@@ -1,0 +1,18 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    environment:
+      EDGEML_MODELS_ROOT: /app/ml_models
+      EDGEML_MAX_UPLOAD_BYTES: "5242880"
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build:
+      context: ./frontend
+    depends_on:
+      - backend
+    ports:
+      - "5173:80"
+

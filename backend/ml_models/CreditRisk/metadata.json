@@ -1,0 +1,19 @@
+{
+  "id": "credit-risk-v1",
+  "name": "CreditRisk",
+  "version": "1.0.0",
+  "framework": "sklearn",
+  "problem_type": "binary_classification",
+  "target": "Approved",
+  "features": [
+    {"name": "Income", "dtype": "float64", "required": true},
+    {"name": "DebtRatio", "dtype": "float64", "required": true},
+    {"name": "CreditHistoryYears", "dtype": "int64", "required": true}
+  ],
+  "prediction_column": "approved_prediction",
+  "author": "EdgeML AI Team",
+  "created_at": "2026-08-06",
+  "description": "Illustrative credit-approval binary classification model.",
+  "artifact": "model.pkl"
+}
+

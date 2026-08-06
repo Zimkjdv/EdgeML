@@ -1,0 +1,11 @@
+.env
+.venv/
+.venv*/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+node_modules/
+dist/
+coverage/
+backend/ml_models/*/model.pkl

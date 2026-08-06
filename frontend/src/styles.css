@@ -1,0 +1,13 @@
+:root { font-family: Inter, ui-sans-serif, system-ui, sans-serif; color: #1f2937; background: #f5f7fb; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+.page-shell { max-width: 980px; margin: 0 auto; padding: 64px 24px; }
+.hero { margin-bottom: 32px; }
+.eyebrow { margin: 0 0 8px; color: #2563eb; font-size: 12px; font-weight: 700; letter-spacing: .12em; }
+h1 { margin: 0; font-size: 40px; letter-spacing: -.03em; }
+.hero > p:last-child { color: #6b7280; }
+.workspace, .result-card { margin-bottom: 24px; border-radius: 14px; }
+.full-width { width: 100%; }
+.result-heading { display: flex; justify-content: space-between; align-items: center; font-weight: 600; }
+.result-heading span { color: #9ca3af; font-size: 13px; font-weight: 400; }
+

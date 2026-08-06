@@ -1,0 +1,19 @@
+{
+  "id": "house-price-v1",
+  "name": "HousePrice",
+  "version": "1.0.0",
+  "framework": "sklearn",
+  "problem_type": "regression",
+  "target": "Price",
+  "features": [
+    {"name": "Area", "dtype": "float64", "required": true},
+    {"name": "Room", "dtype": "int64", "required": true},
+    {"name": "Age", "dtype": "int64", "required": true}
+  ],
+  "prediction_column": "prediction",
+  "author": "EdgeML AI Team",
+  "created_at": "2026-08-06",
+  "description": "Illustrative house-price regression model.",
+  "artifact": "model.pkl"
+}
+

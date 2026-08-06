@@ -1,0 +1,19 @@
+{
+  "id": "customer-churn-v1",
+  "name": "CustomerChurn",
+  "version": "1.0.0",
+  "framework": "sklearn",
+  "problem_type": "binary_classification",
+  "target": "Churned",
+  "features": [
+    {"name": "TenureMonths", "dtype": "int64", "required": true},
+    {"name": "MonthlySpend", "dtype": "float64", "required": true},
+    {"name": "SupportTickets", "dtype": "int64", "required": true}
+  ],
+  "prediction_column": "churn_prediction",
+  "author": "EdgeML AI Team",
+  "created_at": "2026-08-06",
+  "description": "Illustrative customer-churn binary classification model.",
+  "artifact": "model.pkl"
+}
+
