@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { Download, UploadFilled } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 
 type Feature = { name: string; dtype: string; required: boolean }
 type PredictionModel = { id: string; name: string; version: string; framework: string; problem_type: string; description: string; features: Feature[] }
@@ -30,6 +30,7 @@ const selectedTrainedModel = ref<TrainedModel | null>(null)
 const datasetRename = ref('')
 const evaluationDatasetId = ref('')
 const trainedModelRename = ref('')
+const selectedTrainedModelIds = ref<string[]>([])
 
 const training = ref({
   datasetId: '', modelName: '', targetColumn: '', featureColumns: [] as string[], algorithm: 'xgboost',
@@ -51,6 +52,7 @@ const api = async <T>(url: string, init?: RequestInit): Promise<T> => {
     const body = await response.json().catch(() => ({}))
     throw new Error(body.detail ?? '系統操作失敗。')
   }
+  if (response.status === 204) return undefined as T
   return response.json() as Promise<T>
 }
 
@@ -146,6 +148,7 @@ const loadPublished = (model: TrainedModel) => { activePage.value = 'prediction'
 const openTrainedModel = async (id: string) => { selectedTrainedModel.value = await api<TrainedModel>(`/api/trained-models/${id}`); trainedModelRename.value = selectedTrainedModel.value.name }
 const renameTrainedModel = async () => { if (!selectedTrainedModel.value || !trainedModelRename.value.trim()) return; selectedTrainedModel.value = await api<TrainedModel>(`/api/trained-models/${selectedTrainedModel.value.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: trainedModelRename.value }) }); await refreshTrainedModels(); await refreshModels(); ElMessage.success('模型名稱已更新。') }
 const evaluateExternal = async () => { if (!selectedTrainedModel.value || !evaluationDatasetId.value) return ElMessage.warning('請選擇外部測試資料集。'); const result = await api<{ metrics: Record<string, number> }>(`/api/trained-models/${selectedTrainedModel.value.id}/evaluate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dataset_id: evaluationDatasetId.value }) }); selectedTrainedModel.value.test_metrics = result.metrics; ElMessage.success('外部測試完成。') }
+const deleteTrainedModels = async (ids = selectedTrainedModelIds.value) => { if (!ids.length) return ElMessage.warning('請先勾選要刪除的模型。'); try { await ElMessageBox.confirm(`確定刪除 ${ids.length} 個模型？已發布模型也會從 Prediction Server 移除。`, '確認刪除', { type: 'warning', confirmButtonText: '刪除', cancelButtonText: '取消' }); await api<void>('/api/trained-models', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model_ids: ids }) }); selectedTrainedModelIds.value = []; selectedTrainedModel.value = null; await refreshTrainedModels(); await refreshModels(); ElMessage.success('模型已刪除。') } catch (error) { if (error !== 'cancel' && error !== 'close') ElMessage.error(error instanceof Error ? error.message : '刪除失敗。') } }
 
 onMounted(async () => {
   try { await Promise.all([refreshModels(), refreshDatasets(), refreshTrainedModels()]) }
@@ -193,7 +196,7 @@ onMounted(async () => {
 
     <section v-else>
       <el-card v-if="selectedTrainedModel" class="result-card"><template #header>修改模型名稱</template><el-form inline><el-form-item label="模型名稱"><el-input v-model="trainedModelRename" /></el-form-item><el-button type="primary" @click="renameTrainedModel">儲存名稱</el-button></el-form></el-card>
-      <el-card class="workspace"><template #header>已訓練模型管理</template><el-table :data="trainedModels" @row-click="(row: TrainedModel) => openTrainedModel(row.id)"><el-table-column prop="name" label="模型名稱" /><el-table-column label="完成時間"><template #default="scope">{{ formatDate(scope.row.completed_at) }}</template></el-table-column><el-table-column prop="target_column" label="Target" /><el-table-column prop="algorithm" label="演算法" /><el-table-column label="驗證 RMSE"><template #default="scope">{{ formatNumber(scope.row.validation_rmse) }}</template></el-table-column><el-table-column label="測試 RMSE"><template #default="scope">{{ formatNumber(scope.row.test_rmse) }}</template></el-table-column><el-table-column label="狀態"><template #default="scope"><el-tag :type="scope.row.status === 'published' ? 'success' : 'info'">{{ scope.row.status }}</el-tag></template></el-table-column><el-table-column label="操作" width="190"><template #default="scope"><el-button v-if="scope.row.status === 'draft'" type="primary" link @click.stop="publish(scope.row)">發布至 Prediction</el-button><el-button v-else type="success" link @click.stop="loadPublished(scope.row)">載入現有模型</el-button></template></el-table-column></el-table></el-card>
+      <el-card class="workspace"><template #header><div class="result-heading"><span>已訓練模型管理</span><el-button type="danger" plain :disabled="!selectedTrainedModelIds.length" @click="deleteTrainedModels()">刪除勾選模型（{{ selectedTrainedModelIds.length }}）</el-button></div></template><el-table :data="trainedModels" @row-click="(row: TrainedModel) => openTrainedModel(row.id)" @selection-change="(rows: TrainedModel[]) => selectedTrainedModelIds = rows.map(row => row.id)"><el-table-column type="selection" width="48" /><el-table-column prop="name" label="模型名稱" /><el-table-column label="完成時間"><template #default="scope">{{ formatDate(scope.row.completed_at) }}</template></el-table-column><el-table-column prop="target_column" label="Target" /><el-table-column prop="algorithm" label="演算法" /><el-table-column label="驗證 RMSE"><template #default="scope">{{ formatNumber(scope.row.validation_rmse) }}</template></el-table-column><el-table-column label="測試 RMSE"><template #default="scope">{{ formatNumber(scope.row.test_rmse) }}</template></el-table-column><el-table-column label="狀態"><template #default="scope"><el-tag :type="scope.row.status === 'published' ? 'success' : 'info'">{{ scope.row.status }}</el-tag></template></el-table-column><el-table-column label="操作" width="210"><template #default="scope"><el-button v-if="scope.row.status === 'draft'" type="primary" link @click.stop="publish(scope.row)">發布</el-button><el-button v-else type="success" link @click.stop="loadPublished(scope.row)">載入</el-button><el-button type="danger" link @click.stop="deleteTrainedModels([scope.row.id])">刪除</el-button></template></el-table-column></el-table></el-card>
       <el-card v-if="selectedTrainedModel" class="result-card"><template #header><div class="result-heading"><span>{{ selectedTrainedModel.name }}：詳細指標</span><el-button v-if="selectedTrainedModel.status === 'draft'" type="primary" @click="publish(selectedTrainedModel)">發布至 Prediction Server</el-button><el-button v-else type="success" @click="loadPublished(selectedTrainedModel)">載入到 Prediction</el-button></div></template><el-descriptions :column="2" border><el-descriptions-item label="模型類型">{{ selectedTrainedModel.algorithm }} / Regression</el-descriptions-item><el-descriptions-item label="Target">{{ selectedTrainedModel.target_column }}</el-descriptions-item><el-descriptions-item label="特徵欄位" :span="2">{{ selectedTrainedModel.feature_columns?.join('、') }}</el-descriptions-item><el-descriptions-item label="Validation RMSE">{{ formatNumber(selectedTrainedModel.validation_metrics?.rmse) }}</el-descriptions-item><el-descriptions-item label="Validation MAE">{{ formatNumber(selectedTrainedModel.validation_metrics?.mae) }}</el-descriptions-item><el-descriptions-item label="Test RMSE">{{ formatNumber(selectedTrainedModel.test_metrics?.rmse) }}</el-descriptions-item><el-descriptions-item label="Test MAE">{{ formatNumber(selectedTrainedModel.test_metrics?.mae) }}</el-descriptions-item><el-descriptions-item label="Test MAPE">{{ formatNumber(selectedTrainedModel.test_metrics?.mape) }}</el-descriptions-item><el-descriptions-item label="Test NRMSE">{{ formatNumber(selectedTrainedModel.test_metrics?.nrmse) }}</el-descriptions-item><el-descriptions-item label="最大誤差">{{ formatNumber(selectedTrainedModel.test_metrics?.max_error) }}</el-descriptions-item></el-descriptions></el-card>
     </section>
   </main>

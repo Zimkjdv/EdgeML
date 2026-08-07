@@ -168,6 +168,16 @@ class TrainingService:
                 metadata_path.write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
         return TrainedModelDetail.model_validate(payload)
 
+    def delete_many(self, model_ids: list[str]) -> None:
+        for model_id in model_ids:
+            source = self._trained_root / model_id
+            self.get(model_id)
+            for metadata_path in self._publish_root.glob("*/metadata.json"):
+                metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+                if metadata.get("id") == model_id:
+                    shutil.rmtree(metadata_path.parent)
+            shutil.rmtree(source)
+
     def _external_test(self, pipeline: Pipeline, request: TrainingRequest) -> dict[str, float]:
         frame = self._datasets.frame(request.test_dataset_id)
         required = request.feature_columns + [request.target_column]

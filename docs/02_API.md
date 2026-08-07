@@ -25,6 +25,7 @@ Errors use JSON with `detail` and appropriate HTTP status codes: 400 for invalid
 - `POST /api/training/jobs`: create a background training job; `GET /api/training/jobs/{job_id}` returns persisted progress and status.
 - `GET /api/trained-models`: list draft and published training artifacts.
 - `PATCH /api/trained-models/{model_id}`: update a model display name and its published manifest when applicable.
+- `DELETE /api/trained-models`: delete one or more Draft/Published model artifacts by id.
 - `POST /api/trained-models/{model_id}/publish`: validate and publish a draft model package to the prediction catalog.
 - `POST /api/trained-models/{model_id}/evaluate`: evaluate an existing trained model with a separately uploaded Dataset.
 

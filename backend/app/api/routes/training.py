@@ -2,7 +2,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 
 from app.api.dependencies import get_training_service
 from app.domain.errors import ModelNotFoundError, PredictionValidationError
-from app.domain.training_schemas import DatasetRenameRequest, ExternalEvaluationRequest, ExternalEvaluationResult, TrainedModelDetail, TrainedModelSummary, TrainingJob, TrainingRequest
+from app.domain.training_schemas import DatasetRenameRequest, ExternalEvaluationRequest, ExternalEvaluationResult, TrainedModelDeleteRequest, TrainedModelDetail, TrainedModelSummary, TrainingJob, TrainingRequest
 from app.services.training_service import TrainingService
 
 router = APIRouter()
@@ -45,6 +45,12 @@ def get_trained_model(model_id: str, service: TrainingService = Depends(get_trai
 @router.patch("/trained-models/{model_id}", response_model=TrainedModelDetail)
 def rename_trained_model(model_id: str, request: DatasetRenameRequest, service: TrainingService = Depends(get_training_service)) -> TrainedModelDetail:
     try: return service.rename(model_id, request.name)
+    except ModelNotFoundError as exc: raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.delete("/trained-models", status_code=204)
+def delete_trained_models(request: TrainedModelDeleteRequest, service: TrainingService = Depends(get_training_service)) -> None:
+    try: service.delete_many(request.model_ids)
     except ModelNotFoundError as exc: raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 

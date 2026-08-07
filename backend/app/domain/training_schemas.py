@@ -91,3 +91,7 @@ class ExternalEvaluationRequest(BaseModel):
 
 class ExternalEvaluationResult(BaseModel):
     metrics: dict[str, float]
+
+
+class TrainedModelDeleteRequest(BaseModel):
+    model_ids: list[str] = Field(min_length=1)
