@@ -31,4 +31,8 @@ The executable development examples are built together with `python scripts/buil
 
 The initial training module is regression-only. A user selects one numeric target and explicitly checks feature columns. `TrainingService` fits imputers and categorical encoders inside a sklearn `Pipeline`, so each cross-validation fold fits preprocessing only from its training partition. The pipeline is serialized as one artifact and published only after evaluation.
 
+Training executes as a local background job. The job record persists queued/running/completed/failed status and stage progress so the UI can show real server-side progress rather than simulated client progress. This is intentionally a lightweight local implementation; a future multi-user deployment will replace it with a queue and worker service.
+
+Model manifests use the actual pandas dtype of each selected feature. Prediction validation therefore knows which uploaded CSV columns must be numeric, while categorical columns continue through the fitted encoder.
+
 XGBoost is used through `XGBRegressor` inside this trusted sklearn pipeline. The Prediction Server therefore uses the existing sklearn artifact adapter while retaining an XGBoost dependency in its runtime image.

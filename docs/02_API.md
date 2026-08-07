@@ -20,8 +20,14 @@ Errors use JSON with `detail` and appropriate HTTP status codes: 400 for invalid
 - `GET /api/datasets`: list uploaded datasets.
 - `POST /api/datasets`: upload a CSV and produce a column profile. UTF-8, UTF-8 BOM, CP950, and Big5 are accepted.
 - `GET /api/datasets/{dataset_id}`: retrieve columns, inferred ML types, missing values, IQR outliers, and numeric statistics.
+- `PATCH /api/datasets/{dataset_id}`: update a dataset display name without renaming its original CSV file.
 - `POST /api/training`: train a regression pipeline from a selected target and checked feature columns.
+- `POST /api/training/jobs`: create a background training job; `GET /api/training/jobs/{job_id}` returns persisted progress and status.
 - `GET /api/trained-models`: list draft and published training artifacts.
+- `PATCH /api/trained-models/{model_id}`: update a model display name and its published manifest when applicable.
 - `POST /api/trained-models/{model_id}/publish`: validate and publish a draft model package to the prediction catalog.
+- `POST /api/trained-models/{model_id}/evaluate`: evaluate an existing trained model with a separately uploaded Dataset.
 
 The initial training algorithms are Random Forest, Gradient Boosting, XGBoost, and AdaBoost regressors. Training persists the full preprocessing and model pipeline as one trusted `model.pkl` artifact.
+
+XGBoost hyperparameters are optional. Omitted parameters use XGBoost's native defaults; EdgeML only fixes a random seed and CPU worker count for reproducibility during local development.

@@ -13,6 +13,8 @@ EdgeML is a self-hosted, plugin-oriented platform for batch predictions from CSV
 - Dataset upload and profile pages with Chinese CSV encoding support
 - Regression training for Random Forest, Gradient Boosting, XGBoost, and AdaBoost
 - Draft-to-published model workflow; published models appear in Prediction automatically
+- Dataset and trained-model display-name editing without changing original CSV filenames
+- Background training progress and optional XGBoost hyperparameter overrides
 - Docker Compose deployment
 
 ## Quick start
@@ -59,6 +61,14 @@ npm run dev
 ```
 
 When updating an existing local environment after pulling the training module, run `pip install -r requirements.txt` again. It installs XGBoost in addition to the original prediction dependencies.
+
+## Training workflow
+
+1. Upload a CSV in **數據集管理**, inspect columns, and optionally rename its display name.
+2. In **模型訓練**, choose one numeric target and check the feature columns to use.
+3. Select a regression algorithm. XGBoost exposes optional hyperparameter fields; leaving them empty uses native XGBoost defaults.
+4. Review the background-job progress, then inspect the Draft model metrics.
+5. Publish the model to make it available in **Prediction**.
 
 ## Documentation
 
