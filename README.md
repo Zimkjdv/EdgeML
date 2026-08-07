@@ -10,6 +10,9 @@ EdgeML is a self-hosted, plugin-oriented platform for batch predictions from CSV
 - CSV batch prediction for trusted sklearn artifacts
 - Stateless API: prediction results are returned directly as CSV
 - Vue 3 interface with upload, preview, and download
+- Dataset upload and profile pages with Chinese CSV encoding support
+- Regression training for Random Forest, Gradient Boosting, XGBoost, and AdaBoost
+- Draft-to-published model workflow; published models appear in Prediction automatically
 - Docker Compose deployment
 
 ## Quick start
@@ -54,6 +57,8 @@ cd frontend
 npm install
 npm run dev
 ```
+
+When updating an existing local environment after pulling the training module, run `pip install -r requirements.txt` again. It installs XGBoost in addition to the original prediction dependencies.
 
 ## Documentation
 

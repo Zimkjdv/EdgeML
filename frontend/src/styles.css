@@ -10,4 +10,8 @@ h1 { margin: 0; font-size: 40px; letter-spacing: -.03em; }
 .full-width { width: 100%; }
 .result-heading { display: flex; justify-content: space-between; align-items: center; font-weight: 600; }
 .result-heading span { color: #9ca3af; font-size: 13px; font-weight: 400; }
-
+.nav { margin-bottom: 24px; border-radius: 12px; background: #fff; padding: 0 12px; }
+.helper { color: #6b7280; font-size: 13px; line-height: 1.6; margin: 10px 0 0; }
+.top-gap { margin-top: 16px; }
+.bottom-gap { margin-bottom: 18px; }
+.muted { color: #9ca3af; }

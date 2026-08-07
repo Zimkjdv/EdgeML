@@ -8,10 +8,11 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="EDGEML_", case_sensitive=False)
 
     models_root: Path = Path(__file__).resolve().parents[2] / "ml_models"
+    datasets_root: Path = Path(__file__).resolve().parents[2] / "data" / "datasets"
+    trained_models_root: Path = Path(__file__).resolve().parents[2] / "trained_models"
     max_upload_bytes: int = 5 * 1024 * 1024
 
 
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
-

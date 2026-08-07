@@ -3,6 +3,9 @@
 ```text
 Vue UI -> FastAPI router -> PredictionService -> ModelCatalog -> BasePredictor plugin
                                             -> CSV validation
+
+Vue UI -> FastAPI router -> DatasetService -> trusted CSV + profile metadata
+                       -> TrainingService -> sklearn Pipeline artifact -> ModelCatalog publication
 ```
 
 Routers only handle HTTP. `PredictionService` coordinates validation and prediction. `ModelCatalog` scans model folders and constructs a validated `ModelManifest`. `PredictorFactory` chooses a `BasePredictor` implementation from the manifest's `framework` field.
@@ -23,3 +26,9 @@ ml_models/HousePrice/
 Artifacts are trusted deployment inputs. Model packages are mounted or baked into an image by an operator; the API never accepts serialized models.
 
 The executable development examples are built together with `python scripts/build_example_models.py`.
+
+## Training module
+
+The initial training module is regression-only. A user selects one numeric target and explicitly checks feature columns. `TrainingService` fits imputers and categorical encoders inside a sklearn `Pipeline`, so each cross-validation fold fits preprocessing only from its training partition. The pipeline is serialized as one artifact and published only after evaluation.
+
+XGBoost is used through `XGBRegressor` inside this trusted sklearn pipeline. The Prediction Server therefore uses the existing sklearn artifact adapter while retaining an XGBoost dependency in its runtime image.

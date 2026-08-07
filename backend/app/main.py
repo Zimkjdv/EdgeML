@@ -10,7 +10,7 @@ def create_app() -> FastAPI:
         CORSMiddleware,
         allow_origins=["http://localhost:5173"],
         allow_credentials=False,
-        allow_methods=["GET", "POST"],
+        allow_methods=["GET", "POST", "DELETE"],
         allow_headers=["*"],
     )
     app.include_router(api_router, prefix="/api")
@@ -23,4 +23,3 @@ def create_app() -> FastAPI:
 
 
 app = create_app()
-
