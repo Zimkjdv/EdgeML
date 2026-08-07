@@ -13,7 +13,7 @@ from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import AdaBoostRegressor, GradientBoostingRegressor, RandomForestRegressor
 from sklearn.impute import SimpleImputer
 from sklearn.metrics import mean_absolute_error, mean_absolute_percentage_error, max_error, r2_score, root_mean_squared_error
-from sklearn.model_selection import KFold, cross_validate
+from sklearn.model_selection import KFold, cross_val_predict, cross_validate
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.decomposition import TruncatedSVD
@@ -51,6 +51,8 @@ class TrainingService:
             pipeline, features, target, cv=cv,
             scoring={"rmse": "neg_root_mean_squared_error", "mae": "neg_mean_absolute_error", "r2": "r2"},
         )
+        oof_predictions = cross_val_predict(pipeline, features, target, cv=cv)
+        validation_correlation = pd.Series(target).corr(pd.Series(oof_predictions), method="pearson")
         if progress: progress(70, "以完整資料集訓練模型")
         pipeline.fit(features, target)
         if progress: progress(85, "儲存模型 artifact")
@@ -59,6 +61,7 @@ class TrainingService:
             "mae": round(float(-scores["test_mae"].mean()), 6),
             "rmse_std": round(float(scores["test_rmse"].std()), 6),
             "r2": round(float(scores["test_r2"].mean()), 6),
+            "pearson_r": 0.0 if pd.isna(validation_correlation) else round(float(validation_correlation), 6),
         }
         test_metrics = self._external_test(pipeline, request) if request.test_dataset_id else None
         model_id = str(uuid4())
@@ -75,7 +78,9 @@ class TrainingService:
             "algorithm": request.algorithm,
             "problem_type": "regression",
             "validation_rmse": validation["rmse"],
+            "validation_r2": validation["r2"],
             "test_rmse": test_metrics["rmse"] if test_metrics else None,
+            "test_r2": test_metrics["r2"] if test_metrics else None,
             "status": "draft",
             "feature_columns": request.feature_columns,
             "validation_metrics": validation,
@@ -121,6 +126,7 @@ class TrainingService:
         metrics = self._metrics(actual, pipeline.predict(frame[record.feature_columns]))
         payload = self._read_record(self._trained_root / model_id)
         payload["test_metrics"] = metrics; payload["test_rmse"] = metrics["rmse"]
+        payload["test_r2"] = metrics["r2"]
         (self._trained_root / model_id / "record.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         return ExternalEvaluationResult(metrics=metrics)
 

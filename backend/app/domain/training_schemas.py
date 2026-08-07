@@ -64,7 +64,9 @@ class TrainedModelSummary(BaseModel):
     algorithm: str
     problem_type: str = "regression"
     validation_rmse: float
+    validation_r2: float | None = None
     test_rmse: float | None = None
+    test_r2: float | None = None
     status: Literal["draft", "published"]
 
 
