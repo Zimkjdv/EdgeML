@@ -20,6 +20,16 @@ docker compose up --build
 
 Open http://localhost:5173. The API is available at http://localhost:8000 and its OpenAPI UI at http://localhost:8000/docs.
 
+## Windows development launcher
+
+After completing the one-time local setup below, double-click `start-dev.bat` in the project root, or run it from PowerShell:
+
+```powershell
+.\start-dev.bat
+```
+
+It opens separate terminals for the FastAPI reload server and Vite development server. It automatically uses `backend/.venv` when present, falling back to `backend/.venv-local`.
+
 Three deterministic example model packages are included:
 
 | Model | Task | Sample CSV |
