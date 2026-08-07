@@ -57,6 +57,12 @@ class DatasetService:
         path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         return DatasetDetail.model_validate(payload)
 
+    def delete(self, dataset_id: str) -> None:
+        self.get(dataset_id)
+        for suffix in (".csv", ".json"):
+            path = self._root / f"{dataset_id}{suffix}"
+            if path.exists(): path.unlink()
+
     def frame(self, dataset_id: str) -> pd.DataFrame:
         self.get(dataset_id)
         return self.read_csv((self._root / f"{dataset_id}.csv").read_bytes())

@@ -21,6 +21,7 @@ Errors use JSON with `detail` and appropriate HTTP status codes: 400 for invalid
 - `POST /api/datasets`: upload a CSV and produce a column profile. UTF-8, UTF-8 BOM, CP950, and Big5 are accepted.
 - `GET /api/datasets/{dataset_id}`: retrieve columns, inferred ML types, missing values, IQR outliers, and numeric statistics.
 - `PATCH /api/datasets/{dataset_id}`: update a dataset display name without renaming its original CSV file.
+- `DELETE /api/datasets/{dataset_id}`: remove a stored source CSV and its profile metadata.
 - `POST /api/training`: train a regression pipeline from a selected target and checked feature columns.
 - `POST /api/training/jobs`: create a background training job; `GET /api/training/jobs/{job_id}` returns persisted progress and status.
 - `GET /api/trained-models`: list draft and published training artifacts.
