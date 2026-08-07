@@ -12,7 +12,7 @@ import pandas as pd
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import AdaBoostRegressor, GradientBoostingRegressor, RandomForestRegressor
 from sklearn.impute import SimpleImputer
-from sklearn.metrics import mean_absolute_error, mean_absolute_percentage_error, max_error, root_mean_squared_error
+from sklearn.metrics import mean_absolute_error, mean_absolute_percentage_error, max_error, r2_score, root_mean_squared_error
 from sklearn.model_selection import KFold, cross_validate
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
@@ -49,7 +49,7 @@ class TrainingService:
         cv = KFold(n_splits=request.cv_folds, shuffle=True, random_state=42)
         scores = cross_validate(
             pipeline, features, target, cv=cv,
-            scoring={"rmse": "neg_root_mean_squared_error", "mae": "neg_mean_absolute_error"},
+            scoring={"rmse": "neg_root_mean_squared_error", "mae": "neg_mean_absolute_error", "r2": "r2"},
         )
         if progress: progress(70, "以完整資料集訓練模型")
         pipeline.fit(features, target)
@@ -58,6 +58,7 @@ class TrainingService:
             "rmse": round(float(-scores["test_rmse"].mean()), 6),
             "mae": round(float(-scores["test_mae"].mean()), 6),
             "rmse_std": round(float(scores["test_rmse"].std()), 6),
+            "r2": round(float(scores["test_r2"].mean()), 6),
         }
         test_metrics = self._external_test(pipeline, request) if request.test_dataset_id else None
         model_id = str(uuid4())
@@ -193,12 +194,16 @@ class TrainingService:
     def _metrics(actual, predicted) -> dict[str, float]:
         value_range = float(np.max(actual) - np.min(actual))
         rmse = float(root_mean_squared_error(actual, predicted))
+        correlation = pd.Series(actual).corr(pd.Series(predicted), method="pearson")
         return {
             "mae": round(float(mean_absolute_error(actual, predicted)), 6),
-            "mape": round(float(mean_absolute_percentage_error(actual, predicted)), 6),
+            "mape": round(float(mean_absolute_percentage_error(actual, predicted) * 100), 6),
             "rmse": round(rmse, 6),
             "nrmse": round(rmse / value_range, 6) if value_range else 0.0,
             "max_error": round(float(max_error(actual, predicted)), 6),
+            "target_mean": round(float(np.mean(actual)), 6),
+            "pearson_r": 0.0 if pd.isna(correlation) else round(float(correlation), 6),
+            "r2": round(float(r2_score(actual, predicted)), 6),
         }
 
     @staticmethod

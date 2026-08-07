@@ -33,6 +33,8 @@ The initial training module is regression-only. A user selects one numeric targe
 
 Training executes as a local background job. The job record persists queued/running/completed/failed status and stage progress so the UI can show real server-side progress rather than simulated client progress. This is intentionally a lightweight local implementation; a future multi-user deployment will replace it with a queue and worker service.
 
+Regression evaluation uses R² as its primary model score. Detailed evaluation also records MAE, MAPE (%), RMSE, NRMSE, maximum error, target mean, and Pearson correlation (R). R² and R should be interpreted with the dataset context; EdgeML presents metrics rather than claiming a universal quality threshold.
+
 Model manifests use the actual pandas dtype of each selected feature. Prediction validation therefore knows which uploaded CSV columns must be numeric, while categorical columns continue through the fitted encoder.
 
 XGBoost is used through `XGBRegressor` inside this trusted sklearn pipeline. The Prediction Server therefore uses the existing sklearn artifact adapter while retaining an XGBoost dependency in its runtime image.
