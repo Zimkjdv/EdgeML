@@ -12,3 +12,4 @@ coverage/
 backend/ml_models/*/model.pkl
 backend/data/
 backend/trained_models/
+backend/training_jobs/

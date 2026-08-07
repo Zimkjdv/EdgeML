@@ -18,7 +18,7 @@ h1 { margin: 0; font-size: 40px; letter-spacing: -.03em; }
 .r2-hint { display: inline-flex; align-items: center; gap: 4px; margin: 0 0 8px 4px; color: #2563eb; cursor: help; font-size: 13px; }
 .feature-count { margin-left: 8px; vertical-align: middle; }
 /* Legacy detail cards are retained temporarily for component-state compatibility; the unified card is authoritative. */
-.page-shell > section:last-of-type > .result-card:nth-of-type(2),
-.page-shell > section:last-of-type > .result-card:nth-of-type(3),
-.page-shell > section:last-of-type > .result-card:nth-of-type(5),
-.page-shell > section:last-of-type > .r2-hint { display: none; }
+.trained-models-page > .result-card:nth-of-type(2),
+.trained-models-page > .result-card:nth-of-type(3),
+.trained-models-page > .result-card:nth-of-type(5),
+.trained-models-page > .r2-hint { display: none; }
