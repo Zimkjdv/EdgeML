@@ -5,6 +5,10 @@ export type Locale = 'zh-TW' | 'en'
 const storedLocale = typeof window !== 'undefined' ? window.localStorage.getItem('edgeml-locale') : null
 export const locale = ref<Locale>(storedLocale === 'en' ? 'en' : 'zh-TW')
 
+const registryLabels = {
+  registry: 'Model Registry', modelRegistry: 'Model Registry Management', models: 'models', registryHint: 'The registry records which trusted model packages are available to Prediction. Active models appear in the Prediction selector.', version: 'Version', framework: 'Framework', target: 'Target', package: 'Package Directory', active: 'Active', disabled: 'Disabled', disable: 'Disable', enable: 'Enable', unregister: 'Unregister', registryEmpty: 'No model registry entries yet.',
+} as const
+
 const messages = {
   'zh-TW': {
     brandTag: 'EDGE MACHINE LEARNING',
@@ -101,8 +105,10 @@ const messages = {
     featureColumns: '特徵欄位',
     problemType: '問題類型', regression: '回歸', classification: '分類',
     classificationNotice: '分類訓練支援 Random Forest、Gradient Boosting、XGBoost 與 AdaBoost。目標欄位可以是數值或類別欄位。', classificationEvaluation: '分類評估指標', validationAccuracy: '驗證準確率', validationF1: '驗證 F1', validationPrecision: '驗證 Precision', validationRecall: '驗證 Recall', validationRocAuc: '驗證 ROC AUC', testAccuracy: '測試準確率', testF1: '測試 F1', testPrecision: '測試 Precision', testRecall: '測試 Recall',
+    registry: '模型註冊庫', modelRegistry: '模型註冊庫管理', models: '模型', registryHint: '模型註冊庫記錄哪些受信任的模型套件可供 Prediction 使用。啟用中的模型會出現在 Prediction 選單。', version: '版本', framework: '框架', target: '目標', package: '套件目錄', active: '啟用', disabled: '停用', disable: '停用模型', enable: '啟用模型', unregister: '移除註冊', registryEmpty: '目前沒有模型註冊資料。',
   },
   en: {
+    ...registryLabels,
     brandTag: 'EDGE MACHINE LEARNING',
     brandTitle: 'EdgeML Platform',
     brandDescription: 'CSV data management, model training, and enterprise prediction services.',

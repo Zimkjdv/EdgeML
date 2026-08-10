@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     datasets_root: Path = Path(__file__).resolve().parents[2] / "data" / "datasets"
     trained_models_root: Path = Path(__file__).resolve().parents[2] / "trained_models"
     prediction_history_file: Path = Path(__file__).resolve().parents[2] / "data" / "prediction_history.jsonl"
+    model_registry_file: Path = Path(__file__).resolve().parents[2] / "data" / "model_registry.json"
     max_upload_bytes: int = 5 * 1024 * 1024
 
 

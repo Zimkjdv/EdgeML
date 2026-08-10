@@ -9,7 +9,9 @@ Vue UI -> FastAPI router -> DatasetService -> trusted CSV + profile metadata
                        -> TrainingService -> sklearn Pipeline artifact -> ModelCatalog publication
 ```
 
-Routers only handle HTTP. `PredictionService` coordinates validation and prediction. `ModelCatalog` scans model folders and constructs a validated `ModelManifest`. `PredictorFactory` chooses a `BasePredictor` implementation from the manifest's `framework` field.
+Routers only handle HTTP. `PredictionService` coordinates validation and prediction. `ModelCatalog` is the application boundary for model discovery and lookup; v0.5 uses `FileModelRegistry` to persist registry metadata while model packages remain trusted files under `ml_models/`. `PredictorFactory` chooses a `BasePredictor` implementation from the manifest's `framework` field.
+
+The registry stores package metadata and an active/disabled status in `backend/data/model_registry.json`. Existing model packages are bootstrapped into the registry on first startup. Disabling a model removes it from the Prediction selector without deleting its artifact package; unregistering only removes the registry entry.
 
 `PredictionService` depends on the `PredictionHistoryRepository` abstraction and records metadata only after a prediction succeeds. The initial `FilePredictionHistoryRepository` adapter uses JSON Lines local persistence. It can be replaced by a database-backed adapter without changing the service or HTTP route.
 
@@ -32,7 +34,7 @@ The executable development examples are built together with `python scripts/buil
 
 ## Training module
 
-The initial training module is regression-only. A user selects one numeric target and explicitly checks feature columns. `TrainingService` fits imputers and categorical encoders inside a sklearn `Pipeline`, so each cross-validation fold fits preprocessing only from its training partition. The pipeline is serialized as one artifact and published only after evaluation.
+The training module supports regression and classification. A user selects a target and explicitly checks feature columns. `TrainingService` fits imputers and categorical encoders inside a sklearn `Pipeline`, so each cross-validation fold fits preprocessing only from its training partition. The pipeline is serialized as one artifact and published only after evaluation.
 
 Training executes as a local background job. The job record persists queued/running/completed/failed status and stage progress so the UI can show real server-side progress rather than simulated client progress. This is intentionally a lightweight local implementation; a future multi-user deployment will replace it with a queue and worker service.
 

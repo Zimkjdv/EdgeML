@@ -33,6 +33,12 @@ EdgeML is a self-hosted, plugin-oriented platform for batch predictions from CSV
 - Add Ridge regression as a regularized linear baseline.
 - Keep regression and classification model manifests compatible with the existing trained-model and prediction workflows.
 
+## v0.5 in progress
+
+- Replace runtime folder scanning with a file-backed model registry while keeping `ModelCatalog` as the Prediction application boundary.
+- Add a Model Registry page for viewing, enabling, disabling, and unregistering trusted model packages.
+- Published model artifacts remain operator-controlled files; registry removal never accepts or deletes serialized artifacts through HTTP.
+
 ## Quick start
 
 ```bash

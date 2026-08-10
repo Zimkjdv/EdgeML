@@ -40,6 +40,8 @@ from sklearn.base import BaseEstimator, ClassifierMixin, clone
 from xgboost import XGBClassifier, XGBRegressor
 
 from app.domain.errors import ModelNotFoundError, PredictionValidationError
+from app.domain.model_catalog import ModelRegistry
+from app.domain.schemas import ModelManifest
 from app.domain.training_schemas import TrainedModelDetail, TrainedModelSummary, TrainingRequest
 from app.domain.training_schemas import ExternalEvaluationResult, TrainingJob
 from app.services.dataset_service import DatasetService
@@ -67,7 +69,7 @@ class EncodedTargetClassifier(ClassifierMixin, BaseEstimator):
 
 
 class TrainingService:
-    def __init__(self, datasets: DatasetService, trained_models_root: Path, publish_root: Path, jobs_root: Path | None = None) -> None:
+    def __init__(self, datasets: DatasetService, trained_models_root: Path, publish_root: Path, jobs_root: Path | None = None, model_registry: ModelRegistry | None = None) -> None:
         self._datasets = datasets
         self._trained_root = trained_models_root
         self._publish_root = publish_root
@@ -75,6 +77,7 @@ class TrainingService:
         self._publish_root.mkdir(parents=True, exist_ok=True)
         self._jobs_root = jobs_root or trained_models_root.parent / "training_jobs"
         self._jobs_root.mkdir(parents=True, exist_ok=True)
+        self._model_registry = model_registry
 
     def train(self, request: TrainingRequest, progress=None) -> TrainedModelDetail:
         if progress: progress(10, "驗證資料與訓練設定")
@@ -202,6 +205,9 @@ class TrainingService:
         if destination.exists():
             shutil.rmtree(destination)
         shutil.copytree(source, destination, ignore=shutil.ignore_patterns("record.json"))
+        published_manifest = ModelManifest.model_validate({**record.manifest, "model_path": destination})
+        if self._model_registry:
+            self._model_registry.register(published_manifest, destination.name)
         payload = self._read_record(source)
         payload["status"] = "published"
         (source / "record.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -219,6 +225,9 @@ class TrainingService:
             if metadata.get("id") == model_id:
                 metadata["name"] = name.strip()
                 metadata_path.write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
+                if self._model_registry:
+                    published_manifest = ModelManifest.model_validate({**metadata, "model_path": metadata_path.parent})
+                    self._model_registry.update_manifest(published_manifest)
         return TrainedModelDetail.model_validate(payload)
 
     def delete_many(self, model_ids: list[str]) -> None:
@@ -229,6 +238,11 @@ class TrainingService:
                 metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
                 if metadata.get("id") == model_id:
                     shutil.rmtree(metadata_path.parent)
+                    if self._model_registry:
+                        try:
+                            self._model_registry.unregister(model_id)
+                        except ModelNotFoundError:
+                            pass
             shutil.rmtree(source)
 
     @staticmethod

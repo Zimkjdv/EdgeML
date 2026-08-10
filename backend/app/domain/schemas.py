@@ -1,6 +1,8 @@
 from datetime import date, datetime
 from pathlib import Path
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -37,6 +39,12 @@ class ModelSummary(BaseModel):
     features: list[FeatureSpec]
     prediction_column: str
     description: str
+
+
+class ModelRegistrySummary(ModelSummary):
+    package_name: str
+    status: Literal["active", "disabled"]
+    registered_at: datetime
 
 
 class PredictionOutput(BaseModel):

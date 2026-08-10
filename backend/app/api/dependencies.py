@@ -1,18 +1,24 @@
 from functools import lru_cache
 
 from app.core.config import get_settings
-from app.infrastructure.model_catalog import FileModelCatalog
+from app.infrastructure.file_model_registry import FileModelRegistry
 from app.infrastructure.file_prediction_history_repository import FilePredictionHistoryRepository
 from app.infrastructure.predictor_factory import PredictorFactory
 from app.services.prediction_service import PredictionService
 from app.services.dataset_service import DatasetService
 from app.services.training_service import TrainingService
+from app.services.model_registry_service import ModelRegistryService
+
+
+def get_model_registry() -> FileModelRegistry:
+    settings = get_settings()
+    return FileModelRegistry(settings.model_registry_file, settings.models_root)
 
 
 @lru_cache
 def get_prediction_service() -> PredictionService:
     settings = get_settings()
-    catalog = FileModelCatalog(settings.models_root)
+    catalog = get_model_registry()
     history_repository = FilePredictionHistoryRepository(settings.prediction_history_file)
     return PredictionService(
         catalog=catalog,
@@ -29,4 +35,9 @@ def get_dataset_service() -> DatasetService:
 @lru_cache
 def get_training_service() -> TrainingService:
     settings = get_settings()
-    return TrainingService(get_dataset_service(), settings.trained_models_root, settings.models_root)
+    return TrainingService(get_dataset_service(), settings.trained_models_root, settings.models_root, model_registry=get_model_registry())
+
+
+@lru_cache
+def get_model_registry_service() -> ModelRegistryService:
+    return ModelRegistryService(get_model_registry())

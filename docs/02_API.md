@@ -2,7 +2,7 @@
 
 ## `GET /api/models`
 
-Returns every valid model manifest discovered under the configured models root.
+Returns every active model registered in the configured model registry.
 
 ## `POST /api/predict`
 
@@ -17,6 +17,12 @@ Every successful request also writes prediction metadata to the configured histo
 
 Errors use JSON with `detail` and appropriate HTTP status codes: 400 for invalid input, 404 for an unknown model, and 422 for schema/type validation failures.
 
+## Model registry APIs
+
+- `GET /api/model-registry`: list all registered model packages and lifecycle status.
+- `PATCH /api/model-registry/{model_id}/status`: enable or disable a registered model in the Prediction selector.
+- `DELETE /api/model-registry/{model_id}`: remove a registry entry without deleting the trusted package files.
+
 ## `GET /api/prediction-history`
 
 Returns successful prediction records in reverse chronological order. Each record contains its identifier, model identifier and name, sanitized source filename, input row count, and UTC creation time. The history contains metadata only.
@@ -28,7 +34,7 @@ Returns successful prediction records in reverse chronological order. Each recor
 - `GET /api/datasets/{dataset_id}`: retrieve columns, inferred ML types, missing values, IQR outliers, and numeric statistics.
 - `PATCH /api/datasets/{dataset_id}`: update a dataset display name without renaming its original CSV file.
 - `DELETE /api/datasets/{dataset_id}`: remove a stored source CSV and its profile metadata.
-- `POST /api/training`: train a regression pipeline from a selected target and checked feature columns.
+- `POST /api/training`: train a regression or classification pipeline from a selected target and checked feature columns.
 - `POST /api/training/jobs`: create a background training job; `GET /api/training/jobs/{job_id}` returns persisted progress and status.
 - `GET /api/trained-models`: list draft and published training artifacts.
 - `PATCH /api/trained-models/{model_id}`: update a model display name and its published manifest when applicable.
@@ -36,6 +42,6 @@ Returns successful prediction records in reverse chronological order. Each recor
 - `POST /api/trained-models/{model_id}/publish`: validate and publish a draft model package to the prediction catalog.
 - `POST /api/trained-models/{model_id}/evaluate`: evaluate an existing trained model with a separately uploaded Dataset.
 
-The initial training algorithms are Random Forest, Gradient Boosting, XGBoost, and AdaBoost regressors. Training persists the full preprocessing and model pipeline as one trusted `model.pkl` artifact.
+Training supports Random Forest, Gradient Boosting, XGBoost, AdaBoost, and Ridge regression, plus classifier variants for the first four algorithms. Training persists the full preprocessing and model pipeline as one trusted `model.pkl` artifact.
 
 XGBoost hyperparameters are optional. Omitted parameters use XGBoost's native defaults; EdgeML only fixes a random seed and CPU worker count for reproducibility during local development.

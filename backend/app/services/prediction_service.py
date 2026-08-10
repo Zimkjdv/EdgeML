@@ -5,8 +5,8 @@ from uuid import uuid4
 import pandas as pd
 
 from app.domain.errors import PredictionValidationError
+from app.domain.model_catalog import ModelCatalog
 from app.domain.schemas import ModelSummary, PredictionHistoryRecord, PredictionOutput
-from app.infrastructure.model_catalog import FileModelCatalog
 from app.infrastructure.predictor_factory import PredictorFactory
 from app.repositories.prediction_history import PredictionHistoryRepository
 
@@ -14,7 +14,7 @@ from app.repositories.prediction_history import PredictionHistoryRepository
 class PredictionService:
     def __init__(
         self,
-        catalog: FileModelCatalog,
+        catalog: ModelCatalog,
         predictor_factory: PredictorFactory,
         history_repository: PredictionHistoryRepository,
     ) -> None:

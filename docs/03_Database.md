@@ -8,6 +8,7 @@ The first Training Module uses local filesystem persistence to avoid prematurely
 
 - `backend/data/datasets/`: trusted uploaded CSVs and dataset-profile metadata.
 - `backend/trained_models/`: draft training artifacts and training records.
-- `backend/ml_models/`: published artifact packages scanned by the Prediction Server.
+- `backend/ml_models/`: published artifact packages referenced by the Prediction Server's model registry.
+- `backend/data/model_registry.json`: the v0.5 file-backed registry index for trusted published model packages and their active/disabled status.
 
 Multi-user prediction and training may introduce database persistence behind the existing repository boundary in a later milestone. Database selection and schema will be decided then.
