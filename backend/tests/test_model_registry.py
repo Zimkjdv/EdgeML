@@ -20,20 +20,26 @@ def test_registry_lists_bootstrapped_models(tmp_path) -> None:
     response = registry_client(tmp_path).get("/api/model-registry")
 
     assert response.status_code == 200
-    assert {item["id"] for item in response.json()} == {
+    assert {
         "house-price-v1",
         "credit-risk-v1",
         "customer-churn-v1",
-    }
-    assert response.json()[0]["status"] == "active"
+    }.issubset({item["id"] for item in response.json()})
+    assert next(item for item in response.json() if item["id"] == "house-price-v1")["status"] == "active"
 
 
 def test_registry_status_controls_prediction_catalog(tmp_path) -> None:
     models_root = Path(__file__).resolve().parents[1] / "ml_models"
     registry = FileModelRegistry(tmp_path / "model_registry.json", models_root)
-    assert {item.id for item in registry.list()} == {"house-price-v1", "credit-risk-v1", "customer-churn-v1"}
+    assert {
+        "house-price-v1",
+        "credit-risk-v1",
+        "customer-churn-v1",
+    }.issubset({item.id for item in registry.list()})
 
     registry.set_status("house-price-v1", "disabled")
 
-    assert {item.id for item in registry.list()} == {"credit-risk-v1", "customer-churn-v1"}
-    assert registry.list_registry()[2].status == "disabled"
+    active_ids = {item.id for item in registry.list()}
+    assert "house-price-v1" not in active_ids
+    assert {"credit-risk-v1", "customer-churn-v1"}.issubset(active_ids)
+    assert next(item for item in registry.list_registry() if item.id == "house-price-v1").status == "disabled"

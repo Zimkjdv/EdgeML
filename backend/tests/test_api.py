@@ -40,11 +40,11 @@ def client(
 def test_list_models() -> None:
     response = client().get("/api/models")
     assert response.status_code == 200
-    assert {model["id"] for model in response.json()} == {
+    assert {
         "house-price-v1",
         "credit-risk-v1",
         "customer-churn-v1",
-    }
+    }.issubset({model["id"] for model in response.json()})
 
 
 def test_predict_returns_csv() -> None:

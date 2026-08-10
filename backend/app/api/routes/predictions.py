@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response
 
 from app.api.dependencies import get_prediction_service
+from app.core.observability import record_prediction
 from app.core.config import get_settings
 from app.domain.errors import ModelNotFoundError, PredictionValidationError
 from app.domain.schemas import PredictionHistoryRecord
@@ -38,9 +39,16 @@ async def predict(
             source_filename=file.filename,
         )
     except ModelNotFoundError as exc:
+        record_prediction("not_found")
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except PredictionValidationError as exc:
+        record_prediction("validation_error")
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception:
+        record_prediction("error")
+        raise
+
+    record_prediction("success")
 
     headers = {"Content-Disposition": f'attachment; filename="{result.filename}"'}
     return Response(content=result.csv_content, media_type="text/csv; charset=utf-8", headers=headers)

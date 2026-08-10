@@ -1,5 +1,13 @@
 # API
 
+## Observability endpoints
+
+- `GET /health` and `GET /health/live`: process liveness checks. Both return `{"status":"ok"}` while the API process is running.
+- `GET /health/ready`: validates the model, dataset, trained-model, and registry storage paths. Returns `503` when a required check fails.
+- `GET /metrics`: Prometheus text exposition containing HTTP request, prediction, training-job, and active-registry-model metrics.
+
+Every HTTP response includes an `X-Request-ID` header. Clients may provide a bounded `X-Request-ID` value to correlate logs; otherwise EdgeML generates one. Structured access logs include the request ID, route, status code, and duration without logging uploaded CSV contents.
+
 ## `GET /api/models`
 
 Returns every active model registered in the configured model registry.

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
@@ -44,6 +45,7 @@ from app.domain.model_catalog import ModelRegistry
 from app.domain.schemas import ModelManifest
 from app.domain.training_schemas import TrainedModelDetail, TrainedModelSummary, TrainingRequest
 from app.domain.training_schemas import ExternalEvaluationResult, TrainingJob
+from app.core.observability import training_finished, training_started
 from app.services.dataset_service import DatasetService
 
 
@@ -78,6 +80,7 @@ class TrainingService:
         self._jobs_root = jobs_root or trained_models_root.parent / "training_jobs"
         self._jobs_root.mkdir(parents=True, exist_ok=True)
         self._model_registry = model_registry
+        self._logger = logging.getLogger("edgeml.training")
 
     def train(self, request: TrainingRequest, progress=None) -> TrainedModelDetail:
         if progress: progress(10, "驗證資料與訓練設定")
@@ -150,14 +153,22 @@ class TrainingService:
 
     def run_job(self, job_id: str) -> None:
         job, request = self._read_job(job_id)
+        started_at = training_started()
+        self._logger.info("Training job started", extra={"event": "training.job.started", "job_id": job_id})
         job.status, job.progress, job.message = "running", 2, "準備訓練環境"
         self._write_job(job, request)
         try:
             result = self.train(request, lambda progress, message: self._update_job(job, request, progress, message))
             job.status, job.progress, job.message, job.result_model_id = "completed", 100, "訓練完成", result.id
         except Exception as exc:
+            self._logger.exception("Training job failed", extra={"event": "training.job.failed", "job_id": job_id})
             job.status, job.message, job.error = "failed", "訓練失敗", str(exc)
         self._write_job(job, request)
+        training_finished(job.status, started_at)
+        self._logger.info(
+            "Training job finished",
+            extra={"event": "training.job.finished", "job_id": job_id, "model_id": job.result_model_id},
+        )
 
     def get_job(self, job_id: str) -> TrainingJob:
         return self._read_job(job_id)[0]
