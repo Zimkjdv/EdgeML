@@ -139,3 +139,4 @@ When updating an existing local environment after pulling the training module, r
 ## Documentation
 
 See [docs/01_Project.md](docs/01_Project.md) for the roadmap and [docs/04_Architecture.md](docs/04_Architecture.md) for the design.
+See [DEVELOPMENT_MEMO.md](DEVELOPMENT_MEMO.md) for the local development, Docker verification, and Git workflow.
