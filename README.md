@@ -14,6 +14,7 @@ EdgeML is a self-hosted, plugin-oriented platform for batch predictions from CSV
 - Regression training for Random Forest, Gradient Boosting, XGBoost, and AdaBoost
 - Draft-to-published model workflow; published models appear in Prediction automatically
 - Dataset and trained-model display-name editing without changing original CSV filenames
+- Traditional Chinese / English UI switching with a persisted language preference
 - Background training progress and optional XGBoost hyperparameter overrides
 - Docker Compose deployment
 

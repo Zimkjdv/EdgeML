@@ -2,6 +2,7 @@
 import { computed, nextTick, onMounted, onUnmounted, onUpdated, ref, watch } from 'vue'
 import { Download, QuestionFilled, UploadFilled } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { locale, t, toggleLocale } from './i18n'
 
 type Feature = { name: string; dtype: string; required: boolean }
 type PredictionModel = { id: string; name: string; version: string; framework: string; problem_type: string; description: string; features: Feature[] }
@@ -81,10 +82,68 @@ const showTableTooltip = (event: MouseEvent) => {
   activeTableTooltip = tooltip
   activeTooltipCell = cell
 }
-onMounted(() => document.addEventListener('mouseover', showTableTooltip))
-onUnmounted(() => { document.removeEventListener('mouseover', showTableTooltip); hideTableTooltip() })
+const hideTooltipWhenLeavingModelPage = (event: MouseEvent) => {
+  const target = event.target as HTMLElement
+  const page = target.closest('.trained-models-page')
+  if (!page) return
+  const related = event.relatedTarget as Node | null
+  if (!related || !page.contains(related)) hideTableTooltip()
+}
+const trainedModelTranslations: Array<[string, string]> = [
+  ['模型詳細資訊與評估', 'Model Details and Evaluation'],
+  ['發布至 Prediction', 'Publish to Prediction'],
+  ['載入到 Prediction', 'Load into Prediction'],
+  ['完整回歸評估指標', 'Full Regression Evaluation'],
+  ['修改模型名稱', 'Rename Model'],
+  ['已訓練模型管理', 'Trained Model Management'],
+  ['刪除勾選模型', 'Delete Selected Models'],
+  ['完成時間', 'Completed At'],
+  ['模型名稱', 'Model Name'],
+  ['演算法', 'Algorithm'],
+  ['驗證決定係數', 'Validation R²'],
+  ['測試決定係數', 'Test R²'],
+  ['驗證 RMSE', 'Validation RMSE'],
+  ['測試 RMSE', 'Test RMSE'],
+  ['狀態', 'Status'],
+  ['操作', 'Actions'],
+  ['發布', 'Publish'],
+  ['載入', 'Load'],
+  ['刪除', 'Delete'],
+  ['模型類型', 'Model Type'],
+  ['特徵欄位', 'Feature Columns'],
+  ['目標欄位', 'Target Column'],
+  ['Validation MAE', 'Validation MAE'],
+  ['Validation MAPE (%)', 'Validation MAPE (%)'],
+  ['Test MAE', 'Test MAE'],
+  ['Test MAPE', 'Test MAPE'],
+  ['Test NRMSE', 'Test NRMSE'],
+  ['最大誤差', 'Maximum Error'],
+  ['目標平均', 'Target Mean'],
+  ['相關係數', 'Correlation'],
+]
+const applyTrainedModelLocale = () => {
+  const pairs = locale.value === 'en' ? trainedModelTranslations : trainedModelTranslations.map(([zh, en]) => [en, zh] as [string, string])
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT)
+  let node: Node | null
+  while ((node = walker.nextNode())) {
+    const parent = node.parentElement
+    if (!parent?.closest('.trained-models-page') || parent.closest('.table-hover-tooltip')) continue
+    let value = node.nodeValue ?? ''
+    for (const [from, to] of pairs) value = value.split(from).join(to)
+    node.nodeValue = value
+  }
+}
+onMounted(() => {
+  document.addEventListener('mouseover', showTableTooltip)
+  document.addEventListener('mouseout', hideTooltipWhenLeavingModelPage)
+})
+onUnmounted(() => {
+  document.removeEventListener('mouseover', showTableTooltip)
+  document.removeEventListener('mouseout', hideTooltipWhenLeavingModelPage)
+  hideTableTooltip()
+})
 watch([trainedModels, activePage], async () => { await nextTick(); addTrainedModelTooltips() }, { deep: true })
-onUpdated(addTrainedModelTooltips)
+onUpdated(() => { addTrainedModelTooltips(); applyTrainedModelLocale() })
 const api = async <T>(url: string, init?: RequestInit): Promise<T> => {
   const response = await fetch(url, init)
   if (!response.ok) {
@@ -198,52 +257,52 @@ onMounted(async () => {
 </script>
 
 <template>
-  <main class="page-shell">
-    <section class="hero"><p class="eyebrow">EDGE MACHINE LEARNING</p><h1>EdgeML 工作平台</h1><p>CSV 資料管理、模型訓練與企業內部預測服務。</p></section>
+  <main class="page-shell" :class="locale === 'en' ? 'locale-en' : 'locale-zh'">
+    <section class="hero"><p class="eyebrow">{{ t('brandTag') }}</p><h1>{{ t('brandTitle') }}</h1><p>{{ t('brandDescription') }}</p></section>
     <el-menu :default-active="activePage" mode="horizontal" class="nav" @select="(key: string) => activePage = key">
-      <el-menu-item index="prediction">Prediction</el-menu-item><el-menu-item index="history">Prediction History</el-menu-item><el-menu-item index="datasets">數據集管理</el-menu-item><el-menu-item index="training">模型訓練</el-menu-item><el-menu-item index="trained">已訓練模型</el-menu-item>
+      <el-menu-item index="prediction">{{ t('prediction') }}</el-menu-item><el-menu-item index="history">{{ t('history') }}</el-menu-item><el-menu-item index="datasets">{{ t('datasets') }}</el-menu-item><el-menu-item index="training">{{ t('training') }}</el-menu-item><el-menu-item index="trained">{{ t('trainedModels') }}</el-menu-item><el-button class="language-switch" plain @click.stop="toggleLocale">{{ t('language') }}</el-button>
     </el-menu>
 
     <section v-if="activePage === 'prediction'">
-      <el-card class="workspace"><template #header>載入現有模型並進行預測</template><el-form label-position="top">
-        <el-form-item label="已發布模型"><el-select v-model="predictionModelId" class="full-width" placeholder="選擇模型"><el-option v-for="model in models" :key="model.id" :value="model.id" :label="`${model.name} · ${model.version}`" /></el-select><p v-if="selectedPredictionModel" class="helper">{{ selectedPredictionModel.description }}｜需要欄位：{{ selectedPredictionModel.features.map(f => f.name).join('、') }}</p></el-form-item>
-        <el-form-item label="輸入 CSV"><el-upload :auto-upload="false" accept=".csv,text/csv" :limit="1" :on-change="selectPredictionFile"><el-button :icon="UploadFilled">選擇 CSV</el-button></el-upload></el-form-item>
-        <el-button type="primary" :loading="predictionLoading" @click="runPrediction">執行預測</el-button><el-button :icon="Download" :disabled="!outputBlob" @click="downloadPrediction">下載結果 CSV</el-button>
+      <el-card class="workspace"><template #header>{{ t('predictionWorkspace') }}</template><el-form label-position="top">
+        <el-form-item :label="t('publishedModel')"><el-select v-model="predictionModelId" class="full-width" :placeholder="t('selectModel')"><el-option v-for="model in models" :key="model.id" :value="model.id" :label="`${model.name} · ${model.version}`" /></el-select><p v-if="selectedPredictionModel" class="helper">{{ selectedPredictionModel.description }}｜{{ locale === 'zh-TW' ? '需要欄位' : 'Required features' }}：{{ selectedPredictionModel.features.map(f => f.name).join('、') }}</p></el-form-item>
+        <el-form-item :label="t('inputCsv')"><el-upload :auto-upload="false" accept=".csv,text/csv" :limit="1" :on-change="selectPredictionFile"><el-button :icon="UploadFilled">{{ t('chooseCsv') }}</el-button></el-upload></el-form-item>
+        <el-button type="primary" :loading="predictionLoading" @click="runPrediction">{{ t('runPrediction') }}</el-button><el-button :icon="Download" :disabled="!outputBlob" @click="downloadPrediction">{{ t('downloadCsv') }}</el-button>
       </el-form></el-card>
       <el-card v-if="previewColumns.length" class="result-card"><template #header><div class="result-heading">預測結果預覽 <span>前 10 筆</span></div></template><el-table :data="previewRows" max-height="360"><el-table-column v-for="column in previewColumns" :key="column" :prop="column" :label="column" /></el-table></el-card>
     </section>
 
     <section v-else-if="activePage === 'history'">
       <el-card class="workspace history-workspace">
-        <template #header><div class="result-heading"><span>Prediction History</span><el-tag type="info" effect="light">{{ predictionHistory.length }} 筆紀錄</el-tag></div></template>
-        <el-empty v-if="!predictionHistory.length" description="尚無預測紀錄。" />
+        <template #header><div class="result-heading"><span>{{ t('historyTitle') }}</span><el-tag type="info" effect="light">{{ predictionHistory.length }} {{ t('records') }}</el-tag></div></template>
+        <el-empty v-if="!predictionHistory.length" :description="t('noHistory')" />
         <el-table v-else :data="predictionHistory" stripe>
-          <el-table-column label="預測時間" min-width="220"><template #default="scope">{{ formatDate(scope.row.created_at) }}</template></el-table-column>
-          <el-table-column prop="model_name" label="模型名稱" min-width="220" />
+          <el-table-column :label="t('predictionTime')" min-width="220"><template #default="scope">{{ formatDate(scope.row.created_at) }}</template></el-table-column>
+          <el-table-column prop="model_name" :label="t('modelName')" min-width="220" />
         </el-table>
       </el-card>
     </section>
 
     <section v-else-if="activePage === 'datasets'">
-      <el-card class="workspace"><template #header>上傳數據集</template><el-upload :auto-upload="false" accept=".csv,text/csv" :limit="1" :on-change="selectDatasetFile"><el-button :icon="UploadFilled">選擇 CSV</el-button></el-upload><el-button class="top-gap" type="primary" :loading="datasetLoading" @click="uploadDataset">上傳並分析</el-button><p class="helper">支援 UTF-8、UTF-8 BOM、CP950／Big5 編碼，中文欄位名稱與內容可正常分析。</p></el-card>
-      <el-card v-if="selectedDataset" class="result-card"><template #header>修改資料集名稱</template><el-form inline><el-form-item label="顯示名稱"><el-input v-model="datasetRename" /></el-form-item><el-button type="primary" @click="renameDataset">儲存名稱</el-button></el-form><p class="helper">原始檔案：{{ selectedDataset.original_filename }}｜資料筆數：{{ selectedDataset.row_count }}｜欄位數量：{{ selectedDataset.column_count }}</p></el-card>
-      <el-card class="workspace"><template #header>數據集清單</template><el-table :data="datasets" @row-click="(row: Dataset) => openDataset(row.id)"><el-table-column prop="name" label="名稱" /><el-table-column prop="original_filename" label="檔案" /><el-table-column prop="row_count" label="列數" /><el-table-column prop="column_count" label="欄數" /><el-table-column label="上傳時間"><template #default="scope">{{ formatDate(scope.row.created_at) }}</template></el-table-column><el-table-column label="操作" width="90"><template #default="scope"><el-button type="danger" link @click.stop="deleteDataset(scope.row)">刪除</el-button></template></el-table-column></el-table></el-card>
-      <el-card v-if="selectedDataset" class="result-card"><template #header>{{ selectedDataset.name }}：欄位分析</template><el-table :data="selectedDataset.columns" max-height="420"><el-table-column prop="name" label="欄位" /><el-table-column prop="raw_dtype" label="資料型態" /><el-table-column prop="ml_type" label="ML 類型" /><el-table-column prop="missing_count" label="缺值" /><el-table-column prop="outlier_count" label="異值" /><el-table-column label="最小值"><template #default="scope">{{ formatNumber(scope.row.minimum) }}</template></el-table-column><el-table-column label="最大值"><template #default="scope">{{ formatNumber(scope.row.maximum) }}</template></el-table-column><el-table-column label="平均"><template #default="scope">{{ formatNumber(scope.row.mean) }}</template></el-table-column><el-table-column label="標準差"><template #default="scope">{{ formatNumber(scope.row.std) }}</template></el-table-column><el-table-column label="中位數"><template #default="scope">{{ formatNumber(scope.row.median) }}</template></el-table-column><el-table-column prop="mode" label="眾數" /></el-table></el-card>
+      <el-card class="workspace"><template #header>{{ t('uploadDataset') }}</template><el-upload :auto-upload="false" accept=".csv,text/csv" :limit="1" :on-change="selectDatasetFile"><el-button :icon="UploadFilled">{{ t('chooseCsv') }}</el-button></el-upload><el-button class="top-gap" type="primary" :loading="datasetLoading" @click="uploadDataset">{{ t('uploadAnalyze') }}</el-button><p class="helper">{{ t('encodingHelp') }}</p></el-card>
+      <el-card v-if="selectedDataset" class="result-card"><template #header>{{ t('renameDataset') }}</template><el-form inline><el-form-item :label="t('displayName')"><el-input v-model="datasetRename" /></el-form-item><el-button type="primary" @click="renameDataset">{{ t('saveName') }}</el-button></el-form><p class="helper">{{ t('originalFile') }}：{{ selectedDataset.original_filename }}｜{{ t('rows') }}：{{ selectedDataset.row_count }}｜{{ t('columns') }}：{{ selectedDataset.column_count }}</p></el-card>
+      <el-card class="workspace"><template #header>{{ t('datasetList') }}</template><el-table :data="datasets" @row-click="(row: Dataset) => openDataset(row.id)"><el-table-column prop="name" :label="t('modelName')" /><el-table-column prop="original_filename" :label="t('file')" /><el-table-column prop="row_count" :label="t('rowCount')" /><el-table-column prop="column_count" :label="t('columnCount')" /><el-table-column :label="t('uploadTime')"><template #default="scope">{{ formatDate(scope.row.created_at) }}</template></el-table-column><el-table-column :label="t('actions')" width="90"><template #default="scope"><el-button type="danger" link @click.stop="deleteDataset(scope.row)">{{ t('delete') }}</el-button></template></el-table-column></el-table></el-card>
+      <el-card v-if="selectedDataset" class="result-card"><template #header>{{ selectedDataset.name }}：{{ t('columnAnalysis') }}</template><el-table :data="selectedDataset.columns" max-height="420"><el-table-column prop="name" :label="t('column')" /><el-table-column prop="raw_dtype" :label="t('dataType')" /><el-table-column prop="ml_type" :label="t('mlType')" /><el-table-column prop="missing_count" :label="t('missing')" /><el-table-column prop="outlier_count" :label="t('outliers')" /><el-table-column :label="t('minimum')"><template #default="scope">{{ formatNumber(scope.row.minimum) }}</template></el-table-column><el-table-column :label="t('maximum')"><template #default="scope">{{ formatNumber(scope.row.maximum) }}</template></el-table-column><el-table-column :label="t('mean')"><template #default="scope">{{ formatNumber(scope.row.mean) }}</template></el-table-column><el-table-column :label="t('standardDeviation')"><template #default="scope">{{ formatNumber(scope.row.std) }}</template></el-table-column><el-table-column :label="t('median')"><template #default="scope">{{ formatNumber(scope.row.median) }}</template></el-table-column><el-table-column prop="mode" :label="t('mode')" /></el-table></el-card>
     </section>
 
     <section v-else-if="activePage === 'training'">
-      <el-card class="workspace"><template #header>Regression 模型訓練</template><el-alert title="第一階段支援 Random Forest、Gradient Boosting、XGBoost 與 AdaBoost Regression。請先在數據集管理頁選擇一份資料集。" type="info" :closable="false" show-icon class="bottom-gap" /><el-form label-position="top">
-        <el-form-item label="來源數據集"><el-select v-model="training.datasetId" class="full-width" placeholder="選擇資料集" @change="openDataset"><el-option v-for="dataset in datasets" :key="dataset.id" :label="`${dataset.name} (${dataset.row_count} 列)`" :value="dataset.id" /></el-select></el-form-item>
-        <template v-if="selectedDataset"><el-form-item label="模型名稱"><el-input v-model="training.modelName" placeholder="例如：2026 Q3 房價模型" /></el-form-item><el-form-item label="Target 欄位（僅可選數值欄位）"><el-radio-group :model-value="training.targetColumn" @change="setTarget"><el-radio v-for="column in numericColumns" :key="column.name" :value="column.name">{{ column.name }}</el-radio></el-radio-group></el-form-item><el-form-item><template #label>訓練特徵（checkbox）<el-tag size="small" class="feature-count">已選擇 {{ training.featureColumns.length }} 個</el-tag></template><el-checkbox-group v-model="training.featureColumns"><el-checkbox v-for="column in selectedDatasetColumns" :key="column.name" :value="column.name" :disabled="column.name === training.targetColumn">{{ column.name }} <span class="muted">({{ column.ml_type }})</span></el-checkbox></el-checkbox-group></el-form-item>
-        <el-form-item label="演算法"><el-radio-group v-model="training.algorithm"><el-radio value="random_forest">Random Forest</el-radio><el-radio value="gradient_boosting">Gradient Boosting</el-radio><el-radio value="xgboost">XGBoost</el-radio><el-radio value="adaboost">AdaBoost</el-radio></el-radio-group></el-form-item>
-        <el-row :gutter="16"><el-col :span="12"><el-form-item label="數值型缺值補值"><el-select v-model="training.numericImputer"><el-option value="median" label="中位數（預設）" /><el-option value="mean" label="平均數" /><el-option value="most_frequent" label="眾數" /><el-option value="constant" label="特定值" /><el-option value="drop" label="剔除資料列" /></el-select></el-form-item></el-col><el-col :span="12"><el-form-item label="類別型缺值補值"><el-select v-model="training.categoricalImputer"><el-option value="most_frequent" label="眾數（預設）" /><el-option value="constant" label="特定值" /></el-select></el-form-item></el-col></el-row>
-        <el-row :gutter="16"><el-col :span="12"><el-form-item label="交叉驗證折數"><el-input-number v-model="training.cvFolds" :min="2" :max="10" /></el-form-item></el-col><el-col :span="12"><el-form-item label="外部測試資料集（選填）"><el-select v-model="training.testDatasetId" clearable placeholder="不使用"><el-option v-for="dataset in datasets.filter(item => item.id !== training.datasetId)" :key="dataset.id" :value="dataset.id" :label="dataset.name" /></el-select></el-form-item></el-col></el-row>
-        <el-row :gutter="16"><el-col :span="12"><el-form-item label="特徵降維"><el-select v-model="training.dimensionReduction"><el-option value="none" label="不使用（預設）" /><el-option value="truncated_svd" label="Truncated SVD" /></el-select></el-form-item></el-col><el-col v-if="training.dimensionReduction === 'truncated_svd'" :span="12"><el-form-item label="SVD 元件數"><el-input-number v-model="training.svdComponents" :min="2" :max="100" /></el-form-item></el-col></el-row>
-        <el-button type="primary" :loading="trainingLoading" @click="train">開始訓練</el-button></template>
+      <el-card class="workspace"><template #header>{{ t('regressionTraining') }}</template><el-alert :title="t('trainingNotice')" type="info" :closable="false" show-icon class="bottom-gap" /><el-form label-position="top">
+        <el-form-item :label="t('sourceDataset')"><el-select v-model="training.datasetId" class="full-width" :placeholder="t('selectModel')" @change="openDataset"><el-option v-for="dataset in datasets" :key="dataset.id" :label="`${dataset.name} (${dataset.row_count} ${t('rows')})`" :value="dataset.id" /></el-select></el-form-item>
+        <template v-if="selectedDataset"><el-form-item :label="t('modelName')"><el-input v-model="training.modelName" :placeholder="locale === 'zh-TW' ? '例如：2026 Q3 房價模型' : 'e.g. 2026 Q3 House Price Model'" /></el-form-item><el-form-item :label="t('targetColumn')"><el-radio-group :model-value="training.targetColumn" @change="setTarget"><el-radio v-for="column in numericColumns" :key="column.name" :value="column.name">{{ column.name }}</el-radio></el-radio-group></el-form-item><el-form-item><template #label>{{ t('trainingFeatures') }} <el-tag size="small" class="feature-count">{{ t('selected') }} {{ training.featureColumns.length }}</el-tag></template><el-checkbox-group v-model="training.featureColumns"><el-checkbox v-for="column in selectedDatasetColumns" :key="column.name" :value="column.name" :disabled="column.name === training.targetColumn">{{ column.name }} <span class="muted">({{ column.ml_type }})</span></el-checkbox></el-checkbox-group></el-form-item>
+        <el-form-item :label="t('algorithm')"><el-radio-group v-model="training.algorithm"><el-radio value="random_forest">Random Forest</el-radio><el-radio value="gradient_boosting">Gradient Boosting</el-radio><el-radio value="xgboost">XGBoost</el-radio><el-radio value="adaboost">AdaBoost</el-radio></el-radio-group></el-form-item>
+        <el-row :gutter="16"><el-col :span="12"><el-form-item :label="t('numericImputer')"><el-select v-model="training.numericImputer"><el-option value="median" :label="t('medianDefault')" /><el-option value="mean" :label="t('average')" /><el-option value="most_frequent" :label="t('mostFrequent')" /><el-option value="constant" :label="t('constant')" /><el-option value="drop" :label="t('dropRows')" /></el-select></el-form-item></el-col><el-col :span="12"><el-form-item :label="t('categoricalImputer')"><el-select v-model="training.categoricalImputer"><el-option value="most_frequent" :label="t('medianDefault')" /><el-option value="constant" :label="t('constant')" /></el-select></el-form-item></el-col></el-row>
+        <el-row :gutter="16"><el-col :span="12"><el-form-item :label="t('cvFolds')"><el-input-number v-model="training.cvFolds" :min="2" :max="10" /></el-form-item></el-col><el-col :span="12"><el-form-item :label="t('externalTest')"><el-select v-model="training.testDatasetId" clearable :placeholder="t('notUsed')"><el-option v-for="dataset in datasets.filter(item => item.id !== training.datasetId)" :key="dataset.id" :value="dataset.id" :label="dataset.name" /></el-select></el-form-item></el-col></el-row>
+        <el-row :gutter="16"><el-col :span="12"><el-form-item :label="t('dimensionReduction')"><el-select v-model="training.dimensionReduction"><el-option value="none" :label="t('noReduction')" /><el-option value="truncated_svd" label="Truncated SVD" /></el-select></el-form-item></el-col><el-col v-if="training.dimensionReduction === 'truncated_svd'" :span="12"><el-form-item :label="t('svdComponents')"><el-input-number v-model="training.svdComponents" :min="2" :max="100" /></el-form-item></el-col></el-row>
+        <el-button type="primary" :loading="trainingLoading" @click="train">{{ t('startTraining') }}</el-button></template>
       </el-form></el-card>
-      <el-card v-if="selectedDataset && training.algorithm === 'xgboost'" class="result-card"><template #header>XGBoost Hyper Parameters</template><el-row :gutter="12"><el-col :span="8"><el-form-item label="n_estimators"><el-input-number v-model="xgbParams.n_estimators" :min="1" /></el-form-item></el-col><el-col :span="8"><el-form-item label="learning_rate"><el-input-number v-model="xgbParams.learning_rate" :min="0.001" :step="0.01" /></el-form-item></el-col><el-col :span="8"><el-form-item label="max_depth"><el-input-number v-model="xgbParams.max_depth" :min="1" /></el-form-item></el-col><el-col :span="8"><el-form-item label="gamma"><el-input-number v-model="xgbParams.gamma" :min="0" :step="0.01" /></el-form-item></el-col><el-col :span="8"><el-form-item label="subsample"><el-input-number v-model="xgbParams.subsample" :min="0.1" :max="1" :step="0.05" /></el-form-item></el-col><el-col :span="8"><el-form-item label="verbosity"><el-input-number v-model="xgbParams.verbosity" :min="0" :max="3" /></el-form-item></el-col></el-row><p class="helper">保留預設值即可；調整後會僅套用至本次 XGBoost 訓練。</p></el-card>
-      <el-card v-if="selectedDataset && training.algorithm !== 'xgboost'" class="result-card"><template #header>{{ training.algorithm }} Hyper Parameters</template><el-empty description="此演算法目前使用系統預設值。Hyper Parameters 控制項已預留，待後續規格確認後啟用。" :image-size="72" /></el-card>
-      <el-card v-if="trainingLoading" class="result-card"><template #header>訓練進度</template><el-progress :percentage="trainingProgress" :status="trainingProgress === 100 ? 'success' : undefined" /><p class="helper">{{ trainingMessage }}</p></el-card>
+       <el-card v-if="selectedDataset && training.algorithm === 'xgboost'" class="result-card"><template #header>{{ t('xgbParameters') }}</template><el-row :gutter="12"><el-col :span="8"><el-form-item label="n_estimators"><el-input-number v-model="xgbParams.n_estimators" :min="1" /></el-form-item></el-col><el-col :span="8"><el-form-item label="learning_rate"><el-input-number v-model="xgbParams.learning_rate" :min="0.001" :step="0.01" /></el-form-item></el-col><el-col :span="8"><el-form-item label="max_depth"><el-input-number v-model="xgbParams.max_depth" :min="1" /></el-form-item></el-col><el-col :span="8"><el-form-item label="gamma"><el-input-number v-model="xgbParams.gamma" :min="0" :step="0.01" /></el-form-item></el-col><el-col :span="8"><el-form-item label="subsample"><el-input-number v-model="xgbParams.subsample" :min="0.1" :max="1" :step="0.05" /></el-form-item></el-col><el-col :span="8"><el-form-item label="verbosity"><el-input-number v-model="xgbParams.verbosity" :min="0" :max="3" /></el-form-item></el-col></el-row><p class="helper">{{ t('xgbHint') }}</p></el-card>
+       <el-card v-if="selectedDataset && training.algorithm !== 'xgboost'" class="result-card"><template #header>{{ training.algorithm }} {{ t('hyperParameters') }}</template><el-empty :description="t('hyperParametersReserved')" :image-size="72" /></el-card>
+       <el-card v-if="trainingLoading" class="result-card"><template #header>{{ t('trainingProgress') }}</template><el-progress :percentage="trainingProgress" :status="trainingProgress === 100 ? 'success' : undefined" /><p class="helper">{{ trainingMessage }}</p></el-card>
     </section>
 
     <section v-else class="trained-models-page">
