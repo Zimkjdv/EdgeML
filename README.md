@@ -60,6 +60,15 @@ docker compose up --build
 
 Open http://localhost:5173. The API is available at http://localhost:8000 and its OpenAPI UI at http://localhost:8000/docs.
 
+The Docker Compose setup runs the complete v0.7.2 workflow:
+
+- `frontend`: Vue application served by Nginx.
+- `backend`: FastAPI API server.
+- `redis`: training job queue.
+- `worker`: independent training worker.
+
+Training jobs flow from the API to Redis and are executed by the worker. The backend and worker share the persistent data volume for datasets, job records, and trained artifacts.
+
 ## Windows development launcher
 
 After completing the one-time local setup below, double-click `start-dev.bat` in the project root, or run it from PowerShell:
@@ -68,7 +77,7 @@ After completing the one-time local setup below, double-click `start-dev.bat` in
 .\start-dev.bat
 ```
 
-It opens separate terminals for the FastAPI reload server and Vite development server. It automatically uses `backend/.venv` when present, falling back to `backend/.venv-local`.
+It opens separate terminals for the FastAPI reload server and Vite development server. It automatically uses `backend/.venv` when present, falling back to `backend/.venv-local`. Because v0.7.2 training uses Redis and a separate worker, start them as described in the local development section before submitting training jobs.
 
 Three deterministic example model packages are included:
 
@@ -80,7 +89,17 @@ Three deterministic example model packages are included:
 
 ## Local development
 
-```bash
+The asynchronous training API uses Redis by default. You can run the complete stack with Docker Compose, or run the API and frontend locally while using Docker only for Redis and the worker.
+
+For the hybrid local workflow, start Redis first:
+
+```powershell
+docker compose up -d redis
+```
+
+Then run the FastAPI server in one terminal:
+
+```powershell
 cd backend
 python -m venv .venv
 # Windows: If multiple Python versions are installed, explicitly select Python 3.12:
@@ -91,11 +110,15 @@ python scripts/build_example_models.py
 uvicorn app.main:app --reload
 ```
 
-The asynchronous training API uses Redis by default. For local development, start Redis with `docker compose up -d redis` and run the worker in a second backend terminal:
+Run the training worker in a second backend terminal:
 
 ```powershell
+cd backend
+.venv\Scripts\activate
 python -m app.workers.training_worker
 ```
+
+If only the FastAPI server is started without Redis and the worker, Prediction remains available but `POST /api/training/jobs` cannot enqueue work and returns `503 Training queue is unavailable`.
 
 ```bash
 cd frontend

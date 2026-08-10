@@ -15,6 +15,10 @@ The v0.7.1 observability layer is cross-cutting: `RequestContextMiddleware` adds
 
 In v0.7.2, `TrainingJobQueue` is the application boundary for asynchronous training dispatch. The API persists the request and initial job state under `training_jobs/`, then enqueues only the job ID. A separate Redis-backed worker consumes, executes, and acknowledges jobs through `TrainingService`; the API and worker share the job and trained-model storage volume. The queue uses an at-least-once delivery model and requeues jobs left in the processing list after worker restart.
 
+## Runtime modes
+
+Docker Compose is the recommended runtime and starts the frontend, FastAPI backend, Redis queue, and training worker together. Local development may run the FastAPI server and Vue dev server directly while Redis and the training worker run through Docker. Prediction can run with only the API process, but asynchronous training requires both Redis and a worker.
+
 The registry stores package metadata and an active/disabled status in `backend/data/model_registry.json`. Existing model packages are bootstrapped into the registry on first startup. Disabling a model removes it from the Prediction selector without deleting its artifact package; unregistering only removes the registry entry.
 
 `PredictionService` depends on the `PredictionHistoryRepository` abstraction and records metadata only after a prediction succeeds. The initial `FilePredictionHistoryRepository` adapter uses JSON Lines local persistence. It can be replaced by a database-backed adapter without changing the service or HTTP route.
