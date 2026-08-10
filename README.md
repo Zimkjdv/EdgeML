@@ -18,11 +18,14 @@ EdgeML is a self-hosted, plugin-oriented platform for batch predictions from CSV
 - Background training progress and optional XGBoost hyperparameter overrides
 - Docker Compose deployment
 
-## v0.2 in progress
+## v0.2 current status
 
 - Successful prediction metadata is recorded through an injectable `PredictionHistoryRepository`.
 - `GET /api/prediction-history` returns prediction history in reverse chronological order.
 - The initial file adapter persists metadata only; uploaded CSV files and prediction outputs are not retained.
+- The frontend provides Traditional Chinese / English switching with a persisted language preference.
+- Prediction, history, dataset, training, and trained-model pages share a responsive visual design system.
+- Tables support compact layouts, readable typography, and full-value hover tooltips for truncated content.
 
 ## Quick start
 
