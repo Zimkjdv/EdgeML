@@ -27,6 +27,12 @@ EdgeML is a self-hosted, plugin-oriented platform for batch predictions from CSV
 - Prediction, history, dataset, training, and trained-model pages share a responsive visual design system.
 - Tables support compact layouts, readable typography, and full-value hover tooltips for truncated content.
 
+## v0.3 in progress
+
+- Add classification training with stratified cross-validation and classification metrics.
+- Add Ridge regression as a regularized linear baseline.
+- Keep regression and classification model manifests compatible with the existing trained-model and prediction workflows.
+
 ## Quick start
 
 ```bash

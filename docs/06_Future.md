@@ -1,7 +1,7 @@
 # Future design
 
 - **v0.2:** inject a history repository into `PredictionService` and persist durable training-job metadata.
-- **v0.3:** add classification training, Ridge, Lasso Lars, Stacking, and richer feature-dimension reduction controls.
+- **v0.3 (in progress):** add classification training with stratified evaluation and classification metrics, plus Ridge regression as a regularized baseline. Lasso Lars, Stacking, and richer feature-dimension reduction controls remain planned follow-up work.
 - **v0.4:** add SHAP-backed `explain` support through predictor capabilities.
 - **v0.5:** replace the file-only catalog with a model registry while keeping `ModelCatalog` as the application boundary.
 - **v0.6:** add API-token authentication middleware and access-control boundaries.

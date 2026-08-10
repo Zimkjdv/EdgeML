@@ -59,7 +59,7 @@ const messages = {
     median: '中位數',
     mode: '眾數',
     regressionTraining: '回歸模型訓練',
-    trainingNotice: '第一階段支援 Random Forest、Gradient Boosting、XGBoost 與 AdaBoost Regression。請先在數據集管理頁選擇一份資料集。',
+    trainingNotice: '回歸訓練支援 Random Forest、Gradient Boosting、XGBoost、AdaBoost 與 Ridge。請先在數據集管理頁選擇一份資料集。',
     sourceDataset: '來源數據集',
     targetColumn: '目標欄位（僅可選數值欄位）',
     trainingFeatures: '訓練特徵',
@@ -99,6 +99,8 @@ const messages = {
     load: '載入',
     modelType: '模型類型',
     featureColumns: '特徵欄位',
+    problemType: '問題類型', regression: '回歸', classification: '分類',
+    classificationNotice: '分類訓練支援 Random Forest、Gradient Boosting、XGBoost 與 AdaBoost。目標欄位可以是數值或類別欄位。', classificationEvaluation: '分類評估指標', validationAccuracy: '驗證準確率', validationF1: '驗證 F1', validationPrecision: '驗證 Precision', validationRecall: '驗證 Recall', validationRocAuc: '驗證 ROC AUC', testAccuracy: '測試準確率', testF1: '測試 F1', testPrecision: '測試 Precision', testRecall: '測試 Recall',
   },
   en: {
     brandTag: 'EDGE MACHINE LEARNING',
@@ -132,12 +134,13 @@ const messages = {
     columnAnalysis: 'Column Analysis', column: 'Column', dataType: 'Data Type', mlType: 'ML Type', missing: 'Missing',
     outliers: 'Outliers', minimum: 'Minimum', maximum: 'Maximum', mean: 'Mean', standardDeviation: 'Std. Dev.',
     median: 'Median', mode: 'Mode', regressionTraining: 'Regression Model Training',
-    trainingNotice: 'The first phase supports Random Forest, Gradient Boosting, XGBoost, and AdaBoost Regression. Select a dataset in Dataset Management first.',
+    trainingNotice: 'Regression training supports Random Forest, Gradient Boosting, XGBoost, AdaBoost, and Ridge. Select a dataset in Dataset Management first.',
     sourceDataset: 'Source Dataset', targetColumn: 'Target Column (numeric only)', trainingFeatures: 'Training Features', selected: 'Selected', algorithm: 'Algorithm',
     numericImputer: 'Numeric Missing-Value Imputation', categoricalImputer: 'Categorical Missing-Value Imputation', medianDefault: 'Median (default)', average: 'Mean', mostFrequent: 'Most Frequent', constant: 'Constant', dropRows: 'Drop Rows',
     cvFolds: 'Cross-Validation Folds', externalTest: 'External Test Dataset (optional)', notUsed: 'Not used', dimensionReduction: 'Dimensionality Reduction', noReduction: 'None (default)', svdComponents: 'SVD Components', startTraining: 'Start Training',
     xgbParameters: 'XGBoost Hyperparameters', xgbHint: 'Leave the defaults to use native XGBoost settings; changes apply only to this training run.', hyperParameters: 'Hyperparameters', hyperParametersReserved: 'This algorithm currently uses system defaults. Hyperparameter controls are reserved for a later specification.', trainingProgress: 'Training Progress',
     modelDetails: 'Model Details and Evaluation', publishToPrediction: 'Publish to Prediction', loadToPrediction: 'Load into Prediction', fullEvaluation: 'Full Regression Evaluation', renameModel: 'Rename Model', trainedModelManagement: 'Trained Model Management', deleteSelected: 'Delete Selected Models', completedAt: 'Completed At', validationR2: 'Validation R²', testR2: 'Test R²', status: 'Status', publish: 'Publish', load: 'Load', modelType: 'Model Type', featureColumns: 'Feature Columns',
+    problemType: 'Problem Type', regression: 'Regression', classification: 'Classification', classificationNotice: 'Classification training supports Random Forest, Gradient Boosting, XGBoost, and AdaBoost. The target can be numeric or categorical.', classificationEvaluation: 'Classification Evaluation', validationAccuracy: 'Validation Accuracy', validationF1: 'Validation F1', validationPrecision: 'Validation Precision', validationRecall: 'Validation Recall', validationRocAuc: 'Validation ROC AUC', testAccuracy: 'Test Accuracy', testF1: 'Test F1', testPrecision: 'Test Precision', testRecall: 'Test Recall',
   },
 } as const
 

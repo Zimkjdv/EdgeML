@@ -76,9 +76,13 @@ h1 { margin: 0; font-size: 40px; letter-spacing: -.03em; }
 }
 .workspace:has(.el-checkbox-group) .el-radio-group {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 10px;
   width: 100%;
+}
+.workspace:has(.el-checkbox-group) .el-form > .el-form-item:first-of-type .el-radio-group {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: min(100%, 640px);
 }
 .workspace:has(.el-checkbox-group) .el-radio {
   min-height: 42px;
@@ -88,6 +92,12 @@ h1 { margin: 0; font-size: 40px; letter-spacing: -.03em; }
   border-radius: 9px;
   background: #fff;
   transition: border-color .18s ease, background .18s ease, box-shadow .18s ease;
+}
+.workspace:has(.el-checkbox-group) .el-radio__label {
+  min-width: 0;
+  white-space: normal;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 .workspace:has(.el-checkbox-group) .el-radio:hover,
 .workspace:has(.el-checkbox-group) .el-radio.is-checked {
@@ -105,6 +115,7 @@ h1 { margin: 0; font-size: 40px; letter-spacing: -.03em; }
   border: 1px solid #dbe5f1;
   border-radius: 12px;
   background: #f8fbff;
+  width: 100%;
 }
 .workspace:has(.el-checkbox-group) .el-checkbox {
   min-width: 0;
@@ -117,6 +128,12 @@ h1 { margin: 0; font-size: 40px; letter-spacing: -.03em; }
 .workspace:has(.el-checkbox-group) .el-checkbox:hover {
   border-color: #c8dcf5;
   background: #fff;
+}
+.workspace:has(.el-checkbox-group) .el-checkbox__label {
+  min-width: 0;
+  white-space: normal;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 .workspace:has(.el-checkbox-group) .feature-count {
   margin-left: 10px;
@@ -208,6 +225,63 @@ h1 { margin: 0; font-size: 40px; letter-spacing: -.03em; }
   background: #f3f8ff;
   color: #55708f;
 }
+
+/* Keep hyperparameter controls compact and aligned with the earlier form layout. */
+.workspace:has(.el-checkbox-group) ~ .result-card .el-row {
+  margin: -5px !important;
+}
+.workspace:has(.el-checkbox-group) ~ .result-card .el-col {
+  padding: 5px !important;
+}
+.workspace:has(.el-checkbox-group) ~ .result-card .el-form-item {
+  display: grid;
+  grid-template-columns: minmax(108px, .4fr) minmax(0, 1fr);
+  align-items: center;
+  column-gap: 14px;
+  min-height: 58px;
+  padding: 10px 12px;
+}
+.workspace:has(.el-checkbox-group) ~ .result-card .el-form-item__label {
+  margin: 0;
+  line-height: 1.3;
+}
+.workspace:has(.el-checkbox-group) ~ .result-card .el-form-item__content {
+  min-width: 0;
+}
+.workspace:has(.el-checkbox-group) ~ .result-card .el-input-number {
+  width: min(100%, 240px);
+}
+
+/* Training options use a lightweight form grid instead of large nested panels. */
+.workspace:has(.el-checkbox-group) .el-row {
+  margin: 0 -8px 12px !important;
+  padding: 4px 8px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.workspace:has(.el-checkbox-group) .el-row .el-col {
+  padding: 0 8px !important;
+}
+.workspace:has(.el-checkbox-group) .el-row .el-form-item {
+  margin-bottom: 18px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.workspace:has(.el-checkbox-group) .el-row .el-form-item__label {
+  margin-bottom: 7px;
+}
+.workspace:has(.el-checkbox-group) .el-row .el-select {
+  width: min(100%, 440px);
+}
+.workspace:has(.el-checkbox-group) .el-form > .el-form-item:nth-of-type(2) .el-select,
+.workspace:has(.el-checkbox-group) .el-form > .el-form-item:nth-of-type(3) .el-input {
+  width: min(100%, 760px);
+}
+.workspace:has(.el-checkbox-group) .el-input-number {
+  border-radius: 9px;
+}
 @media (max-width: 700px) {
   .unified-model-detail .el-descriptions__table { table-layout: auto; }
   .unified-model-detail .el-descriptions__label.is-bordered-label { width: 132px; min-width: 132px; }
@@ -215,9 +289,25 @@ h1 { margin: 0; font-size: 40px; letter-spacing: -.03em; }
   .workspace:has(.el-checkbox-group) .el-card__header { padding: 20px 18px; }
   .workspace:has(.el-checkbox-group) .el-radio-group,
   .workspace:has(.el-checkbox-group) .el-checkbox-group { grid-template-columns: 1fr; }
-  .workspace:has(.el-checkbox-group) .el-row { padding: 14px 12px 0; }
+  .workspace:has(.el-checkbox-group) .el-form > .el-form-item:first-of-type .el-radio-group { width: 100%; }
+  .workspace:has(.el-checkbox-group) .el-row { margin: 0 -4px 8px !important; padding: 4px 4px 0; }
+  .workspace:has(.el-checkbox-group) .el-row .el-col { padding: 0 4px !important; }
   .workspace:has(.el-checkbox-group) ~ .result-card .el-card__body { padding: 18px 14px; }
   .workspace:has(.el-checkbox-group) ~ .result-card .el-card__header { padding: 16px 18px; }
+  .workspace:has(.el-checkbox-group) ~ .result-card .el-form-item {
+    display: block;
+    min-height: 0;
+  }
+  .workspace:has(.el-checkbox-group) ~ .result-card .el-form-item__label { margin-bottom: 8px; }
+  .workspace:has(.el-checkbox-group) ~ .result-card .el-input-number { width: 100%; }
+}
+@media (min-width: 701px) and (max-width: 1200px) {
+  .workspace:has(.el-checkbox-group) .el-radio-group {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .workspace:has(.el-checkbox-group) .el-form > .el-form-item:first-of-type .el-radio-group {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 /* Legacy detail cards are retained temporarily for component-state compatibility; the unified card is authoritative. */
 .trained-models-page > .result-card:nth-of-type(2),

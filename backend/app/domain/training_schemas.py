@@ -44,7 +44,11 @@ class TrainingRequest(BaseModel):
     model_name: str = Field(min_length=2, max_length=80)
     target_column: str
     feature_columns: list[str] = Field(min_length=1)
-    algorithm: Literal["random_forest", "gradient_boosting", "xgboost", "adaboost"]
+    problem_type: Literal["regression", "classification"] = "regression"
+    algorithm: Literal[
+        "random_forest", "gradient_boosting", "xgboost", "adaboost", "ridge",
+        "random_forest_classifier", "gradient_boosting_classifier", "xgboost_classifier", "adaboost_classifier",
+    ]
     numeric_imputer: Literal["median", "mean", "most_frequent", "constant", "drop"] = "median"
     categorical_imputer: Literal["most_frequent", "constant"] = "most_frequent"
     numeric_constant: float = 0
@@ -63,7 +67,7 @@ class TrainedModelSummary(BaseModel):
     target_column: str
     algorithm: str
     problem_type: str = "regression"
-    validation_rmse: float
+    validation_rmse: float | None = None
     validation_r2: float | None = None
     test_rmse: float | None = None
     test_r2: float | None = None
