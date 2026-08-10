@@ -7,11 +7,13 @@ type Feature = { name: string; dtype: string; required: boolean }
 type PredictionModel = { id: string; name: string; version: string; framework: string; problem_type: string; description: string; features: Feature[] }
 type ColumnProfile = { name: string; raw_dtype: string; ml_type: 'numeric' | 'categorical'; missing_count: number; missing_rate: number; unique_count: number; outlier_count?: number; minimum?: number; maximum?: number; mean?: number; std?: number; median?: number; mode?: string }
 type Dataset = { id: string; name: string; original_filename: string; row_count: number; column_count: number; created_at: string; columns?: ColumnProfile[] }
+type PredictionHistoryRecord = { id: string; model_id: string; model_name: string; source_filename: string; row_count: number; created_at: string }
 type TrainedModel = { id: string; name: string; completed_at: string; target_column: string; algorithm: string; problem_type: string; validation_rmse: number; validation_r2?: number; test_rmse?: number; test_r2?: number; status: 'draft' | 'published'; feature_columns?: string[]; validation_metrics?: Record<string, number>; test_metrics?: Record<string, number>; settings?: Record<string, unknown>; manifest?: Record<string, unknown> }
 
 const activePage = ref('prediction')
 const models = ref<PredictionModel[]>([])
 const datasets = ref<Dataset[]>([])
+const predictionHistory = ref<PredictionHistoryRecord[]>([])
 const trainedModels = ref<TrainedModel[]>([])
 const selectedDataset = ref<Dataset | null>(null)
 const predictionModelId = ref('')
@@ -62,6 +64,7 @@ const refreshModels = async () => {
 }
 const refreshDatasets = async () => { datasets.value = await api<Dataset[]>('/api/datasets') }
 const refreshTrainedModels = async () => { trainedModels.value = await api<TrainedModel[]>('/api/trained-models') }
+const refreshPredictionHistory = async () => { predictionHistory.value = await api<PredictionHistoryRecord[]>('/api/prediction-history') }
 
 const selectPredictionFile = (file: { raw?: File }) => {
   predictionFile.value = file.raw ?? null
@@ -92,7 +95,7 @@ const runPrediction = async () => {
     const form = new FormData(); form.append('model_id', predictionModelId.value); form.append('file', predictionFile.value)
     const response = await fetch('/api/predict', { method: 'POST', body: form })
     if (!response.ok) { const error = await response.json(); throw new Error(error.detail ?? '預測失敗。') }
-    outputBlob.value = await response.blob(); parseCsvPreview(await outputBlob.value.text()); ElMessage.success('預測已完成。')
+    outputBlob.value = await response.blob(); parseCsvPreview(await outputBlob.value.text()); await refreshPredictionHistory(); ElMessage.success('預測已完成。')
   } catch (error) { ElMessage.error(error instanceof Error ? error.message : '預測失敗。') } finally { predictionLoading.value = false }
 }
 const downloadPrediction = () => {
@@ -152,7 +155,7 @@ const evaluateExternal = async () => { if (!selectedTrainedModel.value || !evalu
 const deleteTrainedModels = async (ids = selectedTrainedModelIds.value) => { if (!ids.length) return ElMessage.warning('請先勾選要刪除的模型。'); try { await ElMessageBox.confirm(`確定刪除 ${ids.length} 個模型？已發布模型也會從 Prediction Server 移除。`, '確認刪除', { type: 'warning', confirmButtonText: '刪除', cancelButtonText: '取消' }); await api<void>('/api/trained-models', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model_ids: ids }) }); selectedTrainedModelIds.value = []; selectedTrainedModel.value = null; await refreshTrainedModels(); await refreshModels(); ElMessage.success('模型已刪除。') } catch (error) { if (error !== 'cancel' && error !== 'close') ElMessage.error(error instanceof Error ? error.message : '刪除失敗。') } }
 
 onMounted(async () => {
-  try { await Promise.all([refreshModels(), refreshDatasets(), refreshTrainedModels()]) }
+  try { await Promise.all([refreshModels(), refreshDatasets(), refreshTrainedModels(), refreshPredictionHistory()]) }
   catch (error) { ElMessage.error(error instanceof Error ? error.message : '初始化失敗。') }
 })
 </script>
@@ -161,7 +164,7 @@ onMounted(async () => {
   <main class="page-shell">
     <section class="hero"><p class="eyebrow">EDGE MACHINE LEARNING</p><h1>EdgeML 工作平台</h1><p>CSV 資料管理、模型訓練與企業內部預測服務。</p></section>
     <el-menu :default-active="activePage" mode="horizontal" class="nav" @select="(key: string) => activePage = key">
-      <el-menu-item index="prediction">Prediction</el-menu-item><el-menu-item index="datasets">數據集管理</el-menu-item><el-menu-item index="training">模型訓練</el-menu-item><el-menu-item index="trained">已訓練模型</el-menu-item>
+      <el-menu-item index="prediction">Prediction</el-menu-item><el-menu-item index="history">Prediction History</el-menu-item><el-menu-item index="datasets">數據集管理</el-menu-item><el-menu-item index="training">模型訓練</el-menu-item><el-menu-item index="trained">已訓練模型</el-menu-item>
     </el-menu>
 
     <section v-if="activePage === 'prediction'">
@@ -171,6 +174,17 @@ onMounted(async () => {
         <el-button type="primary" :loading="predictionLoading" @click="runPrediction">執行預測</el-button><el-button :icon="Download" :disabled="!outputBlob" @click="downloadPrediction">下載結果 CSV</el-button>
       </el-form></el-card>
       <el-card v-if="previewColumns.length" class="result-card"><template #header><div class="result-heading">預測結果預覽 <span>前 10 筆</span></div></template><el-table :data="previewRows" max-height="360"><el-table-column v-for="column in previewColumns" :key="column" :prop="column" :label="column" /></el-table></el-card>
+    </section>
+
+    <section v-else-if="activePage === 'history'">
+      <el-card class="workspace">
+        <template #header>Prediction History</template>
+        <el-empty v-if="!predictionHistory.length" description="尚無預測紀錄。" />
+        <el-table v-else :data="predictionHistory" stripe>
+          <el-table-column label="預測時間" min-width="220"><template #default="scope">{{ formatDate(scope.row.created_at) }}</template></el-table-column>
+          <el-table-column prop="model_name" label="模型名稱" min-width="220" />
+        </el-table>
+      </el-card>
     </section>
 
     <section v-else-if="activePage === 'datasets'">

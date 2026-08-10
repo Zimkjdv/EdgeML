@@ -2,6 +2,7 @@ from functools import lru_cache
 
 from app.core.config import get_settings
 from app.infrastructure.model_catalog import FileModelCatalog
+from app.infrastructure.file_prediction_history_repository import FilePredictionHistoryRepository
 from app.infrastructure.predictor_factory import PredictorFactory
 from app.services.prediction_service import PredictionService
 from app.services.dataset_service import DatasetService
@@ -12,7 +13,12 @@ from app.services.training_service import TrainingService
 def get_prediction_service() -> PredictionService:
     settings = get_settings()
     catalog = FileModelCatalog(settings.models_root)
-    return PredictionService(catalog=catalog, predictor_factory=PredictorFactory())
+    history_repository = FilePredictionHistoryRepository(settings.prediction_history_file)
+    return PredictionService(
+        catalog=catalog,
+        predictor_factory=PredictorFactory(),
+        history_repository=history_repository,
+    )
 
 
 @lru_cache

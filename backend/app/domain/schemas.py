@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 from pydantic import BaseModel, Field
@@ -42,4 +42,13 @@ class ModelSummary(BaseModel):
 class PredictionOutput(BaseModel):
     filename: str
     csv_content: bytes
+
+
+class PredictionHistoryRecord(BaseModel):
+    id: str
+    model_id: str
+    model_name: str
+    source_filename: str
+    row_count: int
+    created_at: datetime
 

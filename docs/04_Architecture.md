@@ -3,12 +3,15 @@
 ```text
 Vue UI -> FastAPI router -> PredictionService -> ModelCatalog -> BasePredictor plugin
                                             -> CSV validation
+                                            -> PredictionHistoryRepository
 
 Vue UI -> FastAPI router -> DatasetService -> trusted CSV + profile metadata
                        -> TrainingService -> sklearn Pipeline artifact -> ModelCatalog publication
 ```
 
 Routers only handle HTTP. `PredictionService` coordinates validation and prediction. `ModelCatalog` scans model folders and constructs a validated `ModelManifest`. `PredictorFactory` chooses a `BasePredictor` implementation from the manifest's `framework` field.
+
+`PredictionService` depends on the `PredictionHistoryRepository` abstraction and records metadata only after a prediction succeeds. The initial `FilePredictionHistoryRepository` adapter uses JSON Lines local persistence. It can be replaced by a database-backed adapter without changing the service or HTTP route.
 
 Each runtime adapter implements `load`, `predict`, `predict_proba`, `explain`, and `metadata`. v0.1 includes `SklearnPredictor`; XGBoost, LightGBM, CatBoost, ONNX, TensorFlow, and Torch are future plugins.
 

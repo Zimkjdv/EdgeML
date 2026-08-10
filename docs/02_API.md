@@ -13,7 +13,13 @@ Multipart form fields:
 
 The request validates its size and CSV headers, runs a prediction, and returns a CSV attachment containing the original input columns and the manifest's `prediction_column`. The response is intentionally stateless: the browser uses the returned CSV for preview and download.
 
+Every successful request also writes prediction metadata to the configured history repository. Uploaded CSV contents and prediction outputs are not retained.
+
 Errors use JSON with `detail` and appropriate HTTP status codes: 400 for invalid input, 404 for an unknown model, and 422 for schema/type validation failures.
+
+## `GET /api/prediction-history`
+
+Returns successful prediction records in reverse chronological order. Each record contains its identifier, model identifier and name, sanitized source filename, input row count, and UTC creation time. The history contains metadata only.
 
 ## Dataset and training APIs
 

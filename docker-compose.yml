@@ -4,7 +4,10 @@ services:
       context: ./backend
     environment:
       EDGEML_MODELS_ROOT: /app/ml_models
+      EDGEML_PREDICTION_HISTORY_FILE: /app/data/prediction_history.jsonl
       EDGEML_MAX_UPLOAD_BYTES: "5242880"
+    volumes:
+      - prediction-data:/app/data
     ports:
       - "8000:8000"
 
@@ -15,4 +18,7 @@ services:
       - backend
     ports:
       - "5173:80"
+
+volumes:
+  prediction-data:
 

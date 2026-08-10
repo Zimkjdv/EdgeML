@@ -1,6 +1,8 @@
 # Database
 
-v0.1 prediction intentionally has no database. Requests are stateless and prediction outputs are returned directly to the caller.
+EdgeML currently has no database. Prediction outputs remain stateless and are returned directly to the caller.
+
+v0.2 introduces prediction-history metadata behind the `PredictionHistoryRepository` abstraction. The initial adapter appends JSON Lines records to `backend/data/prediction_history.jsonl`; Docker Compose stores this path in a named volume. CSV inputs and prediction outputs are never persisted by the history repository. A future database adapter can replace the file implementation without changing `PredictionService`.
 
 The first Training Module uses local filesystem persistence to avoid prematurely adding database infrastructure:
 
@@ -8,4 +10,4 @@ The first Training Module uses local filesystem persistence to avoid prematurely
 - `backend/trained_models/`: draft training artifacts and training records.
 - `backend/ml_models/`: published artifact packages scanned by the Prediction Server.
 
-Prediction history and multi-user training will introduce database persistence behind repository abstractions in a later milestone. Database selection and schema will be decided then.
+Multi-user prediction and training may introduce database persistence behind the existing repository boundary in a later milestone. Database selection and schema will be decided then.
