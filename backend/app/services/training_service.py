@@ -205,7 +205,8 @@ class TrainingService:
         return ExternalEvaluationResult(metrics=metrics)
 
     def _write_job(self, job: TrainingJob, request: TrainingRequest) -> None:
-        (self._jobs_root / f"{job.id}.json").write_text(json.dumps({"job": job.model_dump(), "request": request.model_dump()}, ensure_ascii=False), encoding="utf-8")
+        payload = {"job": job.model_dump(mode="json"), "request": request.model_dump(mode="json")}
+        (self._jobs_root / f"{job.id}.json").write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
 
     def _read_job(self, job_id: str) -> tuple[TrainingJob, TrainingRequest]:
         path = self._jobs_root / f"{job_id}.json"

@@ -47,8 +47,8 @@ EdgeML is a self-hosted, plugin-oriented platform for batch predictions from CSV
 
 ## Future roadmap
 
-- v0.7.2 in progress: replace local background jobs with queue-backed training workers.
-- v0.7.2 follow-up: add retry/dead-letter handling, graceful worker shutdown, and Docker runtime integration tests.
+- v0.7.2 completed: replace local background jobs with queue-backed training workers; the Docker runtime flow is verified end to end.
+- v0.7.2 follow-up: add retry/dead-letter handling and graceful worker shutdown.
 - v0.7.3: add queue operations, worker capacity controls, and queue-depth monitoring.
 - v0.8: add a frontend observability dashboard for API health, registry availability, training activity, prediction outcomes, and operational errors.
 

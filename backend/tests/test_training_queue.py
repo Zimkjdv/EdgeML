@@ -4,7 +4,9 @@ from fastapi.testclient import TestClient
 
 from app.api.dependencies import get_training_job_queue, get_training_service
 from app.domain.training_schemas import TrainingJob
+from app.domain.training_schemas import TrainingRequest
 from app.main import create_app
+from app.services.training_service import TrainingService
 
 
 class RecordingQueue:
@@ -71,3 +73,14 @@ def test_training_job_reports_queue_unavailable() -> None:
 
     assert response.status_code == 503
     assert service.failed == [("job-1", "redis unavailable")]
+
+
+def test_training_job_lifecycle_metadata_is_json_serializable(tmp_path) -> None:
+    service = TrainingService(None, tmp_path / "trained", tmp_path / "models", jobs_root=tmp_path / "jobs")
+    request = TrainingRequest.model_validate(request_payload())
+
+    job = service.create_job(request)
+    loaded = service.get_job(job.id)
+
+    assert loaded.status == "queued"
+    assert loaded.queued_at is not None
