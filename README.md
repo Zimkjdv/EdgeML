@@ -48,6 +48,8 @@ Three deterministic example model packages are included:
 ```bash
 cd backend
 python -m venv .venv
+# Windows: If multiple Python versions are installed, explicitly select Python 3.12:
+# py -3.12 -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
 python scripts/build_example_models.py
