@@ -2,7 +2,7 @@
 
 ## Product scope
 
-EdgeML is an enterprise-oriented, self-hosted machine-learning prediction platform. Work incrementally: v0.1 is prediction only. Do not add databases, authentication, model uploading, SHAP, monitoring, or training features unless the active milestone requires them.
+EdgeML is an enterprise-oriented, self-hosted machine-learning prediction platform. The focused regression-training workflow is integrated only during the early milestones to validate the end-to-end experience; the long-term architecture will move training into a standalone AutoML platform. Work incrementally: v0.1 includes dataset profiling, regression training and evaluation, draft-to-published model lifecycle, and stateless batch prediction. Preserve boundaries that allow training to be extracted later. Do not add databases, authentication, model uploading, SHAP, monitoring, classification training, or production orchestration unless the active milestone requires them.
 
 ## Required stack
 

@@ -2,19 +2,20 @@
 
 ## Vision
 
-EdgeML is an enterprise-oriented, internally deployable machine-learning edge prediction platform. It starts with dependable batch prediction and evolves only when each new capability is needed.
+EdgeML is an enterprise-oriented, internally deployable machine-learning prediction platform for tabular datasets. During the early milestones, a focused regression-training workflow is integrated into the same application to validate the complete dataset-to-prediction experience. The long-term architecture will separate training into a dedicated AutoML platform while EdgeML remains focused on model deployment and prediction.
 
 ## Roadmap
 
 | Version | Scope |
 | --- | --- |
-| v0.1 | Prediction server |
-| v0.2 | Prediction history |
-| v0.3 | SHAP explainability |
-| v0.4 | Model management |
-| v0.5 | REST API tokens |
-| v0.6 | Monitoring |
-| v1.0 | Training platform |
+| v0.1 | CSV dataset profiling, regression training and evaluation, draft-to-published model lifecycle, and stateless batch prediction |
+| v0.2 | Prediction history and durable job metadata |
+| v0.3 | Classification training, additional algorithms, and richer feature controls |
+| v0.4 | SHAP explainability and prediction insights |
+| v0.5 | Model registry and expanded model lifecycle management |
+| v0.6 | REST API tokens and access control |
+| v0.7 | Monitoring, structured observability, and queue-backed training workers |
+| v1.0 | Separate the integrated training workflow into a standalone AutoML platform with production orchestration and experiment tracking |
 
 ## Principles
 
