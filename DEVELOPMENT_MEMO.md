@@ -94,7 +94,30 @@ Running containers do not automatically receive local source changes. Rebuild th
    http://localhost:8000/health/ready
    ```
 
-5. Confirm that a training job can move from `queued` to `completed` when the Redis and worker services are running.
+   The main local endpoints are:
+
+   ```text
+   API docs:       http://localhost:8000/docs
+   API liveness:   http://localhost:8000/health
+   API readiness:  http://localhost:8000/health/ready
+   Model API:      http://localhost:8000/api/models
+   Frontend:       http://localhost:5173
+   ```
+
+5. Verify Redis from the project root. Redis is a TCP service, so it is not opened in a browser:
+
+   ```powershell
+   cd C:\Users\Ryanisop\Desktop\EdgeML
+   docker compose exec redis redis-cli ping
+   ```
+
+   A healthy Redis service returns:
+
+   ```text
+   PONG
+   ```
+
+6. Confirm that a training job can move from `queued` to `completed` when the Redis and worker services are running.
 
 ## Commit and push
 
