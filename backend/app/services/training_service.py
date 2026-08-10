@@ -62,6 +62,9 @@ class TrainingService:
             "rmse_std": round(float(scores["test_rmse"].std()), 6),
             "r2": round(float(scores["test_r2"].mean()), 6),
             "pearson_r": 0.0 if pd.isna(validation_correlation) else round(float(validation_correlation), 6),
+            "mape": round(float(mean_absolute_percentage_error(target, oof_predictions) * 100), 6),
+            "max_error": round(float(max_error(target, oof_predictions)), 6),
+            "target_mean": round(float(target.mean()), 6),
         }
         test_metrics = self._external_test(pipeline, request) if request.test_dataset_id else None
         model_id = str(uuid4())

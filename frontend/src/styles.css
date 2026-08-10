@@ -21,8 +21,16 @@ h1 { margin: 0; font-size: 40px; letter-spacing: -.03em; }
 .unified-model-detail .el-descriptions__table { width: 100%; table-layout: fixed; }
 .unified-model-detail .el-descriptions__label.is-bordered-label { width: 172px; min-width: 172px; white-space: normal; line-height: 1.45; }
 .unified-model-detail .el-descriptions__content.is-bordered-content { min-width: 0; line-height: 1.45; overflow-wrap: anywhere; }
+.publish-button.el-button { --el-button-text-color: #fff; --el-button-bg-color: #1d4ed8; --el-button-border-color: #1d4ed8; --el-button-hover-text-color: #fff; --el-button-hover-bg-color: #1e40af; --el-button-hover-border-color: #1e40af; font-weight: 700; }
+.load-button.el-button { --el-button-text-color: #fff; --el-button-bg-color: #047857; --el-button-border-color: #047857; --el-button-hover-text-color: #fff; --el-button-hover-bg-color: #065f46; --el-button-hover-border-color: #065f46; font-weight: 700; }
 .feature-list { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 8px; max-height: 132px; overflow-y: auto; padding: 4px 2px; }
 .feature-list .el-tag { max-width: 100%; height: auto; min-height: 24px; line-height: 1.4; padding: 3px 10px; white-space: normal; overflow-wrap: anywhere; }
+.trained-models-page > .workspace .el-table { --el-table-header-bg-color: #eaf2ff; --el-table-row-hover-bg-color: #eef6ff; --el-table-border-color: #d8e2f0; }
+.trained-models-page > .workspace .el-table th.el-table__cell { color: #1e3a8a; font-weight: 700; }
+.trained-models-page > .workspace .el-table .el-table__body tr:nth-child(even) > td.el-table__cell { background: #f8fbff; }
+.trained-models-page > .workspace .el-table .cell { line-height: 1.45; }
+.trained-models-page > .workspace .el-button--primary.is-link { color: #1d4ed8; font-weight: 700; }
+.trained-models-page > .workspace .el-button--success.is-link { color: #047857; font-weight: 700; }
 @media (max-width: 700px) {
   .unified-model-detail .el-descriptions__table { table-layout: auto; }
   .unified-model-detail .el-descriptions__label.is-bordered-label { width: 132px; min-width: 132px; }
