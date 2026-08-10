@@ -15,7 +15,7 @@ EdgeML is an enterprise-oriented, internally deployable machine-learning predict
 | v0.5 (completed) | Model registry and expanded model lifecycle management, including the registry management UI |
 | v0.6 | REST API tokens and access control |
 | v0.7.1 | Structured logs, request tracing, metrics, and health/readiness checks |
-| v0.7.2 | Queue-backed training workers for long-running concurrent training |
+| v0.7.2 (completed) | Queue-backed training workers for long-running concurrent training; Docker runtime flow verified end to end |
 | v0.7.3 (planned) | Queue operations, retry/dead-letter handling, worker capacity controls, and runtime integration tests |
 | v0.8 (planned) | Frontend observability dashboard for health, jobs, predictions, and operational errors |
 | v1.0 | Separate the integrated training workflow into a standalone AutoML platform with production orchestration and experiment tracking |

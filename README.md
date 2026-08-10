@@ -46,6 +46,12 @@ EdgeML is a self-hosted, plugin-oriented platform for batch predictions from CSV
 - Liveness/readiness endpoints at `/health/live` and `/health/ready`.
 - Prometheus metrics at `/metrics` for HTTP requests, predictions, and training jobs.
 
+## v0.7.2 completed
+
+- Replace local background jobs with a Redis-backed training queue and independent worker.
+- Keep the existing training-job polling API stable while jobs run asynchronously.
+- Verify the complete Docker Compose training flow end to end, including persisted job records and trained artifacts.
+
 ## Future roadmap
 
 - v0.7.2 completed: replace local background jobs with queue-backed training workers; the Docker runtime flow is verified end to end.
