@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, onUpdated, ref, watch } from 'vue'
 import { Download, QuestionFilled, UploadFilled } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
@@ -48,6 +48,43 @@ const selectedPredictionModel = computed(() => models.value.find((model) => mode
 
 const formatNumber = (value?: number) => value === undefined || value === null ? '—' : Number(value).toLocaleString('zh-TW', { maximumFractionDigits: 4 })
 const formatDate = (value: string) => new Date(value).toLocaleString('zh-TW')
+const addTrainedModelTooltips = () => {
+  document.querySelectorAll<HTMLElement>('.trained-models-page .el-table .cell').forEach((cell) => {
+    const text = cell.textContent?.trim()
+    if (text && text !== '—') {
+      cell.title = text
+      cell.dataset.tooltip = text
+    }
+  })
+}
+let activeTableTooltip: HTMLDivElement | null = null
+let activeTooltipCell: HTMLElement | null = null
+const hideTableTooltip = () => {
+  activeTableTooltip?.remove()
+  activeTableTooltip = null
+  activeTooltipCell = null
+}
+const showTableTooltip = (event: MouseEvent) => {
+  const cell = (event.target as HTMLElement).closest<HTMLElement>('.trained-models-page .el-table .cell')
+  if (!cell || cell === activeTooltipCell) return
+  hideTableTooltip()
+  const text = cell.textContent?.trim()
+  if (!text) return
+  const tooltip = document.createElement('div')
+  tooltip.className = 'table-hover-tooltip'
+  tooltip.textContent = text
+  document.body.appendChild(tooltip)
+  const rect = cell.getBoundingClientRect()
+  const left = Math.min(Math.max(12, rect.left), window.innerWidth - tooltip.offsetWidth - 12)
+  tooltip.style.left = `${left}px`
+  tooltip.style.top = `${Math.min(rect.bottom + 8, window.innerHeight - tooltip.offsetHeight - 12)}px`
+  activeTableTooltip = tooltip
+  activeTooltipCell = cell
+}
+onMounted(() => document.addEventListener('mouseover', showTableTooltip))
+onUnmounted(() => { document.removeEventListener('mouseover', showTableTooltip); hideTableTooltip() })
+watch([trainedModels, activePage], async () => { await nextTick(); addTrainedModelTooltips() }, { deep: true })
+onUpdated(addTrainedModelTooltips)
 const api = async <T>(url: string, init?: RequestInit): Promise<T> => {
   const response = await fetch(url, init)
   if (!response.ok) {
@@ -177,8 +214,8 @@ onMounted(async () => {
     </section>
 
     <section v-else-if="activePage === 'history'">
-      <el-card class="workspace">
-        <template #header>Prediction History</template>
+      <el-card class="workspace history-workspace">
+        <template #header><div class="result-heading"><span>Prediction History</span><el-tag type="info" effect="light">{{ predictionHistory.length }} 筆紀錄</el-tag></div></template>
         <el-empty v-if="!predictionHistory.length" description="尚無預測紀錄。" />
         <el-table v-else :data="predictionHistory" stripe>
           <el-table-column label="預測時間" min-width="220"><template #default="scope">{{ formatDate(scope.row.created_at) }}</template></el-table-column>
