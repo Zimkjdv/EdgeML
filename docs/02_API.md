@@ -3,7 +3,7 @@
 ## Observability endpoints
 
 - `GET /health` and `GET /health/live`: process liveness checks. Both return `{"status":"ok"}` while the API process is running.
-- `GET /health/ready`: validates the model, dataset, trained-model, and registry storage paths. Returns `503` when a required check fails.
+- `GET /health/ready`: validates the model, dataset, trained-model, registry storage paths, and Redis queue connectivity. Returns `503` when a required check fails.
 - `GET /metrics`: Prometheus text exposition containing HTTP request, prediction, training-job, and active-registry-model metrics.
 
 Every HTTP response includes an `X-Request-ID` header. Clients may provide a bounded `X-Request-ID` value to correlate logs; otherwise EdgeML generates one. Structured access logs include the request ID, route, status code, and duration without logging uploaded CSV contents.
@@ -43,7 +43,7 @@ Returns successful prediction records in reverse chronological order. Each recor
 - `PATCH /api/datasets/{dataset_id}`: update a dataset display name without renaming its original CSV file.
 - `DELETE /api/datasets/{dataset_id}`: remove a stored source CSV and its profile metadata.
 - `POST /api/training`: train a regression or classification pipeline from a selected target and checked feature columns.
-- `POST /api/training/jobs`: create a background training job; `GET /api/training/jobs/{job_id}` returns persisted progress and status.
+- `POST /api/training/jobs`: enqueue a training job; `GET /api/training/jobs/{job_id}` returns persisted progress, worker metadata, and status.
 - `GET /api/trained-models`: list draft and published training artifacts.
 - `PATCH /api/trained-models/{model_id}`: update a model display name and its published manifest when applicable.
 - `DELETE /api/trained-models`: delete one or more Draft/Published model artifacts by id.

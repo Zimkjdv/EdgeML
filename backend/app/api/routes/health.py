@@ -4,6 +4,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Response, status
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+import redis
 
 from app.core.config import get_settings
 from app.core.observability import REGISTRY_ACTIVE
@@ -32,6 +33,7 @@ def readiness(response: Response) -> dict[str, object]:
         "datasets": _directory_check(settings.datasets_root),
         "trained_models": _directory_check(settings.trained_models_root),
         "registry": "ok",
+        "queue": "ok",
     }
     try:
         # Listing also validates the JSON index and performs the v0.5 bootstrap if needed.
@@ -39,6 +41,14 @@ def readiness(response: Response) -> dict[str, object]:
         REGISTRY_ACTIVE.set(len(registry.list()))
     except Exception:
         checks["registry"] = "error"
+
+    if settings.queue_backend == "redis":
+        try:
+            redis.Redis.from_url(settings.redis_url).ping()
+        except redis.RedisError:
+            checks["queue"] = "error"
+    else:
+        checks["queue"] = "unsupported"
 
     ready = all(value == "ok" for value in checks.values())
     if not ready:

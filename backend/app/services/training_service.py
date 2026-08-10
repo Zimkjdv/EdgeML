@@ -148,26 +148,40 @@ class TrainingService:
 
     def create_job(self, request: TrainingRequest) -> TrainingJob:
         job = TrainingJob(id=str(uuid4()), status="queued", progress=0, message="等待訓練開始")
+        job.queued_at = datetime.now(timezone.utc)
         self._write_job(job, request)
         return job
 
-    def run_job(self, job_id: str) -> None:
+    def mark_job_failed(self, job_id: str, error: str) -> TrainingJob:
+        job, request = self._read_job(job_id)
+        job.status = "failed"
+        job.message = "Training job could not be queued"
+        job.error = error
+        job.completed_at = datetime.now(timezone.utc)
+        self._write_job(job, request)
+        return job
+
+    def run_job(self, job_id: str, worker_id: str | None = None) -> None:
         job, request = self._read_job(job_id)
         started_at = training_started()
-        self._logger.info("Training job started", extra={"event": "training.job.started", "job_id": job_id})
+        self._logger.info("Training job started", extra={"event": "training.job.started", "job_id": job_id, "worker_id": worker_id})
+        job.attempt += 1
+        job.started_at = datetime.now(timezone.utc)
+        job.worker_id = worker_id
         job.status, job.progress, job.message = "running", 2, "準備訓練環境"
         self._write_job(job, request)
         try:
             result = self.train(request, lambda progress, message: self._update_job(job, request, progress, message))
             job.status, job.progress, job.message, job.result_model_id = "completed", 100, "訓練完成", result.id
         except Exception as exc:
-            self._logger.exception("Training job failed", extra={"event": "training.job.failed", "job_id": job_id})
+            self._logger.exception("Training job failed", extra={"event": "training.job.failed", "job_id": job_id, "worker_id": worker_id})
             job.status, job.message, job.error = "failed", "訓練失敗", str(exc)
+        job.completed_at = datetime.now(timezone.utc)
         self._write_job(job, request)
         training_finished(job.status, started_at)
         self._logger.info(
             "Training job finished",
-            extra={"event": "training.job.finished", "job_id": job_id, "model_id": job.result_model_id},
+            extra={"event": "training.job.finished", "job_id": job_id, "model_id": job.result_model_id, "worker_id": worker_id},
         )
 
     def get_job(self, job_id: str) -> TrainingJob:

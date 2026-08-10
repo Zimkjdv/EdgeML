@@ -11,7 +11,9 @@ Vue UI -> FastAPI router -> DatasetService -> trusted CSV + profile metadata
 
 Routers only handle HTTP. `PredictionService` coordinates validation and prediction. `ModelCatalog` is the application boundary for model discovery and lookup; v0.5 uses `FileModelRegistry` to persist registry metadata while model packages remain trusted files under `ml_models/`. `PredictorFactory` chooses a `BasePredictor` implementation from the manifest's `framework` field.
 
-The v0.7.1 observability layer is cross-cutting: `RequestContextMiddleware` adds bounded request IDs, structured JSON access logs, and HTTP metrics without exposing CSV contents. Health routes expose liveness, storage-backed readiness, and Prometheus metrics. Training and prediction services record outcome counters and duration metrics; the existing local background job mechanism remains in place until v0.7.2.
+The v0.7.1 observability layer is cross-cutting: `RequestContextMiddleware` adds bounded request IDs, structured JSON access logs, and HTTP metrics without exposing CSV contents. Health routes expose liveness, storage-backed readiness, and Prometheus metrics. Training and prediction services record outcome counters and duration metrics.
+
+In v0.7.2, `TrainingJobQueue` is the application boundary for asynchronous training dispatch. The API persists the request and initial job state under `training_jobs/`, then enqueues only the job ID. A separate Redis-backed worker consumes, executes, and acknowledges jobs through `TrainingService`; the API and worker share the job and trained-model storage volume. The queue uses an at-least-once delivery model and requeues jobs left in the processing list after worker restart.
 
 The registry stores package metadata and an active/disabled status in `backend/data/model_registry.json`. Existing model packages are bootstrapped into the registry on first startup. Disabling a model removes it from the Prediction selector without deleting its artifact package; unregistering only removes the registry entry.
 

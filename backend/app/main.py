@@ -8,7 +8,7 @@ from app.core.observability import RequestContextMiddleware, configure_logging
 
 def create_app() -> FastAPI:
     configure_logging()
-    app = FastAPI(title="EdgeML", version="0.7.1")
+    app = FastAPI(title="EdgeML", version="0.7.2")
     app.add_middleware(RequestContextMiddleware)
     app.add_middleware(
         CORSMiddleware,

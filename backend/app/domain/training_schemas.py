@@ -89,6 +89,11 @@ class TrainingJob(BaseModel):
     message: str
     result_model_id: str | None = None
     error: str | None = None
+    queued_at: datetime | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    attempt: int = 0
+    worker_id: str | None = None
 
 
 class ExternalEvaluationRequest(BaseModel):

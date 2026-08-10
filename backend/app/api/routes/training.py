@@ -1,7 +1,8 @@
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
-from app.api.dependencies import get_training_service
+from app.api.dependencies import get_training_job_queue, get_training_service
 from app.domain.errors import ModelNotFoundError, PredictionValidationError
+from app.domain.training_queue import TrainingJobQueue
 from app.domain.training_schemas import DatasetRenameRequest, ExternalEvaluationRequest, ExternalEvaluationResult, TrainedModelDeleteRequest, TrainedModelDetail, TrainedModelSummary, TrainingJob, TrainingRequest
 from app.services.training_service import TrainingService
 
@@ -17,9 +18,17 @@ def train(request: TrainingRequest, service: TrainingService = Depends(get_train
 
 
 @router.post("/training/jobs", response_model=TrainingJob, status_code=202)
-def create_training_job(request: TrainingRequest, background_tasks: BackgroundTasks, service: TrainingService = Depends(get_training_service)) -> TrainingJob:
+def create_training_job(
+    request: TrainingRequest,
+    service: TrainingService = Depends(get_training_service),
+    queue: TrainingJobQueue = Depends(get_training_job_queue),
+) -> TrainingJob:
     job = service.create_job(request)
-    background_tasks.add_task(service.run_job, job.id)
+    try:
+        queue.enqueue(job.id)
+    except Exception as exc:
+        service.mark_job_failed(job.id, str(exc))
+        raise HTTPException(status_code=503, detail="Training queue is unavailable.") from exc
     return job
 
 

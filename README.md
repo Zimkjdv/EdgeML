@@ -39,7 +39,7 @@ EdgeML is a self-hosted, plugin-oriented platform for batch predictions from CSV
 - Add a Model Registry page for viewing, enabling, disabling, and unregistering trusted model packages.
 - Published model artifacts remain operator-controlled files; registry removal never accepts or deletes serialized artifacts through HTTP.
 
-## v0.7.1 in progress
+## v0.7.1 completed
 
 - Structured JSON request and training-job logs with request IDs.
 - Liveness/readiness endpoints at `/health/live` and `/health/ready`.
@@ -47,7 +47,9 @@ EdgeML is a self-hosted, plugin-oriented platform for batch predictions from CSV
 
 ## Future roadmap
 
-- v0.7.2: replace local background jobs with queue-backed training workers.
+- v0.7.2 in progress: replace local background jobs with queue-backed training workers.
+- v0.7.2 follow-up: add retry/dead-letter handling, graceful worker shutdown, and Docker runtime integration tests.
+- v0.7.3: add queue operations, worker capacity controls, and queue-depth monitoring.
 - v0.8: add a frontend observability dashboard for API health, registry availability, training activity, prediction outcomes, and operational errors.
 
 ## Quick start
@@ -87,6 +89,12 @@ python -m venv .venv
 pip install -r requirements.txt
 python scripts/build_example_models.py
 uvicorn app.main:app --reload
+```
+
+The asynchronous training API uses Redis by default. For local development, start Redis with `docker compose up -d redis` and run the worker in a second backend terminal:
+
+```powershell
+python -m app.workers.training_worker
 ```
 
 ```bash

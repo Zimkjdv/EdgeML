@@ -3,7 +3,8 @@ from fastapi.testclient import TestClient
 from app.main import create_app
 
 
-def test_liveness_and_readiness() -> None:
+def test_liveness_and_readiness(monkeypatch) -> None:
+    monkeypatch.setattr("redis.Redis.from_url", lambda *args, **kwargs: type("RedisProbe", (), {"ping": lambda self: True})())
     client = TestClient(create_app())
 
     live = client.get("/health/live")
