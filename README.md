@@ -37,6 +37,7 @@ EdgeML is a self-hosted, plugin-oriented platform for batch predictions from CSV
 
 - Replace runtime folder scanning with a file-backed model registry while keeping `ModelCatalog` as the Prediction application boundary.
 - Add a Model Registry page for viewing, enabling, disabling, and unregistering trusted model packages.
+- Refine the registry table with compact responsive columns, clear status badges, action buttons, and hover details for truncated values.
 - Published model artifacts remain operator-controlled files; registry removal never accepts or deletes serialized artifacts through HTTP.
 
 ## v0.7.1 completed

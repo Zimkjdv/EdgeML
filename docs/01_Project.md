@@ -12,7 +12,7 @@ EdgeML is an enterprise-oriented, internally deployable machine-learning predict
 | v0.2 | Prediction history and durable job metadata |
 | v0.3 | Classification training, Ridge regression, additional algorithms, and richer feature controls |
 | v0.4 (deferred) | SHAP explainability and prediction insights |
-| v0.5 | Model registry and expanded model lifecycle management |
+| v0.5 (completed) | Model registry and expanded model lifecycle management, including the registry management UI |
 | v0.6 | REST API tokens and access control |
 | v0.7.1 | Structured logs, request tracing, metrics, and health/readiness checks |
 | v0.7.2 | Queue-backed training workers for long-running concurrent training |
