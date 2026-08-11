@@ -52,4 +52,4 @@ Returns successful prediction records in reverse chronological order. Each recor
 
 Training supports Random Forest, Gradient Boosting, XGBoost, and AdaBoost regression, plus classifier variants for those algorithms and Logistic Regression classification. Training persists the full preprocessing and model pipeline as one trusted `model.pkl` artifact.
 
-XGBoost hyperparameters are optional. Omitted parameters use XGBoost's native defaults; EdgeML only fixes a random seed and CPU worker count for reproducibility during local development.
+Random Forest, Gradient Boosting, XGBoost, and Logistic Regression hyperparameters are optional. Random Forest accepts `n_estimators`, `min_samples_leaf`, `max_depth`, `min_samples_split`, and `max_leaf_nodes`; omitted parameters use estimator defaults. EdgeML only fixes random seeds and CPU worker counts where applicable for reproducibility during local development.

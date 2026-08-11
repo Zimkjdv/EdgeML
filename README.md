@@ -15,7 +15,7 @@ EdgeML is a self-hosted, plugin-oriented platform for batch predictions from CSV
 - Draft-to-published model workflow; published models appear in Prediction automatically
 - Dataset and trained-model display-name editing without changing original CSV filenames
 - Traditional Chinese / English UI switching with a persisted language preference
-- Background training progress and optional XGBoost hyperparameter overrides
+- Background training progress and optional Random Forest, Gradient Boosting, and XGBoost hyperparameter overrides
 - Docker Compose deployment
 
 ## v0.2 current status
@@ -149,7 +149,7 @@ When updating an existing local environment after pulling the training module, r
 
 1. Upload a CSV in **數據集管理**, inspect columns, and optionally rename its display name.
 2. In **模型訓練**, choose one numeric target and check the feature columns to use.
-3. Select a regression algorithm. Gradient Boosting exposes `n_estimators` and `learning_rate`; XGBoost exposes its optional hyperparameter fields. Leaving fields empty uses the estimator defaults.
+3. Select an algorithm. Random Forest exposes tree-count and split/leaf controls; Gradient Boosting exposes `n_estimators` and `learning_rate`; XGBoost exposes its optional hyperparameter fields. Logistic Regression exposes `penalty`, `solver`, and `C` for classification. Leaving fields empty uses the estimator defaults.
 4. Review the background-job progress, then inspect the Draft model metrics.
 5. Publish the model to make it available in **Prediction**.
 

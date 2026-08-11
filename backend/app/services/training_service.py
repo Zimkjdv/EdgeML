@@ -400,8 +400,8 @@ class TrainingService:
             steps.append(("reduction", TruncatedSVD(n_components=request.svd_components, random_state=42)))
         model = defaults[request.algorithm]
         allowed = {
-            "random_forest": {"n_estimators", "max_depth", "min_samples_split"}, "gradient_boosting": {"n_estimators", "learning_rate", "max_depth", "subsample"}, "xgboost": {"n_estimators", "verbosity", "learning_rate", "max_depth", "gamma", "subsample"}, "adaboost": {"n_estimators", "learning_rate", "loss"},
-            "random_forest_classifier": {"n_estimators", "max_depth", "min_samples_split"}, "gradient_boosting_classifier": {"n_estimators", "learning_rate", "max_depth", "subsample"}, "xgboost_classifier": {"n_estimators", "verbosity", "learning_rate", "max_depth", "gamma", "subsample"}, "adaboost_classifier": {"n_estimators", "learning_rate"}, "logistic_regression": {"penalty", "solver", "C"},
+            "random_forest": {"n_estimators", "min_samples_leaf", "max_depth", "min_samples_split", "max_leaf_nodes"}, "gradient_boosting": {"n_estimators", "learning_rate", "max_depth", "subsample"}, "xgboost": {"n_estimators", "verbosity", "learning_rate", "max_depth", "gamma", "subsample"}, "adaboost": {"n_estimators", "learning_rate", "loss"},
+            "random_forest_classifier": {"n_estimators", "min_samples_leaf", "max_depth", "min_samples_split", "max_leaf_nodes"}, "gradient_boosting_classifier": {"n_estimators", "learning_rate", "max_depth", "subsample"}, "xgboost_classifier": {"n_estimators", "verbosity", "learning_rate", "max_depth", "gamma", "subsample"}, "adaboost_classifier": {"n_estimators", "learning_rate"}, "logistic_regression": {"penalty", "solver", "C"},
         }
         invalid = set(request.hyperparameters) - allowed[request.algorithm]
         if invalid: raise PredictionValidationError(f"不支援的超參數：{', '.join(invalid)}")

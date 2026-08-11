@@ -48,6 +48,13 @@ def test_classification_training(tmp_path) -> None:
         feature_columns=["feature", "segment"],
         algorithm="random_forest_classifier",
         cv_folds=3,
+        hyperparameters={
+            "n_estimators": 20,
+            "min_samples_leaf": 1,
+            "max_depth": 4,
+            "min_samples_split": 2,
+            "max_leaf_nodes": 8,
+        },
     ))
 
     assert result.problem_type == "classification"
