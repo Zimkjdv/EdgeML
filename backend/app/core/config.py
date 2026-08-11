@@ -1,6 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -16,6 +17,9 @@ class Settings(BaseSettings):
     queue_backend: str = "redis"
     redis_url: str = "redis://localhost:6379/0"
     training_queue_name: str = "edgeml:training"
+    training_max_attempts: int = Field(default=3, ge=1, le=10)
+    training_retry_backoff_seconds: float = Field(default=2.0, ge=0, le=300)
+    training_retry_backoff_max_seconds: float = Field(default=60.0, ge=0, le=3600)
     max_upload_bytes: int = 5 * 1024 * 1024
 
 

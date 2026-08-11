@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.api.dependencies import get_training_job_queue, get_training_service
@@ -84,3 +85,31 @@ def test_training_job_lifecycle_metadata_is_json_serializable(tmp_path) -> None:
 
     assert loaded.status == "queued"
     assert loaded.queued_at is not None
+
+
+def test_training_job_can_be_scheduled_for_a_bounded_retry(tmp_path, monkeypatch) -> None:
+    service = TrainingService(None, tmp_path / "trained", tmp_path / "models", jobs_root=tmp_path / "jobs")
+    request = TrainingRequest.model_validate(request_payload())
+    job = service.create_job(request)
+
+    def fail_once(*_args, **_kwargs):
+        raise OSError("temporary storage failure")
+
+    monkeypatch.setattr(service, "train", fail_once)
+    with pytest.raises(OSError):
+        service.run_job(job.id, worker_id="worker-1")
+
+    failed = service.get_job(job.id)
+    assert failed.status == "failed"
+    assert failed.attempt == 1
+
+    queued = service.schedule_retry(job.id, max_attempts=3)
+    assert queued.status == "queued"
+    assert queued.attempt == 1
+    assert queued.error is None
+
+    with pytest.raises(OSError):
+        service.run_job(job.id, worker_id="worker-1")
+    assert service.get_job(job.id).attempt == 2
+
+    assert service.schedule_retry(job.id, max_attempts=2).status == "failed"

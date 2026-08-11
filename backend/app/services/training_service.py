@@ -161,7 +161,7 @@ class TrainingService:
         self._write_job(job, request)
         return job
 
-    def run_job(self, job_id: str, worker_id: str | None = None) -> None:
+    def run_job(self, job_id: str, worker_id: str | None = None) -> TrainingJob:
         job, request = self._read_job(job_id)
         started_at = training_started()
         self._logger.info("Training job started", extra={"event": "training.job.started", "job_id": job_id, "worker_id": worker_id})
@@ -172,10 +172,18 @@ class TrainingService:
         self._write_job(job, request)
         try:
             result = self.train(request, lambda progress, message: self._update_job(job, request, progress, message))
-            job.status, job.progress, job.message, job.result_model_id = "completed", 100, "訓練完成", result.id
         except Exception as exc:
             self._logger.exception("Training job failed", extra={"event": "training.job.failed", "job_id": job_id, "worker_id": worker_id})
             job.status, job.message, job.error = "failed", "訓練失敗", str(exc)
+            job.completed_at = datetime.now(timezone.utc)
+            self._write_job(job, request)
+            training_finished(job.status, started_at)
+            self._logger.info(
+                "Training job finished",
+                extra={"event": "training.job.finished", "job_id": job_id, "model_id": job.result_model_id, "worker_id": worker_id},
+            )
+            raise
+        job.status, job.progress, job.message, job.result_model_id = "completed", 100, "訓練完成", result.id
         job.completed_at = datetime.now(timezone.utc)
         self._write_job(job, request)
         training_finished(job.status, started_at)
@@ -183,6 +191,22 @@ class TrainingService:
             "Training job finished",
             extra={"event": "training.job.finished", "job_id": job_id, "model_id": job.result_model_id, "worker_id": worker_id},
         )
+        return job
+
+    def schedule_retry(self, job_id: str, max_attempts: int) -> TrainingJob:
+        """Move a failed job back to queued state when attempts remain."""
+
+        job, request = self._read_job(job_id)
+        if job.status != "failed" or job.attempt >= max_attempts:
+            return job
+        job.status = "queued"
+        job.progress = 0
+        job.message = f"Retry scheduled ({job.attempt}/{max_attempts})"
+        job.error = None
+        job.started_at = None
+        job.completed_at = None
+        self._write_job(job, request)
+        return job
 
     def get_job(self, job_id: str) -> TrainingJob:
         return self._read_job(job_id)[0]

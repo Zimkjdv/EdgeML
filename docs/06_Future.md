@@ -7,8 +7,7 @@
 - **v0.6:** add API-token authentication middleware and access-control boundaries.
 - **v0.7.1 (completed):** add structured JSON logs, request IDs, Prometheus metrics, and liveness/readiness checks without changing the existing training API.
 - **v0.7.2 (completed):** replace local background jobs with a Redis-backed queue/worker system for long-running concurrent training while keeping the job polling API stable. The Docker runtime flow is verified end to end.
-- **v0.7.2 follow-up:** add configurable retry policies, dead-letter job handling, and graceful worker shutdown.
-- **v0.7.3 (planned):** add worker capacity controls, queue-depth dashboards, and operational controls for retrying or cancelling queued jobs.
+- **v0.7.3 (in progress):** add bounded retries with configurable attempt limits and exponential backoff. Dead-letter job handling, graceful worker shutdown, worker capacity controls, queue-depth dashboards, and operational controls remain planned follow-up work.
 - **v0.8 (planned):** add a frontend observability dashboard for API health, registry availability, training-job activity, prediction outcomes, and recent operational errors. The dashboard will consume read-only monitoring APIs and will not expose raw logs or uploaded data by default.
 - **v1.0:** extract the early integrated training workflow into a standalone AutoML platform with production orchestration and experiment tracking. EdgeML will consume published model packages and remain focused on deployment and prediction.
 

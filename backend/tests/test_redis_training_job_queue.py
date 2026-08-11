@@ -1,4 +1,5 @@
 from app.infrastructure.redis_training_job_queue import RedisTrainingJobQueue
+from app.workers.training_worker import _is_retryable_error, _retry_delay
 
 
 class FakeRedis:
@@ -41,3 +42,12 @@ def test_redis_queue_dispatches_acknowledges_and_recovers(monkeypatch) -> None:
     assert queue.consume(timeout=1) == "job-2"
     assert queue.recover_processing() == 1
     assert queue.consume(timeout=1) == "job-2"
+
+
+def test_retry_policy_classifies_errors_and_caps_backoff() -> None:
+    assert _is_retryable_error(OSError("temporary"))
+    assert _is_retryable_error(TimeoutError("temporary"))
+    assert not _is_retryable_error(ValueError("invalid training request"))
+    assert _retry_delay(1, 2, 10) == 2
+    assert _retry_delay(3, 2, 10) == 8
+    assert _retry_delay(5, 2, 10) == 10

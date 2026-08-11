@@ -16,6 +16,18 @@ from app.infrastructure.redis_training_job_queue import RedisTrainingJobQueue
 logger = logging.getLogger("edgeml.training.worker")
 
 
+def _is_retryable_error(error: Exception) -> bool:
+    """Retry transient infrastructure failures, not deterministic training errors."""
+
+    return isinstance(error, (OSError, TimeoutError, ConnectionError, redis.RedisError))
+
+
+def _retry_delay(attempt: int, base_seconds: float, max_seconds: float) -> float:
+    """Return bounded exponential backoff for the next attempt."""
+
+    return min(base_seconds * (2 ** max(attempt - 1, 0)), max_seconds)
+
+
 def run_worker() -> None:
     configure_logging()
     settings = get_settings()
@@ -39,16 +51,34 @@ def run_worker() -> None:
             continue
         if not job_id:
             continue
+        acknowledge = True
         try:
             service.run_job(job_id, worker_id=worker_id)
         except Exception as exc:
             logger.exception("Training worker failed to execute job", extra={"event": "training.worker.job_error", "job_id": job_id, "worker_id": worker_id})
             try:
-                service.mark_job_failed(job_id, str(exc))
+                job = service.get_job(job_id)
+                if _is_retryable_error(exc) and job.attempt < settings.training_max_attempts:
+                    service.schedule_retry(job_id, settings.training_max_attempts)
+                    delay = _retry_delay(job.attempt, settings.training_retry_backoff_seconds, settings.training_retry_backoff_max_seconds)
+                    if delay:
+                        time.sleep(delay)
+                    queue.enqueue(job_id)
+                    logger.warning(
+                        "Training job scheduled for retry",
+                        extra={"event": "training.worker.retry_scheduled", "job_id": job_id, "worker_id": worker_id},
+                    )
+                else:
+                    logger.error(
+                        "Training job reached a terminal failure",
+                        extra={"event": "training.worker.job_terminal_failure", "job_id": job_id, "worker_id": worker_id},
+                    )
             except Exception:
-                logger.exception("Unable to persist worker job failure", extra={"event": "training.worker.persist_error", "job_id": job_id, "worker_id": worker_id})
+                acknowledge = False
+                logger.exception("Unable to schedule training job retry", extra={"event": "training.worker.retry_error", "job_id": job_id, "worker_id": worker_id})
         finally:
-            queue.acknowledge(job_id)
+            if acknowledge:
+                queue.acknowledge(job_id)
 
 
 if __name__ == "__main__":
