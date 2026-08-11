@@ -10,9 +10,11 @@ EdgeML is a self-hosted, plugin-oriented platform for batch predictions from CSV
 | --- | --- | --- |
 | v0.1 Prediction Server | Completed | Model selection, CSV prediction, missing-row cleanup, optional Ground Truth evaluation, metrics, preview, and download |
 | v0.2 Prediction History | Completed | Stateless prediction metadata history with injectable repository storage |
-| v0.3 Explainability and classification expansion | In progress | Classification training refinement, richer metrics, and future SHAP integration |
-| v0.4 Model Management | Completed | Trusted model registry with publish, enable, disable, and unregister lifecycle controls |
-| v0.7.x Operations | Completed | Redis-backed training worker, health endpoints, request logging, and Prometheus metrics |
+| v0.3 Classification and training controls | In progress | Classification training and Logistic Regression are implemented; Ridge and richer model controls remain planned |
+| v0.4 Explainability | Deferred | SHAP-backed explainability and prediction insights |
+| v0.5 Model Registry | Completed | Trusted model registry with publish, enable, disable, and unregister lifecycle controls |
+| v0.7.1 Observability | Completed | Health endpoints, request logging, and Prometheus metrics |
+| v0.7.2 Queue Workers | Completed | Redis-backed asynchronous training worker with Docker end-to-end verification |
 
 The latest Prediction update rounds regression `prediction` and `prediction_error` values to four decimal places in the returned CSV. Full-precision values remain in the evaluation calculations. Long prediction-preview headers and cell values expose tooltips so Chinese and long feature names remain readable.
 
@@ -43,8 +45,8 @@ The latest Prediction update rounds regression `prediction` and `prediction_erro
 
 ## v0.3 in progress
 
-- Add classification training with stratified cross-validation and classification metrics.
-- Add richer classification and regularized linear-model controls in the standalone AutoML platform.
+- Classification training with stratified cross-validation and classification metrics is implemented for Random Forest, Gradient Boosting, XGBoost, AdaBoost, and Logistic Regression.
+- Ridge regression and richer regularized linear-model controls remain planned for the standalone AutoML platform.
 - Keep regression and classification model manifests compatible with the existing trained-model and prediction workflows.
 
 ## v0.5 completed
@@ -68,7 +70,6 @@ The latest Prediction update rounds regression `prediction` and `prediction_erro
 
 ## Future roadmap
 
-- v0.7.2 completed: replace local background jobs with queue-backed training workers; the Docker runtime flow is verified end to end.
 - v0.7.2 follow-up: add retry/dead-letter handling and graceful worker shutdown.
 - v0.7.3: add queue operations, worker capacity controls, and queue-depth monitoring.
 - v0.8: add a frontend observability dashboard for API health, registry availability, training activity, prediction outcomes, and operational errors.

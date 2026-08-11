@@ -1,11 +1,11 @@
 # Future design
 
 - **v0.2:** inject a history repository into `PredictionService` and persist durable training-job metadata.
-- **v0.3:** add classification training with stratified evaluation, classification metrics, and Logistic Regression with configurable penalty, solver, and C. Lasso Lars, Stacking, and richer feature-dimension reduction controls remain planned follow-up work.
+- **v0.3 (in progress):** classification training with stratified evaluation and classification metrics is implemented for Random Forest, Gradient Boosting, XGBoost, AdaBoost, and Logistic Regression with configurable penalty, solver, and C. Ridge, Lasso Lars, Stacking, and richer feature-dimension reduction controls remain planned follow-up work.
 - **v0.4 (deferred):** add SHAP-backed `explain` support through predictor capabilities.
 - **v0.5 (completed):** replace runtime folder scanning with a file-backed model registry while keeping `ModelCatalog` as the application boundary. Add registry status controls and a responsive Model Registry management page with compact columns, status badges, and clear lifecycle actions.
 - **v0.6:** add API-token authentication middleware and access-control boundaries.
-- **v0.7.1:** add structured JSON logs, request IDs, Prometheus metrics, and liveness/readiness checks without changing the existing training API.
+- **v0.7.1 (completed):** add structured JSON logs, request IDs, Prometheus metrics, and liveness/readiness checks without changing the existing training API.
 - **v0.7.2 (completed):** replace local background jobs with a Redis-backed queue/worker system for long-running concurrent training while keeping the job polling API stable. The Docker runtime flow is verified end to end.
 - **v0.7.2 follow-up:** add configurable retry policies, dead-letter job handling, and graceful worker shutdown.
 - **v0.7.3 (planned):** add worker capacity controls, queue-depth dashboards, and operational controls for retrying or cancelling queued jobs.
