@@ -76,15 +76,23 @@ The Docker Compose setup runs the complete v0.7.2 workflow:
 
 Training jobs flow from the API to Redis and are executed by the worker. The backend and worker share the persistent data volume for datasets, job records, and trained artifacts.
 
-## Windows development launcher
+## Windows development launchers
 
-After completing the one-time local setup below, double-click `start-dev.bat` in the project root, or run it from PowerShell:
+After completing the one-time local setup below, choose the launcher that matches the workflow:
+
+Prediction-only (FastAPI + frontend, no Redis or training worker):
 
 ```powershell
 .\start-dev.bat
 ```
 
-It opens separate terminals for the FastAPI reload server and Vite development server. It automatically uses `backend/.venv` when present, falling back to `backend/.venv-local`. Because v0.7.2 training uses Redis and a separate worker, start them as described in the local development section before submitting training jobs.
+Full local training workflow (Docker Redis + FastAPI + frontend + local training worker):
+
+```powershell
+.\start-dev-redis.bat
+```
+
+`start-dev-redis.bat` starts only the Redis container through Docker Compose, then calls `start-dev.bat` and opens a separate training-worker terminal. It automatically uses `backend/.venv` when present, falling back to `backend/.venv-local`. Docker Desktop must be running before using this launcher.
 
 Three deterministic example model packages are included:
 
@@ -98,11 +106,13 @@ Three deterministic example model packages are included:
 
 The asynchronous training API uses Redis by default. You can run the complete stack with Docker Compose, or run the API and frontend locally while using Docker only for Redis and the worker.
 
-For the hybrid local workflow, start Redis first:
+For the hybrid local workflow, Redis can be started manually:
 
 ```powershell
 docker compose up -d redis
 ```
+
+Alternatively, use `start-dev-redis.bat` from the project root to start Redis, Backend, Frontend, and the local worker together.
 
 Then run the FastAPI server in one terminal:
 
@@ -117,7 +127,7 @@ python scripts/build_example_models.py
 uvicorn app.main:app --reload
 ```
 
-Run the training worker in a second backend terminal:
+Run the training worker in a second backend terminal when using the manual workflow:
 
 ```powershell
 cd backend

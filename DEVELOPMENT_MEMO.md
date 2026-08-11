@@ -12,6 +12,22 @@ GitHub: store the verified version
 
 ## Local development
 
+### Windows launchers
+
+Use the project-root launchers after installing backend and frontend dependencies:
+
+```powershell
+# Prediction only: Backend + Frontend
+.\start-dev.bat
+
+# Full local training workflow: Docker Redis + Backend + Frontend + Training Worker
+.\start-dev-redis.bat
+```
+
+`start-dev-redis.bat` starts the Redis service with Docker Compose, calls `start-dev.bat`, and opens a local Training Worker terminal. Docker Desktop must be running. Do not run both launchers at the same time; the Redis launcher already includes the Prediction-only launcher.
+
+The launchers prefer `backend/.venv` and fall back to `backend/.venv-local`.
+
 Use the local Python environment for the FastAPI server and training worker. Run Redis through Docker:
 
 ```powershell
@@ -107,7 +123,7 @@ Running containers do not automatically receive local source changes. Rebuild th
 5. Verify Redis from the project root. Redis is a TCP service, so it is not opened in a browser:
 
    ```powershell
-   cd C:\Users\Ryanisop\Desktop\EdgeML
+   cd C:\Users\2000640\Desktop\edge
    docker compose exec redis redis-cli ping
    ```
 

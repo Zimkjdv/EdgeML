@@ -10,6 +10,8 @@ The backend listens on port 8000 and the frontend on port 5173. Set `EDGEML_MODE
 
 ## Windows local development
 
-For a non-containerized development environment, run `start-dev.bat` in the repository root after the Python virtual environment and frontend dependencies have been installed. It launches Uvicorn with `--reload` and Vite in separate command windows.
+For Prediction-only development, run `start-dev.bat` in the repository root after the Python virtual environment and frontend dependencies have been installed. It launches Uvicorn with `--reload` and Vite in separate command windows.
+
+For local development with model training, run `start-dev-redis.bat`. It starts Docker Compose Redis, then launches the same Backend and Frontend plus a local Training Worker. Docker Desktop must be running. Both launchers prefer `backend/.venv` and fall back to `backend/.venv-local`.
 
 For production, terminate TLS at the organization-approved reverse proxy and mount only trusted model artifacts read-only.
