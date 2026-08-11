@@ -4,7 +4,19 @@ Enterprise Edge Machine Learning Prediction Platform.
 
 EdgeML is a self-hosted, plugin-oriented platform for batch predictions from CSV files. Its first milestone supports selecting a deployed model, uploading a CSV, previewing results, and downloading a CSV with predictions.
 
-## v0.1 capabilities
+## Implementation progress
+
+| Milestone | Status | Current scope |
+| --- | --- | --- |
+| v0.1 Prediction Server | Completed | Model selection, CSV prediction, missing-row cleanup, optional Ground Truth evaluation, metrics, preview, and download |
+| v0.2 Prediction History | Completed | Stateless prediction metadata history with injectable repository storage |
+| v0.3 Explainability and classification expansion | In progress | Classification training refinement, richer metrics, and future SHAP integration |
+| v0.4 Model Management | Completed | Trusted model registry with publish, enable, disable, and unregister lifecycle controls |
+| v0.7.x Operations | Completed | Redis-backed training worker, health endpoints, request logging, and Prometheus metrics |
+
+The latest Prediction update rounds regression `prediction` and `prediction_error` values to four decimal places in the returned CSV. Full-precision values remain in the evaluation calculations. Long prediction-preview headers and cell values expose tooltips so Chinese and long feature names remain readable.
+
+## v0.1 completed
 
 - Model discovery from `backend/ml_models/`
 - CSV batch prediction for trusted sklearn artifacts
@@ -20,7 +32,7 @@ EdgeML is a self-hosted, plugin-oriented platform for batch predictions from CSV
 - Background training progress and optional Random Forest, Gradient Boosting, and XGBoost hyperparameter overrides
 - Docker Compose deployment
 
-## v0.2 current status
+## v0.2 completed
 
 - Successful prediction metadata is recorded through an injectable `PredictionHistoryRepository`.
 - `GET /api/prediction-history` returns prediction history in reverse chronological order.
