@@ -130,9 +130,11 @@ const messages = {
     problemType: '問題類型', regression: '回歸', classification: '分類',
     classificationNotice: '分類訓練支援 Random Forest、Gradient Boosting、XGBoost 與 AdaBoost。目標欄位可以是數值或類別欄位。', classificationEvaluation: '分類評估指標', validationAccuracy: '驗證準確率', validationF1: '驗證 F1', validationPrecision: '驗證 Precision', validationRecall: '驗證 Recall', validationRocAuc: '驗證 ROC AUC', testAccuracy: '測試準確率', testF1: '測試 F1', testPrecision: '測試 Precision', testRecall: '測試 Recall',
     registry: '模型註冊庫', modelRegistry: '模型註冊庫管理', models: '模型', registryHint: '模型註冊庫記錄哪些受信任的模型套件可供 Prediction 使用。啟用中的模型會出現在 Prediction 選單。', version: '版本', framework: '框架', target: '目標', package: '套件目錄', active: '啟用', disabled: '停用', disable: '停用模型', enable: '啟用模型', unregister: '移除註冊', registryEmpty: '目前沒有模型註冊資料。',
+    queue: '佇列管理', queueOperations: 'Queue Operations 管理', queueHint: '查看訓練佇列狀態、重試失敗工作，並取消尚未開始的訓練工作。', queued: '等待中', processing: '處理中', deadLetter: 'Dead-letter', refreshQueue: '重新整理', queuedJobs: '等待中的工作', processingJobs: '處理中的工作', deadLetterJobs: '失敗工作', noQueuedJobs: '目前沒有等待中的工作。', noProcessingJobs: '目前沒有處理中的工作。', noDeadLetterJobs: '目前沒有 Dead-letter 工作。', cancelJob: '取消工作', requeueJob: '重新排入佇列', attempts: '嘗試次數', failure: '錯誤資訊', queueRequeued: '工作已重新排入佇列。', queueCancelled: '工作已取消。', queueActionFailed: '佇列操作失敗。',
   },
   en: {
     ...registryLabels,
+    queue: 'Queue', queueOperations: 'Queue Operations', queueHint: 'Inspect training queue state, replay failed jobs, and cancel training jobs that have not started.', queued: 'Queued', processing: 'Processing', deadLetter: 'Dead-letter', refreshQueue: 'Refresh', queuedJobs: 'Queued Jobs', processingJobs: 'Processing Jobs', deadLetterJobs: 'Dead-letter Jobs', noQueuedJobs: 'No queued jobs.', noProcessingJobs: 'No processing jobs.', noDeadLetterJobs: 'No dead-letter jobs.', cancelJob: 'Cancel Job', requeueJob: 'Requeue', attempts: 'Attempts', failure: 'Failure', queueRequeued: 'Job requeued.', queueCancelled: 'Job cancelled.', queueActionFailed: 'Queue operation failed.',
     brandTag: 'EDGE MACHINE LEARNING',
     brandTitle: 'EdgeML Platform',
     brandDescription: 'CSV data management, model training, and enterprise prediction services.',

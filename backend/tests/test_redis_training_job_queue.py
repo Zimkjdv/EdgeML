@@ -20,9 +20,16 @@ class FakeRedis:
         self.lpush(destination, value)
         return value
 
-    def lrem(self, key: str, count: int, value: str) -> None:
-        if value in self.lists.get(key, []):
-            self.lists[key].remove(value)
+    def lrem(self, key: str, count: int, value: str) -> int:
+        removed = 0
+        values = self.lists.get(key, [])
+        while value in values and (count == 0 or removed < count):
+            values.remove(value)
+            removed += 1
+        return removed
+
+    def llen(self, key: str) -> int:
+        return len(self.lists.get(key, []))
 
     def lrange(self, key: str, start: int, end: int) -> list[str]:
         return list(self.lists.get(key, []))
@@ -52,6 +59,21 @@ def test_redis_queue_dispatches_acknowledges_and_recovers(monkeypatch) -> None:
     queue.acknowledge("job-3")
     assert fake.lists["queue:dead-letter"] == ["job-3"]
     assert fake.lists["queue:processing"] == ["job-2"]
+
+
+def test_queue_operations_report_and_move_jobs(monkeypatch) -> None:
+    fake = FakeRedis()
+    monkeypatch.setattr("redis.Redis.from_url", lambda *args, **kwargs: fake)
+    queue = RedisTrainingJobQueue("redis://test", "queue")
+
+    queue.enqueue("queued")
+    queue.dead_letter("failed")
+    assert queue.queue_depths() == {"queued": 1, "processing": 0, "dead_letter": 1}
+    assert queue.list_dead_letter() == ["failed"]
+    assert queue.requeue_dead_letter("failed")
+    assert queue.list_dead_letter() == []
+    assert queue.remove_queued("queued")
+    assert queue.queue_depths() == {"queued": 1, "processing": 0, "dead_letter": 0}
 
 
 def test_retry_policy_classifies_errors_and_caps_backoff() -> None:

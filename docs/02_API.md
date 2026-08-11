@@ -47,6 +47,10 @@ Returns successful prediction records in reverse chronological order. Each recor
 - `DELETE /api/datasets/{dataset_id}`: remove a stored source CSV and its profile metadata.
 - `POST /api/training`: train a regression or classification pipeline from a selected target and checked feature columns.
 - `POST /api/training/jobs`: enqueue a training job; `GET /api/training/jobs/{job_id}` returns persisted progress, worker metadata, and status.
+- `POST /api/training/jobs/{job_id}/cancel`: cancel a queued job before a worker claims it. Returns `409` when the job is already running or terminal.
+- `GET /api/queue/status`: return queued, processing, and dead-letter counts plus queued/processing job IDs for the configured training queue.
+- `GET /api/queue/dead-letter`: list failed jobs retained for operator inspection, including attempt count and failure metadata.
+- `POST /api/queue/dead-letter/{job_id}/requeue`: move a dead-letter job back to the primary queue for manual replay while preserving its attempt history.
 - `GET /api/trained-models`: list draft and published training artifacts.
 - `PATCH /api/trained-models/{model_id}`: update a model display name and its published manifest when applicable.
 - `DELETE /api/trained-models`: delete one or more Draft/Published model artifacts by id.

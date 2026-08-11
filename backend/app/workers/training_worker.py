@@ -71,7 +71,12 @@ def run_worker() -> None:
             logger.exception("Training worker failed to execute job", extra={"event": "training.worker.job_error", "job_id": job_id, "worker_id": worker_id})
             try:
                 job = service.get_job(job_id)
-                if _is_retryable_error(exc) and job.attempt < settings.training_max_attempts:
+                if job.status == "cancelled":
+                    logger.info(
+                        "Cancelled training job acknowledged",
+                        extra={"event": "training.worker.job_cancelled", "job_id": job_id, "worker_id": worker_id},
+                    )
+                elif _is_retryable_error(exc) and job.attempt < settings.training_max_attempts:
                     service.schedule_retry(job_id, settings.training_max_attempts)
                     delay = _retry_delay(job.attempt, settings.training_retry_backoff_seconds, settings.training_retry_backoff_max_seconds)
                     if stop_event.is_set() or (delay and stop_event.wait(delay)):

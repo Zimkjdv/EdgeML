@@ -11,6 +11,26 @@ h1 { margin: 0; font-size: 40px; letter-spacing: -.03em; }
 .result-heading { display: flex; justify-content: space-between; align-items: center; font-weight: 600; }
 .result-heading span { color: #9ca3af; font-size: 13px; font-weight: 400; }
 .nav { margin-bottom: 24px; border-radius: 12px; background: #fff; padding: 0 12px; }
+.nav .el-menu-item { flex: 0 0 auto; }
+.queue-workspace { border: 1px solid #dbe5f1; box-shadow: 0 14px 34px rgba(30, 64, 175, .08); }
+.queue-workspace .el-card__header { padding: 22px 28px; border-bottom: 1px solid #dbe5f1; background: linear-gradient(135deg, #f8fbff, #eef5ff); color: #153b72; font-size: 20px; font-weight: 750; }
+.queue-workspace .el-card__body { padding: 26px 28px 30px; }
+.queue-intro { margin: 0 0 22px; padding: 14px 16px; border-left: 4px solid #409eff; border-radius: 0 10px 10px 0; background: #f3f8ff; color: #48617f; line-height: 1.6; }
+.queue-stat-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-bottom: 22px; }
+.queue-stat { display: flex; align-items: center; justify-content: space-between; min-height: 84px; padding: 16px 20px; border: 1px solid #dbe5f1; border-radius: 12px; background: #fbfdff; }
+.queue-stat span { color: #48617f; font-weight: 650; }
+.queue-stat strong { color: #153b72; font-size: 28px; line-height: 1; }
+.queued-stat { border-left: 4px solid #409eff; }.processing-stat { border-left: 4px solid #e6a23c; }.dead-stat { border-left: 4px solid #f56c6c; }
+.queue-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-bottom: 16px; }
+.queue-panel { min-width: 0; padding: 18px; border: 1px solid #e1eaf5; border-radius: 12px; background: #fbfdff; }
+.queue-panel-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.queue-panel-heading h3 { margin: 0; color: #1e3a5f; font-size: 16px; }
+.queue-job-list { display: grid; gap: 8px; }
+.queue-job-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; padding: 10px 12px; border: 1px solid #e5edf7; border-radius: 8px; background: #fff; }
+.queue-job-row code { min-width: 0; overflow: hidden; color: #315780; text-overflow: ellipsis; white-space: nowrap; }
+.dead-letter-panel { padding-bottom: 10px; }
+.queue-dead-letter-table { --el-table-header-bg-color: #fff3f3; --el-table-border-color: #f2d6d6; --el-table-row-hover-bg-color: #fff8f8; }
+@media (max-width: 900px) { .queue-stat-grid, .queue-columns { grid-template-columns: 1fr; } }
 .helper { color: #6b7280; font-size: 13px; line-height: 1.6; margin: 10px 0 0; }
 .prediction-file-stats { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .top-gap { margin-top: 16px; }
@@ -440,6 +460,12 @@ body {
 @keyframes nav-underline-in {
   from { opacity: 0; transform: scaleX(.35); }
   to { opacity: 1; transform: scaleX(1); }
+}
+/* Keep the full desktop navigation on one line without exposing a horizontal scrollbar. */
+@media (min-width: 701px) {
+  .nav { overflow-x: hidden; padding-right: 112px; }
+  .nav .el-menu-item { flex: 1 1 0; min-width: 0; padding-right: 6px; padding-left: 6px; font-size: 15px; letter-spacing: 0; }
+  .locale-zh .nav .el-menu-item { padding-right: 6px; padding-left: 6px; font-size: 16px; letter-spacing: .01em; }
 }
 .workspace, .result-card {
   border: 1px solid #e0e8f3;

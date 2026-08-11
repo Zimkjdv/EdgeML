@@ -15,6 +15,37 @@ class RedisTrainingJobQueue:
     def enqueue(self, job_id: str) -> None:
         self._client.lpush(self._queue_key, job_id)
 
+    def queue_depths(self) -> dict[str, int]:
+        return {
+            "queued": int(self._client.llen(self._queue_key)),
+            "processing": int(self._client.llen(self._processing_key)),
+            "dead_letter": int(self._client.llen(self._dead_letter_key)),
+        }
+
+    def list_queued(self) -> list[str]:
+        return list(self._client.lrange(self._queue_key, 0, -1))
+
+    def list_processing(self) -> list[str]:
+        return list(self._client.lrange(self._processing_key, 0, -1))
+
+    def list_dead_letter(self) -> list[str]:
+        return list(self._client.lrange(self._dead_letter_key, 0, -1))
+
+    def remove_queued(self, job_id: str) -> bool:
+        return bool(self._client.lrem(self._queue_key, 1, job_id))
+
+    def requeue_dead_letter(self, job_id: str) -> bool:
+        removed = bool(self._client.lrem(self._dead_letter_key, 1, job_id))
+        if not removed:
+            return False
+        try:
+            self.enqueue(job_id)
+        except Exception:
+            # Preserve the dead-letter record if the primary queue is unavailable.
+            self._client.lpush(self._dead_letter_key, job_id)
+            raise
+        return True
+
     def consume(self, timeout: int = 5) -> str | None:
         return self._client.brpoplpush(self._queue_key, self._processing_key, timeout=timeout)
 

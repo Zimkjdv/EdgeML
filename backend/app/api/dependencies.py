@@ -5,11 +5,12 @@ from app.infrastructure.file_model_registry import FileModelRegistry
 from app.infrastructure.file_prediction_history_repository import FilePredictionHistoryRepository
 from app.infrastructure.predictor_factory import PredictorFactory
 from app.infrastructure.redis_training_job_queue import RedisTrainingJobQueue
-from app.domain.training_queue import TrainingJobQueue
+from app.domain.training_queue import TrainingJobQueue, TrainingQueueOperations
 from app.services.prediction_service import PredictionService
 from app.services.dataset_service import DatasetService
 from app.services.training_service import TrainingService
 from app.services.model_registry_service import ModelRegistryService
+from app.services.queue_operations_service import QueueOperationsService
 
 
 def get_model_registry() -> FileModelRegistry:
@@ -52,6 +53,15 @@ def get_training_job_queue() -> TrainingJobQueue:
     if settings.queue_backend != "redis":
         raise RuntimeError(f"Unsupported training queue backend: {settings.queue_backend}")
     return RedisTrainingJobQueue(settings.redis_url, settings.training_queue_name)
+
+
+@lru_cache
+def get_queue_operations_service() -> QueueOperationsService:
+    settings = get_settings()
+    queue = get_training_job_queue()
+    # RedisTrainingJobQueue implements both the dispatch and operations boundaries.
+    operations: TrainingQueueOperations = queue  # type: ignore[assignment]
+    return QueueOperationsService(operations, get_training_service(), settings.training_queue_name)
 
 
 @lru_cache

@@ -11,6 +11,8 @@ type Dataset = { id: string; name: string; original_filename: string; row_count:
 type PredictionHistoryRecord = { id: string; model_id: string; model_name: string; source_filename: string; row_count: number; created_at: string }
 type TrainedModel = { id: string; name: string; completed_at: string; target_column: string; algorithm: string; problem_type: string; validation_rmse?: number | null; validation_r2?: number | null; test_rmse?: number | null; test_r2?: number | null; status: 'draft' | 'published'; feature_columns?: string[]; validation_metrics?: Record<string, number>; test_metrics?: Record<string, number>; settings?: Record<string, unknown>; manifest?: Record<string, unknown> }
 type ModelRegistryItem = { id: string; name: string; version: string; framework: string; problem_type: string; target: string; description: string; package_name: string; status: 'active' | 'disabled'; registered_at: string }
+type QueueStatus = { queue_name: string; queued_count: number; processing_count: number; dead_letter_count: number; queued_job_ids: string[]; processing_job_ids: string[] }
+type DeadLetterJob = { job_id: string; status: string; attempt: number; message: string; error?: string | null; queued_at?: string | null; started_at?: string | null; completed_at?: string | null }
 
 const activePage = ref('prediction')
 const models = ref<PredictionModel[]>([])
@@ -18,6 +20,10 @@ const datasets = ref<Dataset[]>([])
 const predictionHistory = ref<PredictionHistoryRecord[]>([])
 const trainedModels = ref<TrainedModel[]>([])
 const registryModels = ref<ModelRegistryItem[]>([])
+const queueStatus = ref<QueueStatus | null>(null)
+const deadLetterJobs = ref<DeadLetterJob[]>([])
+const queueLoading = ref(false)
+const queueActionId = ref('')
 const selectedDataset = ref<Dataset | null>(null)
 const predictionModelId = ref('')
 const predictionFile = ref<File | null>(null)
@@ -174,6 +180,40 @@ const refreshDatasets = async () => { datasets.value = await api<Dataset[]>('/ap
 const refreshTrainedModels = async () => { trainedModels.value = await api<TrainedModel[]>('/api/trained-models') }
 const refreshRegistry = async () => { registryModels.value = await api<ModelRegistryItem[]>('/api/model-registry') }
 const refreshPredictionHistory = async () => { predictionHistory.value = await api<PredictionHistoryRecord[]>('/api/prediction-history') }
+const refreshQueue = async () => {
+  queueLoading.value = true
+  try {
+    const [status, deadLetter] = await Promise.all([
+      api<QueueStatus>('/api/queue/status'),
+      api<DeadLetterJob[]>('/api/queue/dead-letter'),
+    ])
+    queueStatus.value = status
+    deadLetterJobs.value = deadLetter
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : 'Queue operations could not be loaded.')
+  } finally {
+    queueLoading.value = false
+  }
+}
+const requeueDeadLetter = async (job: DeadLetterJob) => {
+  queueActionId.value = job.job_id
+  try {
+    await api<unknown>(`/api/queue/dead-letter/${job.job_id}/requeue`, { method: 'POST' })
+    await refreshQueue()
+    ElMessage.success(t('queueRequeued'))
+  } catch (error) { ElMessage.error(error instanceof Error ? error.message : t('queueActionFailed')) }
+  finally { queueActionId.value = '' }
+}
+const cancelQueuedJob = async (jobId: string) => {
+  queueActionId.value = jobId
+  try {
+    await api<unknown>(`/api/training/jobs/${jobId}/cancel`, { method: 'POST' })
+    await refreshQueue()
+    ElMessage.success(t('queueCancelled'))
+  } catch (error) { ElMessage.error(error instanceof Error ? error.message : t('queueActionFailed')) }
+  finally { queueActionId.value = '' }
+}
+watch(activePage, (page) => { if (page === 'queue') refreshQueue() })
 
 const detectGroundTruthColumn = () => {
   const columns = predictionFileColumns.value
@@ -294,7 +334,7 @@ const train = async () => {
     await pollTrainingJob(job.id)
   } catch (error) { ElMessage.error(error instanceof Error ? error.message : '訓練失敗。') } finally { trainingLoading.value = false }
 }
-const pollTrainingJob = async (id: string): Promise<void> => { const job = await api<{ status: string; progress: number; message: string; result_model_id?: string; error?: string }>(`/api/training/jobs/${id}`); trainingProgress.value = job.progress; trainingMessage.value = job.message; if (job.status === 'completed') { trainingResult.value = await api<TrainedModel>(`/api/trained-models/${job.result_model_id}`); await refreshTrainedModels(); activePage.value = 'trained'; ElMessage.success('模型訓練完成。'); return }; if (job.status === 'failed') throw new Error(job.error ?? '訓練失敗。'); await new Promise((resolve) => window.setTimeout(resolve, 700)); return pollTrainingJob(id) }
+const pollTrainingJob = async (id: string): Promise<void> => { const job = await api<{ status: string; progress: number; message: string; result_model_id?: string; error?: string }>(`/api/training/jobs/${id}`); trainingProgress.value = job.progress; trainingMessage.value = job.message; if (job.status === 'completed') { trainingResult.value = await api<TrainedModel>(`/api/trained-models/${job.result_model_id}`); await refreshTrainedModels(); activePage.value = 'trained'; ElMessage.success('模型訓練完成。'); return }; if (job.status === 'failed' || job.status === 'cancelled') throw new Error(job.error ?? (job.status === 'cancelled' ? t('queueCancelled') : '訓練失敗。')); await new Promise((resolve) => window.setTimeout(resolve, 700)); return pollTrainingJob(id) }
 const publish = async (model: TrainedModel) => {
   try { selectedTrainedModel.value = await api<TrainedModel>(`/api/trained-models/${model.id}/publish`, { method: 'POST' }); await refreshTrainedModels(); await refreshModels(); ElMessage.success('模型已發布，可在 Prediction 頁面載入。') }
   catch (error) { ElMessage.error(error instanceof Error ? error.message : '發布失敗。') }
@@ -329,7 +369,7 @@ onMounted(async () => {
   <main class="page-shell" :class="locale === 'en' ? 'locale-en' : 'locale-zh'">
     <section class="hero"><p class="eyebrow">{{ t('brandTag') }}</p><h1>{{ t('brandTitle') }}</h1><p>{{ t('brandDescription') }}</p></section>
     <el-menu :default-active="activePage" mode="horizontal" :ellipsis="false" class="nav" @select="(key: string) => activePage = key">
-      <el-menu-item index="prediction">{{ t('prediction') }}</el-menu-item><el-menu-item index="history">{{ t('history') }}</el-menu-item><el-menu-item index="datasets">{{ t('datasets') }}</el-menu-item><el-menu-item index="training">{{ t('training') }}</el-menu-item><el-menu-item index="trained">{{ t('trainedModels') }}</el-menu-item><el-menu-item index="registry">{{ t('registry') }}</el-menu-item><el-button class="language-switch" plain @click.stop="toggleLocale">{{ t('language') }}</el-button>
+      <el-menu-item index="prediction">{{ t('prediction') }}</el-menu-item><el-menu-item index="history">{{ t('history') }}</el-menu-item><el-menu-item index="datasets">{{ t('datasets') }}</el-menu-item><el-menu-item index="training">{{ t('training') }}</el-menu-item><el-menu-item index="trained">{{ t('trainedModels') }}</el-menu-item><el-menu-item index="registry">{{ t('registry') }}</el-menu-item><el-menu-item index="queue">{{ t('queue') }}</el-menu-item><el-button class="language-switch" plain @click.stop="toggleLocale">{{ t('language') }}</el-button>
     </el-menu>
 
     <section v-if="activePage === 'prediction'">
@@ -389,7 +429,24 @@ onMounted(async () => {
       <el-card v-if="selectedTrainedModel" class="result-card"><template #header><div class="result-heading"><span>{{ selectedTrainedModel.name }}：詳細指標</span><el-button v-if="selectedTrainedModel.status === 'draft'" type="primary" @click="publish(selectedTrainedModel)">發布至 Prediction Server</el-button><el-button v-else type="success" @click="loadPublished(selectedTrainedModel)">載入到 Prediction</el-button></div></template><el-descriptions :column="2" border><el-descriptions-item label="模型類型">{{ selectedTrainedModel.algorithm }} / Regression</el-descriptions-item><el-descriptions-item label="Target">{{ selectedTrainedModel.target_column }}</el-descriptions-item><el-descriptions-item label="特徵欄位" :span="2">{{ selectedTrainedModel.feature_columns?.join('、') }}</el-descriptions-item><el-descriptions-item label="Validation RMSE">{{ formatNumber(selectedTrainedModel.validation_metrics?.rmse) }}</el-descriptions-item><el-descriptions-item label="Validation MAE">{{ formatNumber(selectedTrainedModel.validation_metrics?.mae) }}</el-descriptions-item><el-descriptions-item label="Test RMSE">{{ formatNumber(selectedTrainedModel.test_metrics?.rmse) }}</el-descriptions-item><el-descriptions-item label="Test MAE">{{ formatNumber(selectedTrainedModel.test_metrics?.mae) }}</el-descriptions-item><el-descriptions-item label="Test MAPE">{{ formatNumber(selectedTrainedModel.test_metrics?.mape) }}</el-descriptions-item><el-descriptions-item label="Test NRMSE">{{ formatNumber(selectedTrainedModel.test_metrics?.nrmse) }}</el-descriptions-item><el-descriptions-item label="最大誤差">{{ formatNumber(selectedTrainedModel.test_metrics?.max_error) }}</el-descriptions-item></el-descriptions></el-card>
     </section>
 
-    <section v-else class="registry-page">
+    <section v-else-if="activePage === 'queue'" class="queue-page">
+      <el-card class="workspace queue-workspace" v-loading="queueLoading">
+        <template #header><div class="result-heading"><span>{{ t('queueOperations') }}</span><el-button plain type="primary" @click="refreshQueue">{{ t('refreshQueue') }}</el-button></div></template>
+        <p class="queue-intro">{{ t('queueHint') }}</p>
+        <div v-if="queueStatus" class="queue-stat-grid">
+          <div class="queue-stat queued-stat"><span>{{ t('queued') }}</span><strong>{{ queueStatus.queued_count }}</strong></div>
+          <div class="queue-stat processing-stat"><span>{{ t('processing') }}</span><strong>{{ queueStatus.processing_count }}</strong></div>
+          <div class="queue-stat dead-stat"><span>{{ t('deadLetter') }}</span><strong>{{ queueStatus.dead_letter_count }}</strong></div>
+        </div>
+        <div class="queue-columns">
+          <div class="queue-panel"><div class="queue-panel-heading"><h3>{{ t('queuedJobs') }}</h3><el-tag size="small" effect="plain">{{ queueStatus?.queued_count ?? 0 }}</el-tag></div><el-empty v-if="!queueStatus?.queued_job_ids.length" :description="t('noQueuedJobs')" :image-size="64" /><div v-else class="queue-job-list"><div v-for="jobId in queueStatus.queued_job_ids" :key="jobId" class="queue-job-row"><el-tooltip :content="jobId" placement="top"><code>{{ jobId }}</code></el-tooltip><el-button size="small" type="danger" plain :loading="queueActionId === jobId" @click="cancelQueuedJob(jobId)">{{ t('cancelJob') }}</el-button></div></div></div>
+          <div class="queue-panel"><div class="queue-panel-heading"><h3>{{ t('processingJobs') }}</h3><el-tag size="small" type="warning" effect="plain">{{ queueStatus?.processing_count ?? 0 }}</el-tag></div><el-empty v-if="!queueStatus?.processing_job_ids.length" :description="t('noProcessingJobs')" :image-size="64" /><div v-else class="queue-job-list"><div v-for="jobId in queueStatus.processing_job_ids" :key="jobId" class="queue-job-row"><el-tooltip :content="jobId" placement="top"><code>{{ jobId }}</code></el-tooltip><el-tag type="warning" effect="light">{{ t('processing') }}</el-tag></div></div></div>
+        </div>
+        <div class="queue-panel dead-letter-panel"><div class="queue-panel-heading"><h3>{{ t('deadLetterJobs') }}</h3><el-tag size="small" type="danger" effect="plain">{{ queueStatus?.dead_letter_count ?? 0 }}</el-tag></div><el-empty v-if="!deadLetterJobs.length" :description="t('noDeadLetterJobs')" :image-size="64" /><el-table v-else :data="deadLetterJobs" class="queue-dead-letter-table"><el-table-column prop="job_id" label="Job ID" min-width="220" show-overflow-tooltip /><el-table-column prop="attempt" :label="t('attempts')" width="100" /><el-table-column prop="error" :label="t('failure')" min-width="260" show-overflow-tooltip /><el-table-column :label="t('actions')" width="150"><template #default="scope"><el-button size="small" type="primary" plain :loading="queueActionId === scope.row.job_id" @click="requeueDeadLetter(scope.row)">{{ t('requeueJob') }}</el-button></template></el-table-column></el-table></div>
+      </el-card>
+    </section>
+
+    <section v-else-if="activePage === 'registry'" class="registry-page">
       <el-card class="workspace registry-workspace"><template #header><div class="result-heading"><span>{{ t('modelRegistry') }}</span><el-tag effect="plain">{{ registryModels.length }} {{ t('models') }}</el-tag></div></template>
         <p class="registry-intro">{{ t('registryHint') }}</p>
         <el-table class="registry-table" :data="registryModels" row-key="id">

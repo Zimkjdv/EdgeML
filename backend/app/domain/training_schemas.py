@@ -84,7 +84,7 @@ class TrainedModelDetail(TrainedModelSummary):
 
 class TrainingJob(BaseModel):
     id: str
-    status: Literal["queued", "running", "completed", "failed"]
+    status: Literal["queued", "running", "completed", "failed", "cancelled"]
     progress: int = Field(ge=0, le=100)
     message: str
     result_model_id: str | None = None
@@ -94,6 +94,26 @@ class TrainingJob(BaseModel):
     completed_at: datetime | None = None
     attempt: int = 0
     worker_id: str | None = None
+
+
+class QueueStatus(BaseModel):
+    queue_name: str
+    queued_count: int = Field(ge=0)
+    processing_count: int = Field(ge=0)
+    dead_letter_count: int = Field(ge=0)
+    queued_job_ids: list[str] = Field(default_factory=list)
+    processing_job_ids: list[str] = Field(default_factory=list)
+
+
+class DeadLetterJobSummary(BaseModel):
+    job_id: str
+    status: Literal["queued", "running", "completed", "failed", "cancelled"]
+    attempt: int = Field(ge=0)
+    message: str
+    error: str | None = None
+    queued_at: datetime | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
 
 
 class ExternalEvaluationRequest(BaseModel):

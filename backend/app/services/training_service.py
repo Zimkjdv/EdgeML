@@ -163,6 +163,10 @@ class TrainingService:
 
     def run_job(self, job_id: str, worker_id: str | None = None) -> TrainingJob:
         job, request = self._read_job(job_id)
+        # A recovered processing-list entry may still be persisted as running after
+        # a worker crash, so it is safe to resume both queued and running jobs.
+        if job.status not in {"queued", "running"}:
+            raise PredictionValidationError(f"Training job '{job_id}' is not available to run.")
         started_at = training_started()
         self._logger.info("Training job started", extra={"event": "training.job.started", "job_id": job_id, "worker_id": worker_id})
         job.attempt += 1
@@ -202,6 +206,35 @@ class TrainingService:
         job.status = "queued"
         job.progress = 0
         job.message = f"Retry scheduled ({job.attempt}/{max_attempts})"
+        job.error = None
+        job.started_at = None
+        job.completed_at = None
+        self._write_job(job, request)
+        return job
+
+    def cancel_job(self, job_id: str) -> TrainingJob:
+        """Cancel a job that has not been claimed by a worker yet."""
+
+        job, request = self._read_job(job_id)
+        if job.status != "queued":
+            raise PredictionValidationError("Only queued training jobs can be cancelled.")
+        job.status = "cancelled"
+        job.progress = 0
+        job.message = "Training job cancelled"
+        job.error = "Cancelled by operator"
+        job.completed_at = datetime.now(timezone.utc)
+        self._write_job(job, request)
+        return job
+
+    def requeue_failed_job(self, job_id: str) -> TrainingJob:
+        """Prepare a terminally failed job for manual replay."""
+
+        job, request = self._read_job(job_id)
+        if job.status != "failed":
+            raise PredictionValidationError("Only failed training jobs can be requeued.")
+        job.status = "queued"
+        job.progress = 0
+        job.message = "Training job requeued from dead-letter queue"
         job.error = None
         job.started_at = None
         job.completed_at = None
