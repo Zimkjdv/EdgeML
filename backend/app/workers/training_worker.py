@@ -69,13 +69,14 @@ def run_worker() -> None:
                         extra={"event": "training.worker.retry_scheduled", "job_id": job_id, "worker_id": worker_id},
                     )
                 else:
+                    queue.dead_letter(job_id)
                     logger.error(
-                        "Training job reached a terminal failure",
-                        extra={"event": "training.worker.job_terminal_failure", "job_id": job_id, "worker_id": worker_id},
+                        "Training job moved to dead-letter queue",
+                        extra={"event": "training.worker.dead_lettered", "job_id": job_id, "worker_id": worker_id},
                     )
             except Exception:
                 acknowledge = False
-                logger.exception("Unable to schedule training job retry", extra={"event": "training.worker.retry_error", "job_id": job_id, "worker_id": worker_id})
+                logger.exception("Unable to schedule training job retry or dead-letter job", extra={"event": "training.worker.retry_error", "job_id": job_id, "worker_id": worker_id})
         finally:
             if acknowledge:
                 queue.acknowledge(job_id)

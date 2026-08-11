@@ -43,6 +43,13 @@ def test_redis_queue_dispatches_acknowledges_and_recovers(monkeypatch) -> None:
     assert queue.recover_processing() == 1
     assert queue.consume(timeout=1) == "job-2"
 
+    queue.enqueue("job-3")
+    assert queue.consume(timeout=1) == "job-3"
+    queue.dead_letter("job-3")
+    queue.acknowledge("job-3")
+    assert fake.lists["queue:dead-letter"] == ["job-3"]
+    assert fake.lists["queue:processing"] == ["job-2"]
+
 
 def test_retry_policy_classifies_errors_and_caps_backoff() -> None:
     assert _is_retryable_error(OSError("temporary"))
