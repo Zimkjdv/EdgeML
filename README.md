@@ -78,7 +78,7 @@ The latest Prediction update rounds regression `prediction` and `prediction_erro
 ## Future roadmap
 
 - v0.7.3 in progress: bounded retries, exponential backoff, dead-letter routing, graceful worker shutdown, Queue Operations APIs, and the initial Queue Operations UI are implemented.
-- v0.7.3 follow-up: add worker capacity controls and runtime integration tests.
+- v0.7.3 follow-up: add runtime integration tests and richer worker-capacity controls.
 - v0.8: add a frontend observability dashboard for API health, registry availability, training activity, prediction outcomes, and operational errors.
 
 ## Quick start
@@ -97,6 +97,14 @@ The Docker Compose setup runs the complete v0.7.2 workflow:
 - `worker`: independent training worker.
 
 Training jobs flow from the API to Redis and are executed by the worker. The backend and worker share the persistent data volume for datasets, job records, and trained artifacts.
+
+To increase training capacity, run multiple worker replicas while keeping a single API and Redis instance:
+
+```bash
+docker compose up -d --build --scale worker=3
+```
+
+Each worker consumes the same Redis-backed queue. The Queue Operations page shows the combined queue state; use `docker compose ps worker` to inspect the worker replicas.
 
 ## Windows development launchers
 

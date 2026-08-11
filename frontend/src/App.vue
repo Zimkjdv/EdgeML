@@ -159,6 +159,7 @@ onUnmounted(() => {
   document.removeEventListener('mouseover', showTableTooltip)
   document.removeEventListener('mouseout', hideTooltipWhenLeavingModelPage)
   hideTableTooltip()
+  stopQueueAutoRefresh()
 })
 watch([trainedModels, activePage], async () => { await nextTick(); addTrainedModelTooltips() }, { deep: true })
 onUpdated(() => { addTrainedModelTooltips(); applyTrainedModelLocale() })
@@ -213,7 +214,21 @@ const cancelQueuedJob = async (jobId: string) => {
   } catch (error) { ElMessage.error(error instanceof Error ? error.message : t('queueActionFailed')) }
   finally { queueActionId.value = '' }
 }
-watch(activePage, (page) => { if (page === 'queue') refreshQueue() })
+let queueRefreshTimer: number | undefined
+const stopQueueAutoRefresh = () => {
+  if (queueRefreshTimer !== undefined) {
+    window.clearInterval(queueRefreshTimer)
+    queueRefreshTimer = undefined
+  }
+}
+const startQueueAutoRefresh = () => {
+  stopQueueAutoRefresh()
+  refreshQueue()
+  queueRefreshTimer = window.setInterval(() => {
+    if (activePage.value === 'queue' && !queueLoading.value && !queueActionId.value) refreshQueue()
+  }, 5000)
+}
+watch(activePage, (page) => { page === 'queue' ? startQueueAutoRefresh() : stopQueueAutoRefresh() })
 
 const detectGroundTruthColumn = () => {
   const columns = predictionFileColumns.value
