@@ -18,8 +18,11 @@ Multipart form fields:
 
 - `model_id`: model identifier from `GET /api/models`.
 - `file`: a UTF-8 CSV file.
+- `ground_truth_column` (optional): the answer/target column to score. If omitted, EdgeML automatically uses the manifest target when that column exists in the uploaded CSV. Send an empty value to force prediction-only mode.
 
-The request validates its size and CSV headers, runs a prediction, and returns a CSV attachment containing the original input columns and the manifest's `prediction_column`. The response is intentionally stateless: the browser uses the returned CSV for preview and download.
+The request validates its size and CSV headers, drops rows with missing required feature values (and missing Ground Truth values when evaluation is enabled), runs a prediction on the remaining rows, and returns a CSV attachment containing the original input columns and the manifest's `prediction_column`. Regression prediction and `prediction_error` values in the returned CSV are rounded to four decimal places; evaluation metrics still use the full-precision predictions. Regression files with Ground Truth also receive `prediction_error`; classification files receive `prediction_correct`. If every row is removed, the request returns a validation error. The response is intentionally stateless: the browser uses the returned CSV for preview and download.
+
+When Ground Truth is available, evaluation metrics are returned in the response headers: `X-Prediction-Metrics` (JSON), `X-Prediction-Ground-Truth` (URL-encoded column name), and `X-Prediction-Dropped-Rows`. Regression metrics include MAE, MAPE (%), RMSE, maximum error, R², and Pearson R. Classification metrics include accuracy, weighted precision, weighted recall, and weighted F1.
 
 Every successful request also writes prediction metadata to the configured history repository. Uploaded CSV contents and prediction outputs are not retained.
 

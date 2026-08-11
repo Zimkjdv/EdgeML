@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -57,6 +58,7 @@ def test_predict_returns_csv() -> None:
     assert response.status_code == 200
     assert "prediction" in response.text
     assert response.headers["content-type"].startswith("text/csv")
+    assert "filename*=UTF-8''HousePrice_predictions.csv" in response.headers["content-disposition"]
 
 
 def test_predict_rejects_missing_column() -> None:
@@ -67,6 +69,83 @@ def test_predict_rejects_missing_column() -> None:
     )
     assert response.status_code == 422
     assert "Age" in response.json()["detail"]
+
+
+def test_predict_drops_rows_with_missing_feature_values() -> None:
+    repository = InMemoryPredictionHistoryRepository()
+    test_client = client(repository)
+    content = b"Area,Room,Age\n80,2,10\n,3,12\n90,2,8\n"
+
+    response = test_client.post(
+        "/api/predict",
+        data={"model_id": "house-price-v1"},
+        files={"file": ("missing-values.csv", content, "text/csv")},
+    )
+
+    assert response.status_code == 200
+    assert len(response.text.strip().splitlines()) == 3
+    assert repository.records[0].row_count == 2
+
+
+def test_predict_with_ground_truth_returns_metrics_and_error_column() -> None:
+    repository = InMemoryPredictionHistoryRepository()
+    test_client = client(repository)
+    content = b"Area,Room,Age,Price\n80,2,10,180000\n90,2,8,210000\n"
+
+    response = test_client.post(
+        "/api/predict",
+        data={"model_id": "house-price-v1", "ground_truth_column": "Price"},
+        files={"file": ("scored.csv", content, "text/csv")},
+    )
+
+    assert response.status_code == 200
+    metrics = json.loads(response.headers["x-prediction-metrics"])
+    assert {"mae", "mape", "rmse", "max_error", "r2", "pearson_r"}.issubset(metrics)
+    assert response.headers["x-prediction-ground-truth"] == "Price"
+    assert "prediction_error" in response.text
+    assert repository.records[0].row_count == 2
+
+
+def test_regression_prediction_values_are_rounded_to_four_decimals() -> None:
+    content = b"Area,Room,Age\n80,2,10\n90,2,8\n"
+
+    response = client().post(
+        "/api/predict",
+        data={"model_id": "house-price-v1"},
+        files={"file": ("prediction.csv", content, "text/csv")},
+    )
+
+    assert response.status_code == 200
+    prediction_values = [line.split(",")[-1] for line in response.text.strip().splitlines()[1:]]
+    assert all(len(value.split(".")[1]) <= 4 for value in prediction_values if "." in value)
+
+
+def test_predict_auto_detects_manifest_target() -> None:
+    content = b"Area,Room,Age,Price\n80,2,10,180000\n90,2,8,210000\n"
+
+    response = client().post(
+        "/api/predict",
+        data={"model_id": "house-price-v1"},
+        files={"file": ("scored.csv", content, "text/csv")},
+    )
+
+    assert response.status_code == 200
+    assert response.headers["x-prediction-ground-truth"] == "Price"
+
+
+def test_empty_ground_truth_value_disables_auto_evaluation() -> None:
+    content = b"Area,Room,Age,Price\n80,2,10,180000\n90,2,8,210000\n"
+
+    response = client().post(
+        "/api/predict",
+        data={"model_id": "house-price-v1", "ground_truth_column": ""},
+        files={"file": ("prediction-only.csv", content, "text/csv")},
+    )
+
+    assert response.status_code == 200
+    assert response.headers["x-prediction-metrics"] == "{}"
+    assert response.headers["x-prediction-ground-truth"] == ""
+    assert "prediction_error" not in response.text
 
 
 def test_successful_prediction_is_added_to_history() -> None:

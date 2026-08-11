@@ -5,7 +5,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { locale, t, toggleLocale } from './i18n'
 
 type Feature = { name: string; dtype: string; required: boolean }
-type PredictionModel = { id: string; name: string; version: string; framework: string; problem_type: string; description: string; features: Feature[] }
+type PredictionModel = { id: string; name: string; version: string; framework: string; problem_type: string; target: string; description: string; features: Feature[] }
 type ColumnProfile = { name: string; raw_dtype: string; ml_type: 'numeric' | 'categorical'; missing_count: number; missing_rate: number; unique_count: number; outlier_count?: number; minimum?: number; maximum?: number; mean?: number; std?: number; median?: number; mode?: string }
 type Dataset = { id: string; name: string; original_filename: string; row_count: number; column_count: number; created_at: string; columns?: ColumnProfile[] }
 type PredictionHistoryRecord = { id: string; model_id: string; model_name: string; source_filename: string; row_count: number; created_at: string }
@@ -24,6 +24,11 @@ const predictionFile = ref<File | null>(null)
 const predictionLoading = ref(false)
 const previewColumns = ref<string[]>([])
 const previewRows = ref<Record<string, string>[]>([])
+const predictionFileColumns = ref<string[]>([])
+const groundTruthColumn = ref('')
+const evaluationMetrics = ref<Record<string, number> | null>(null)
+const evaluationGroundTruth = ref('')
+const predictionFileStats = ref({ totalRows: 0, missingRows: 0, predictedRows: 0 })
 const outputBlob = ref<Blob | null>(null)
 const datasetFile = ref<File | null>(null)
 const datasetLoading = ref(false)
@@ -51,6 +56,7 @@ const selectedDatasetColumns = computed(() => selectedDataset.value?.columns ?? 
 const numericColumns = computed(() => selectedDatasetColumns.value.filter((column) => column.ml_type === 'numeric'))
 const categoricalColumns = computed(() => selectedDatasetColumns.value.filter((column) => column.ml_type === 'categorical'))
 const selectedPredictionModel = computed(() => models.value.find((model) => model.id === predictionModelId.value))
+const groundTruthCandidates = computed(() => predictionFileColumns.value.filter((column) => !selectedPredictionModel.value?.features.some((feature) => feature.name === column)))
 const targetColumns = computed(() => training.value.problemType === 'classification' ? selectedDatasetColumns.value : numericColumns.value)
 
 const formatNumber = (value?: number) => value === undefined || value === null ? '—' : Number(value).toLocaleString('zh-TW', { maximumFractionDigits: 4 })
@@ -169,16 +175,47 @@ const refreshTrainedModels = async () => { trainedModels.value = await api<Train
 const refreshRegistry = async () => { registryModels.value = await api<ModelRegistryItem[]>('/api/model-registry') }
 const refreshPredictionHistory = async () => { predictionHistory.value = await api<PredictionHistoryRecord[]>('/api/prediction-history') }
 
-const selectPredictionFile = (file: { raw?: File }) => {
+const detectGroundTruthColumn = () => {
+  const columns = predictionFileColumns.value
+  if (!columns.length) return
+  const target = selectedPredictionModel.value?.target
+  if (target && columns.includes(target)) {
+    groundTruthColumn.value = target
+    return
+  }
+  const features = new Set(selectedPredictionModel.value?.features.map((feature) => feature.name) ?? [])
+  groundTruthColumn.value = [...columns].reverse().find((column) => !features.has(column)) ?? ''
+}
+watch([predictionModelId, predictionFileColumns], detectGroundTruthColumn, { deep: true })
+
+const parseCsvRows = (csv: string) => {
+  const normalized = csv.replace(/^\uFEFF/, '').trim()
+  return normalized ? normalized.split(/\r?\n/).map(parseCsvLine) : []
+}
+const selectPredictionFile = async (file: { raw?: File }) => {
   predictionFile.value = file.raw ?? null
   outputBlob.value = null
   previewColumns.value = []
   previewRows.value = []
+  predictionFileColumns.value = []
+  groundTruthColumn.value = ''
+  evaluationMetrics.value = null
+  evaluationGroundTruth.value = ''
+  predictionFileStats.value = { totalRows: 0, missingRows: 0, predictedRows: 0 }
+  if (!predictionFile.value) return
+  const rows = parseCsvRows(await predictionFile.value.text())
+  const columns = rows.shift() ?? []
+  predictionFileColumns.value = columns
+  const dataRows = rows.filter((values) => values.some((value) => value.trim() !== ''))
+  const missingRows = dataRows.filter((values) => columns.some((_, index) => !(values[index] ?? '').trim())).length
+  predictionFileStats.value = { totalRows: dataRows.length, missingRows, predictedRows: dataRows.length - missingRows }
 }
 const parseCsvPreview = (csv: string) => {
-  const rows = csv.replace(/^\uFEFF/, '').trim().split(/\r?\n/).map(parseCsvLine)
+  const rows = parseCsvRows(csv)
   previewColumns.value = rows.shift() ?? []
-  previewRows.value = rows.slice(0, 10).map((values) => Object.fromEntries(previewColumns.value.map((key, i) => [key, values[i] ?? ''])))
+  const dataRows = rows.filter((values) => values.some((value) => value.trim() !== ''))
+  previewRows.value = dataRows.slice(0, 10).map((values) => Object.fromEntries(previewColumns.value.map((key, i) => [key, values[i] ?? ''])))
+  return dataRows.length
 }
 const parseCsvLine = (line: string) => {
   const values: string[] = []; let value = ''; let quoted = false
@@ -196,9 +233,15 @@ const runPrediction = async () => {
   predictionLoading.value = true
   try {
     const form = new FormData(); form.append('model_id', predictionModelId.value); form.append('file', predictionFile.value)
+    form.append('ground_truth_column', groundTruthColumn.value)
     const response = await fetch('/api/predict', { method: 'POST', body: form })
     if (!response.ok) { const error = await response.json(); throw new Error(error.detail ?? '預測失敗。') }
-    outputBlob.value = await response.blob(); parseCsvPreview(await outputBlob.value.text()); await refreshPredictionHistory(); ElMessage.success('預測已完成。')
+    const metricsHeader = response.headers.get('X-Prediction-Metrics')
+    evaluationMetrics.value = metricsHeader && metricsHeader !== '{}' ? JSON.parse(metricsHeader) : null
+    evaluationGroundTruth.value = decodeURIComponent(response.headers.get('X-Prediction-Ground-Truth') ?? '')
+    const droppedRows = Number(response.headers.get('X-Prediction-Dropped-Rows') ?? '0')
+    if (Number.isFinite(droppedRows)) predictionFileStats.value.missingRows = droppedRows
+    outputBlob.value = await response.blob(); predictionFileStats.value.predictedRows = parseCsvPreview(await outputBlob.value.text()); await refreshPredictionHistory(); ElMessage.success('預測已完成。')
   } catch (error) { ElMessage.error(error instanceof Error ? error.message : '預測失敗。') } finally { predictionLoading.value = false }
 }
 const downloadPrediction = () => {
@@ -290,12 +333,13 @@ onMounted(async () => {
     </el-menu>
 
     <section v-if="activePage === 'prediction'">
-      <el-card class="workspace"><template #header>{{ t('predictionWorkspace') }}</template><el-form label-position="top">
+      <el-card class="workspace prediction-workspace"><template #header>{{ t('predictionWorkspace') }}</template><el-form label-position="top">
         <el-form-item :label="t('publishedModel')"><el-select v-model="predictionModelId" class="full-width" :placeholder="t('selectModel')"><el-option v-for="model in models" :key="model.id" :value="model.id" :label="`${model.name} · ${model.version}`" /></el-select><p v-if="selectedPredictionModel" class="helper">{{ selectedPredictionModel.description }}｜{{ locale === 'zh-TW' ? '需要欄位' : 'Required features' }}：{{ selectedPredictionModel.features.map(f => f.name).join('、') }}</p></el-form-item>
-        <el-form-item :label="t('inputCsv')"><el-upload :auto-upload="false" accept=".csv,text/csv" :limit="1" :on-change="selectPredictionFile"><el-button :icon="UploadFilled">{{ t('chooseCsv') }}</el-button></el-upload></el-form-item>
-        <el-button type="primary" :loading="predictionLoading" @click="runPrediction">{{ t('runPrediction') }}</el-button><el-button :icon="Download" :disabled="!outputBlob" @click="downloadPrediction">{{ t('downloadCsv') }}</el-button>
+        <el-form-item :label="t('inputCsv')"><div class="prediction-upload-block"><div class="prediction-drop-zone"><el-upload :auto-upload="false" accept=".csv,text/csv" :limit="1" :on-change="selectPredictionFile"><el-button :icon="UploadFilled">{{ t('chooseCsv') }}</el-button></el-upload></div><div v-if="predictionFileStats.totalRows" class="prediction-file-stats"><el-tag type="info" effect="light">{{ t('uploadedRows') }}：{{ predictionFileStats.totalRows }}</el-tag><el-tag :type="predictionFileStats.missingRows ? 'warning' : 'success'" effect="light">{{ t('missingRowsDropped') }}：{{ predictionFileStats.missingRows }}</el-tag><el-tag type="success" effect="light">{{ t('rowsToPredict') }}：{{ predictionFileStats.predictedRows }}</el-tag></div><div v-if="predictionFileColumns.length" class="ground-truth-panel"><div class="ground-truth-heading"><span>{{ t('groundTruth') }}</span><el-tag size="small" effect="plain">{{ t('optional') }}</el-tag></div><el-select v-model="groundTruthColumn" class="full-width" clearable :placeholder="t('groundTruthPlaceholder')"><el-option v-for="column in groundTruthCandidates" :key="column" :label="column" :value="column" /></el-select><p class="helper">{{ t('groundTruthHint') }}</p></div></div></el-form-item>
+        <div class="prediction-actions"><el-button type="primary" :loading="predictionLoading" @click="runPrediction">{{ t('runPrediction') }}</el-button><el-button :icon="Download" :disabled="!outputBlob" @click="downloadPrediction">{{ t('downloadCsv') }}</el-button></div>
       </el-form></el-card>
-      <el-card v-if="previewColumns.length" class="result-card"><template #header><div class="result-heading">預測結果預覽 <span>前 10 筆</span></div></template><el-table :data="previewRows" max-height="360"><el-table-column v-for="column in previewColumns" :key="column" :prop="column" :label="column" /></el-table></el-card>
+      <el-card v-if="previewColumns.length" class="result-card prediction-preview-card"><template #header><div class="result-heading">預測結果預覽 <span>前 10 筆</span></div></template><el-table :data="previewRows" max-height="360"><el-table-column v-for="column in previewColumns" :key="column" :prop="column" :label="column" show-overflow-tooltip><template #header><el-tooltip :content="column" placement="top"><span class="preview-column-header">{{ column }}</span></el-tooltip></template></el-table-column></el-table></el-card>
+      <el-card v-if="evaluationMetrics" class="result-card prediction-evaluation-card"><template #header><div class="result-heading"><span>{{ t('groundTruthEvaluation') }}</span><el-tag type="success" effect="light">{{ evaluationGroundTruth }}</el-tag></div></template><el-descriptions v-if="selectedPredictionModel?.problem_type === 'regression'" :column="3" border><el-descriptions-item :label="t('metricMAE')">{{ formatNumber(evaluationMetrics.mae) }}</el-descriptions-item><el-descriptions-item :label="t('metricMAPE')">{{ formatNumber(evaluationMetrics.mape) }}</el-descriptions-item><el-descriptions-item :label="t('metricRMSE')">{{ formatNumber(evaluationMetrics.rmse) }}</el-descriptions-item><el-descriptions-item :label="t('metricR2')">{{ formatNumber(evaluationMetrics.r2) }}</el-descriptions-item><el-descriptions-item :label="t('metricPearsonR')">{{ formatNumber(evaluationMetrics.pearson_r) }}</el-descriptions-item><el-descriptions-item :label="t('metricMaxError')">{{ formatNumber(evaluationMetrics.max_error) }}</el-descriptions-item></el-descriptions><el-descriptions v-else :column="4" border><el-descriptions-item :label="t('metricAccuracy')">{{ formatNumber(evaluationMetrics.accuracy) }}</el-descriptions-item><el-descriptions-item :label="t('metricPrecision')">{{ formatNumber(evaluationMetrics.precision) }}</el-descriptions-item><el-descriptions-item :label="t('metricRecall')">{{ formatNumber(evaluationMetrics.recall) }}</el-descriptions-item><el-descriptions-item :label="t('metricF1')">{{ formatNumber(evaluationMetrics.f1) }}</el-descriptions-item></el-descriptions></el-card>
     </section>
 
     <section v-else-if="activePage === 'history'">

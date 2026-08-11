@@ -3,6 +3,7 @@
 ```text
 Vue UI -> FastAPI router -> PredictionService -> ModelCatalog -> BasePredictor plugin
                                             -> CSV validation
+                                            -> optional Ground Truth evaluation
                                             -> PredictionHistoryRepository
 
 Vue UI -> FastAPI router -> DatasetService -> trusted CSV + profile metadata
@@ -48,6 +49,8 @@ Training executes as a local background job. The job record persists queued/runn
 
 Regression evaluation uses R² as its primary model score. Detailed evaluation also records MAE, MAPE (%), RMSE, NRMSE, maximum error, target mean, and Pearson correlation (R). R² and R should be interpreted with the dataset context; EdgeML presents metrics rather than claiming a universal quality threshold.
 
-Model manifests use the actual pandas dtype of each selected feature. Prediction validation therefore knows which uploaded CSV columns must be numeric, while categorical columns continue through the fitted encoder.
+Model manifests use the actual pandas dtype of each selected feature. Prediction validation therefore knows which uploaded CSV columns must be numeric, while categorical columns continue through the fitted encoder. Rows with missing required feature values are removed before inference; the history row count records only rows actually predicted.
+
+Prediction accepts an optional Ground Truth column. The service prefers the manifest target when it is present, or accepts an explicitly selected column (commonly the last CSV column). Ground Truth is never included in the feature frame. When selected, the service calculates regression or classification metrics and adds row-level error/correctness columns to the returned CSV; regression prediction and error values are rounded to four decimal places for readability while aggregate metrics use full precision. Headers carry the aggregate metrics so the API remains a direct CSV response.
 
 XGBoost is used through `XGBRegressor` inside this trusted sklearn pipeline. The Prediction Server therefore uses the existing sklearn artifact adapter while retaining an XGBoost dependency in its runtime image.

@@ -8,6 +8,8 @@ EdgeML is a self-hosted, plugin-oriented platform for batch predictions from CSV
 
 - Model discovery from `backend/ml_models/`
 - CSV batch prediction for trusted sklearn artifacts
+- Optional Ground Truth scoring during prediction (regression metrics and row-level errors)
+- Prediction preview keeps compact columns and provides tooltips for full headers and values
 - Stateless API: prediction results are returned directly as CSV
 - Vue 3 interface with upload, preview, and download
 - Dataset upload and profile pages with Chinese CSV encoding support

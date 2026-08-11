@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 import pandas as pd
+from sklearn.metrics import accuracy_score, f1_score, mean_absolute_error, mean_absolute_percentage_error, max_error, precision_score, r2_score, recall_score, root_mean_squared_error
 
 from app.domain.errors import PredictionValidationError
 from app.domain.model_catalog import ModelCatalog
@@ -28,7 +29,7 @@ class PredictionService:
     def list_history(self) -> list[PredictionHistoryRecord]:
         return self._history_repository.list()
 
-    def predict_csv(self, model_id: str, content: bytes, source_filename: str = "input.csv") -> PredictionOutput:
+    def predict_csv(self, model_id: str, content: bytes, source_filename: str = "input.csv", ground_truth_column: str | None = None) -> PredictionOutput:
         manifest = self._catalog.get(model_id)
         try:
             frame = pd.read_csv(BytesIO(content))
@@ -36,9 +37,41 @@ class PredictionService:
             raise PredictionValidationError("The uploaded file is not a valid UTF-8 CSV.") from exc
 
         self._validate_frame(frame, manifest.features)
+        # ``None`` means automatic detection (the manifest target is preferred).
+        # An empty form value explicitly disables evaluation, which lets the UI
+        # handle files that happen to contain a target column but should not be
+        # scored.
+        evaluation_column = (
+            None
+            if ground_truth_column == ""
+            else ground_truth_column or (manifest.target if manifest.target in frame.columns else None)
+        )
+        if evaluation_column and evaluation_column in {feature.name for feature in manifest.features}:
+            raise PredictionValidationError("Ground Truth 欄位不能同時作為模型輸入特徵。")
+        if evaluation_column and evaluation_column not in frame.columns:
+            raise PredictionValidationError(f"找不到 Ground Truth 欄位：{evaluation_column}。")
+        required_columns = [feature.name for feature in manifest.features if feature.required]
+        rows_before_cleaning = len(frame)
+        drop_columns = required_columns + ([evaluation_column] if evaluation_column else [])
+        frame = frame.loc[~frame[drop_columns].isna().any(axis=1)].copy()
+        dropped_rows = rows_before_cleaning - len(frame)
+        if frame.empty:
+            raise PredictionValidationError("CSV 清理缺值資料列後，沒有可預測的資料。")
         feature_frame = frame[[feature.name for feature in manifest.features]]
         predictor = self._predictor_factory.create(manifest)
-        frame[manifest.prediction_column] = predictor.predict(feature_frame)
+        predictions = predictor.predict(feature_frame)
+        output_predictions = predictions
+        if manifest.problem_type == "regression":
+            output_predictions = pd.Series(predictions, index=frame.index).round(4)
+        frame[manifest.prediction_column] = output_predictions
+        metrics: dict[str, float] = {}
+        if evaluation_column:
+            metrics = self._evaluate_predictions(manifest.problem_type, frame[evaluation_column], predictions)
+            if manifest.problem_type == "regression":
+                actual_numeric = pd.to_numeric(frame[evaluation_column], errors="raise")
+                frame["prediction_error"] = (pd.Series(predictions, index=frame.index) - actual_numeric).round(4)
+            else:
+                frame["prediction_correct"] = predictions == frame[evaluation_column]
         csv_content = frame.to_csv(index=False).encode("utf-8")
         self._history_repository.add(
             PredictionHistoryRecord(
@@ -50,7 +83,27 @@ class PredictionService:
                 created_at=datetime.now(timezone.utc),
             )
         )
-        return PredictionOutput(filename=f"{manifest.name}_predictions.csv", csv_content=csv_content)
+        return PredictionOutput(filename=f"{manifest.name}_predictions.csv", csv_content=csv_content, metrics=metrics, ground_truth_column=evaluation_column, dropped_rows=dropped_rows)
+
+    @staticmethod
+    def _evaluate_predictions(problem_type: str, actual, predictions) -> dict[str, float]:
+        if problem_type == "classification":
+            return {
+                "accuracy": round(float(accuracy_score(actual, predictions)), 6),
+                "precision": round(float(precision_score(actual, predictions, average="weighted", zero_division=0)), 6),
+                "recall": round(float(recall_score(actual, predictions, average="weighted", zero_division=0)), 6),
+                "f1": round(float(f1_score(actual, predictions, average="weighted", zero_division=0)), 6),
+            }
+        actual_numeric = pd.to_numeric(actual, errors="raise")
+        correlation = pd.Series(actual_numeric).corr(pd.Series(predictions), method="pearson")
+        return {
+            "mae": round(float(mean_absolute_error(actual_numeric, predictions)), 6),
+            "mape": round(float(mean_absolute_percentage_error(actual_numeric, predictions) * 100), 6),
+            "rmse": round(float(root_mean_squared_error(actual_numeric, predictions)), 6),
+            "max_error": round(float(max_error(actual_numeric, predictions)), 6),
+            "r2": round(float(r2_score(actual_numeric, predictions)), 6),
+            "pearson_r": 0.0 if pd.isna(correlation) else round(float(correlation), 6),
+        }
 
     @staticmethod
     def _validate_frame(frame: pd.DataFrame, features) -> None:
@@ -64,9 +117,9 @@ class PredictionService:
                 continue
             if feature.dtype.startswith(("float", "int")):
                 converted = pd.to_numeric(frame[feature.name], errors="coerce")
-                if converted.isna().any():
+                invalid = converted.isna() & frame[feature.name].notna()
+                if invalid.any():
                     raise PredictionValidationError(
                         f"Column '{feature.name}' must contain {feature.dtype} values."
                     )
-                frame[feature.name] = converted.astype(feature.dtype)
-
+                frame[feature.name] = converted if converted.isna().any() else converted.astype(feature.dtype)

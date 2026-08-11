@@ -50,6 +50,9 @@ class ModelRegistrySummary(ModelSummary):
 class PredictionOutput(BaseModel):
     filename: str
     csv_content: bytes
+    metrics: dict[str, float] = Field(default_factory=dict)
+    ground_truth_column: str | None = None
+    dropped_rows: int = 0
 
 
 class PredictionHistoryRecord(BaseModel):
@@ -59,4 +62,3 @@ class PredictionHistoryRecord(BaseModel):
     source_filename: str
     row_count: int
     created_at: datetime
-

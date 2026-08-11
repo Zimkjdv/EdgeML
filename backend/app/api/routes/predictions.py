@@ -1,3 +1,6 @@
+import json
+from urllib.parse import quote
+
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response
 
@@ -22,6 +25,7 @@ def prediction_history(
 async def predict(
     model_id: str = Form(...),
     file: UploadFile = File(...),
+    ground_truth_column: str | None = Form(None),
     service: PredictionService = Depends(get_prediction_service),
 ) -> Response:
     settings = get_settings()
@@ -37,6 +41,7 @@ async def predict(
             model_id=model_id,
             content=content,
             source_filename=file.filename,
+            ground_truth_column=ground_truth_column,
         )
     except ModelNotFoundError as exc:
         record_prediction("not_found")
@@ -50,6 +55,12 @@ async def predict(
 
     record_prediction("success")
 
-    headers = {"Content-Disposition": f'attachment; filename="{result.filename}"'}
+    encoded_filename = quote(result.filename, safe="")
+    headers = {
+        "Content-Disposition": f'attachment; filename="predictions.csv"; filename*=UTF-8\'\'{encoded_filename}',
+        "X-Prediction-Metrics": json.dumps(result.metrics, separators=(",", ":")),
+        # HTTP headers are Latin-1 in Starlette; percent-encode Chinese column names.
+        "X-Prediction-Ground-Truth": quote(result.ground_truth_column or "", safe=""),
+        "X-Prediction-Dropped-Rows": str(result.dropped_rows),
+    }
     return Response(content=result.csv_content, media_type="text/csv; charset=utf-8", headers=headers)
-

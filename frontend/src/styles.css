@@ -12,6 +12,7 @@ h1 { margin: 0; font-size: 40px; letter-spacing: -.03em; }
 .result-heading span { color: #9ca3af; font-size: 13px; font-weight: 400; }
 .nav { margin-bottom: 24px; border-radius: 12px; background: #fff; padding: 0 12px; }
 .helper { color: #6b7280; font-size: 13px; line-height: 1.6; margin: 10px 0 0; }
+.prediction-file-stats { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .top-gap { margin-top: 16px; }
 .bottom-gap { margin-bottom: 18px; }
 .muted { color: #9ca3af; }
@@ -584,6 +585,28 @@ body {
   background: #f8fbff;
   color: #1e3a5f;
 }
+.prediction-workspace .prediction-upload-block { display: grid; gap: 14px; width: 100%; }
+.prediction-drop-zone { display: flex; justify-content: center; align-items: center; width: 100%; min-height: 96px; padding: 18px; border: 1px dashed #b9d1ee; border-radius: 12px; background: #f8fbff; }
+.prediction-workspace .prediction-drop-zone .el-upload { display: block !important; width: auto !important; padding: 0 !important; border: 0 !important; background: transparent !important; }
+.prediction-workspace .prediction-drop-zone .el-upload .el-button { display: inline-flex; justify-content: center; align-items: center; width: auto !important; min-width: 165px; min-height: 58px; border: 1px solid #d5dfec; border-radius: 12px; background: linear-gradient(135deg, #ffffff, #f8fbff); color: #315b89; font-size: 15px; text-align: center; transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease; }
+.prediction-workspace .prediction-drop-zone .el-upload .el-button:hover { border-color: #409eff; box-shadow: 0 8px 18px rgba(64, 158, 255, .14); transform: translateY(-1px); }
+.prediction-workspace .prediction-upload-block > .el-upload { width: 100%; padding: 0; border: 0; background: transparent; }
+.workspace.prediction-workspace:has(.prediction-upload-block) .prediction-upload-block > .el-upload { display: flex !important; justify-content: center; align-items: center; padding: 18px; border: 1px dashed #b9d1ee; border-radius: 12px; background: #f8fbff; }
+.prediction-workspace .prediction-upload-block > .el-upload .el-button { display: inline-flex; justify-content: center; align-items: center; width: auto !important; min-width: 165px; min-height: 58px; border: 1px solid #d5dfec; border-radius: 12px; background: linear-gradient(135deg, #ffffff, #f8fbff); color: #315b89; font-size: 15px; text-align: center; transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease; }
+.prediction-workspace .prediction-upload-block > .el-upload .el-button:hover { border-color: #409eff; box-shadow: 0 8px 18px rgba(64, 158, 255, .14); transform: translateY(-1px); }
+.prediction-workspace .prediction-upload-block .el-upload-list { margin: 0; }
+.prediction-workspace .prediction-upload-block .el-upload-list__item { height: 38px; margin-top: 0; padding: 0 12px; border: 1px solid #e2eaf4; border-radius: 9px; background: #f8fafc; color: #526b88; }
+.prediction-workspace .prediction-file-stats { align-items: stretch; gap: 10px; margin-top: 0; padding: 12px; border: 1px solid #e3ebf5; border-radius: 11px; background: #fbfdff; }
+.prediction-workspace .prediction-file-stats .el-tag { min-height: 30px; height: auto; padding: 5px 11px; border-radius: 8px; font-weight: 650; }
+.ground-truth-panel { display: grid; gap: 8px; padding: 14px 16px; border: 1px solid #dce9f6; border-radius: 11px; background: linear-gradient(135deg, #ffffff, #f5faff); }
+.ground-truth-heading { display: flex; align-items: center; gap: 8px; color: #254a71; font-weight: 700; }
+.ground-truth-panel .helper { margin: 0; }
+.prediction-evaluation-card { border-color: #cfe7d8; background: linear-gradient(135deg, #ffffff, #f7fcf8); }
+.prediction-preview-card .preview-column-header { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: help; }
+.prediction-preview-card .el-table .cell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prediction-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 2px; padding-top: 20px; border-top: 1px solid #e8eef6; }
+.prediction-actions .el-button { min-width: 144px; height: 44px; margin: 0; border-radius: 10px; font-weight: 750; }
+.prediction-actions .el-button--primary { box-shadow: 0 8px 16px rgba(64, 158, 255, .2); }
 
 /* Prediction history workspace */
 .history-workspace {
