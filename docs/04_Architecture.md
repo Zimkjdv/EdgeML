@@ -16,6 +16,8 @@ The v0.7.1 observability layer is cross-cutting: `RequestContextMiddleware` adds
 
 In v0.7.2, `TrainingJobQueue` is the application boundary for asynchronous training dispatch. The API persists the request and initial job state under `training_jobs/`, then enqueues only the job ID. A separate Redis-backed worker consumes, executes, and acknowledges jobs through `TrainingService`; the API and worker share the job and trained-model storage volume. The queue uses an at-least-once delivery model and requeues jobs left in the processing list after worker restart. The v0.7.3 queue-operations step adds bounded exponential backoff for transient infrastructure failures while deterministic validation and model errors remain terminal; terminal failures are routed to a dedicated Redis dead-letter list for later inspection or replay. Worker SIGTERM/SIGINT handlers stop new consumption, allow the current job lifecycle to finish, and leave an in-flight retry recoverable on the next worker start.
 
+The current frontend polls individual training jobs and displays their progress, but does not administer queue depth, worker capacity, retry attempts, or dead-letter jobs. A future Queue Operations UI will expose those read-oriented metrics and controlled retry/requeue/cancel actions.
+
 ## Runtime modes
 
 Docker Compose is the recommended runtime and starts the frontend, FastAPI backend, Redis queue, and training worker together. Local development may run the FastAPI server and Vue dev server directly while Redis and the training worker run through Docker. Prediction can run with only the API process, but asynchronous training requires both Redis and a worker.
