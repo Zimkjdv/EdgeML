@@ -8,7 +8,7 @@ docker compose up --build
 
 The backend listens on port 8000 and the frontend on port 5173. Set `EDGEML_MODELS_ROOT` to change the deployment model path and `EDGEML_MAX_UPLOAD_BYTES` to limit CSV upload size.
 
-Training workers retry transient infrastructure failures with bounded exponential backoff. The defaults are three total attempts, a two-second initial delay, and a 60-second maximum delay. Override them with `EDGEML_TRAINING_MAX_ATTEMPTS`, `EDGEML_TRAINING_RETRY_BACKOFF_SECONDS`, and `EDGEML_TRAINING_RETRY_BACKOFF_MAX_SECONDS`. Deterministic validation and model errors are marked failed without retry; terminal failures are retained in the Redis dead-letter list (`<queue-name>:dead-letter`) for later inspection. Graceful shutdown remains future queue-operations work.
+Training workers retry transient infrastructure failures with bounded exponential backoff. The defaults are three total attempts, a two-second initial delay, and a 60-second maximum delay. Override them with `EDGEML_TRAINING_MAX_ATTEMPTS`, `EDGEML_TRAINING_RETRY_BACKOFF_SECONDS`, and `EDGEML_TRAINING_RETRY_BACKOFF_MAX_SECONDS`. Deterministic validation and model errors are marked failed without retry; terminal failures are retained in the Redis dead-letter list (`<queue-name>:dead-letter`) for later inspection. On SIGTERM or SIGINT, the worker stops consuming new jobs and exits after the current job lifecycle is finalized.
 
 ## Windows local development
 

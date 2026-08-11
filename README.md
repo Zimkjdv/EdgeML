@@ -15,7 +15,7 @@ EdgeML is a self-hosted, plugin-oriented platform for batch predictions from CSV
 | v0.5 Model Registry | Completed | Trusted model registry with publish, enable, disable, and unregister lifecycle controls |
 | v0.7.1 Observability | Completed | Health endpoints, request logging, and Prometheus metrics |
 | v0.7.2 Queue Workers | Completed | Redis-backed asynchronous training worker with Docker end-to-end verification |
-| v0.7.3 Queue Operations | In progress | Bounded retries and dead-letter routing; shutdown controls, capacity management, and queue operations remain next |
+| v0.7.3 Queue Operations | In progress | Bounded retries, dead-letter routing, and graceful worker shutdown; capacity management and queue operations remain next |
 
 The latest Prediction update rounds regression `prediction` and `prediction_error` values to four decimal places in the returned CSV. Full-precision values remain in the evaluation calculations. Long prediction-preview headers and cell values expose tooltips so Chinese and long feature names remain readable.
 
@@ -71,8 +71,8 @@ The latest Prediction update rounds regression `prediction` and `prediction_erro
 
 ## Future roadmap
 
-- v0.7.3 in progress: add bounded retries with configurable attempts, exponential backoff, and dead-letter routing.
-- v0.7.3 follow-up: add graceful worker shutdown, worker capacity controls, queue-depth monitoring, and manual queue operations.
+- v0.7.3 in progress: bounded retries, exponential backoff, dead-letter routing, and graceful worker shutdown are implemented.
+- v0.7.3 follow-up: add worker capacity controls, queue-depth monitoring, and manual queue operations.
 - v0.8: add a frontend observability dashboard for API health, registry availability, training activity, prediction outcomes, and operational errors.
 
 ## Quick start

@@ -1,5 +1,8 @@
+import signal
+from threading import Event
+
 from app.infrastructure.redis_training_job_queue import RedisTrainingJobQueue
-from app.workers.training_worker import _is_retryable_error, _retry_delay
+from app.workers.training_worker import _install_signal_handlers, _is_retryable_error, _retry_delay
 
 
 class FakeRedis:
@@ -58,3 +61,16 @@ def test_retry_policy_classifies_errors_and_caps_backoff() -> None:
     assert _retry_delay(1, 2, 10) == 2
     assert _retry_delay(3, 2, 10) == 8
     assert _retry_delay(5, 2, 10) == 10
+
+
+def test_worker_signal_handlers_request_stop(monkeypatch) -> None:
+    registered: dict[signal.Signals, object] = {}
+    monkeypatch.setattr(signal, "signal", lambda signum, handler: registered.__setitem__(signum, handler))
+    stop_event = Event()
+
+    _install_signal_handlers(stop_event)
+    registered[signal.SIGTERM](signal.SIGTERM, None)
+
+    assert stop_event.is_set()
+    assert signal.SIGINT in registered
+    assert signal.SIGTERM in registered

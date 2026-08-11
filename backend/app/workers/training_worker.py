@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import logging
 import os
+import signal
 import socket
 import time
+from threading import Event
 
 import redis
 
@@ -28,11 +30,22 @@ def _retry_delay(attempt: int, base_seconds: float, max_seconds: float) -> float
     return min(base_seconds * (2 ** max(attempt - 1, 0)), max_seconds)
 
 
+def _install_signal_handlers(stop_event: Event) -> None:
+    def request_stop(signum, _frame) -> None:
+        logger.info("Training worker shutdown requested", extra={"event": "training.worker.shutdown_requested", "signal": signum})
+        stop_event.set()
+
+    for signum in (signal.SIGINT, signal.SIGTERM):
+        signal.signal(signum, request_stop)
+
+
 def run_worker() -> None:
     configure_logging()
     settings = get_settings()
     queue = RedisTrainingJobQueue(settings.redis_url, settings.training_queue_name)
     service = get_training_service()
+    stop_event = Event()
+    _install_signal_handlers(stop_event)
     worker_id = f"{socket.gethostname()}-{os.getpid()}"
     recovered = queue.recover_processing()
     logger.info("Training worker started", extra={"event": "training.worker.started", "worker_id": worker_id})
@@ -42,12 +55,12 @@ def run_worker() -> None:
             extra={"event": "training.worker.recovered", "job_id": f"count:{recovered}", "worker_id": worker_id},
         )
 
-    while True:
+    while not stop_event.is_set():
         try:
             job_id = queue.consume(timeout=5)
         except redis.RedisError:
             logger.exception("Training queue connection failed", extra={"event": "training.worker.queue_error", "worker_id": worker_id})
-            time.sleep(5)
+            stop_event.wait(5)
             continue
         if not job_id:
             continue
@@ -61,13 +74,18 @@ def run_worker() -> None:
                 if _is_retryable_error(exc) and job.attempt < settings.training_max_attempts:
                     service.schedule_retry(job_id, settings.training_max_attempts)
                     delay = _retry_delay(job.attempt, settings.training_retry_backoff_seconds, settings.training_retry_backoff_max_seconds)
-                    if delay:
-                        time.sleep(delay)
-                    queue.enqueue(job_id)
-                    logger.warning(
-                        "Training job scheduled for retry",
-                        extra={"event": "training.worker.retry_scheduled", "job_id": job_id, "worker_id": worker_id},
-                    )
+                    if stop_event.is_set() or (delay and stop_event.wait(delay)):
+                        acknowledge = False
+                        logger.info(
+                            "Training worker stopped before retry dispatch",
+                            extra={"event": "training.worker.retry_deferred", "job_id": job_id, "worker_id": worker_id},
+                        )
+                    else:
+                        queue.enqueue(job_id)
+                        logger.warning(
+                            "Training job scheduled for retry",
+                            extra={"event": "training.worker.retry_scheduled", "job_id": job_id, "worker_id": worker_id},
+                        )
                 else:
                     queue.dead_letter(job_id)
                     logger.error(
@@ -80,6 +98,8 @@ def run_worker() -> None:
         finally:
             if acknowledge:
                 queue.acknowledge(job_id)
+
+    logger.info("Training worker stopped", extra={"event": "training.worker.stopped", "worker_id": worker_id})
 
 
 if __name__ == "__main__":
