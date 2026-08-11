@@ -50,6 +50,6 @@ Returns successful prediction records in reverse chronological order. Each recor
 - `POST /api/trained-models/{model_id}/publish`: validate and publish a draft model package to the prediction catalog.
 - `POST /api/trained-models/{model_id}/evaluate`: evaluate an existing trained model with a separately uploaded Dataset.
 
-Training supports Random Forest, Gradient Boosting, XGBoost, AdaBoost, and Ridge regression, plus classifier variants for the first four algorithms. Training persists the full preprocessing and model pipeline as one trusted `model.pkl` artifact.
+Training supports Random Forest, Gradient Boosting, XGBoost, and AdaBoost regression, plus classifier variants for those algorithms and Logistic Regression classification. Training persists the full preprocessing and model pipeline as one trusted `model.pkl` artifact.
 
 XGBoost hyperparameters are optional. Omitted parameters use XGBoost's native defaults; EdgeML only fixes a random seed and CPU worker count for reproducibility during local development.

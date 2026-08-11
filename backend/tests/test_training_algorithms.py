@@ -10,23 +10,25 @@ def make_service(tmp_path):
     return datasets, TrainingService(datasets, tmp_path / "trained", tmp_path / "models")
 
 
-def test_ridge_regression_training(tmp_path) -> None:
+def test_logistic_regression_training(tmp_path) -> None:
     datasets, service = make_service(tmp_path)
-    frame = pd.DataFrame({"feature": range(12), "target": [value * 2 + 1 for value in range(12)]})
-    dataset = datasets.upload("ridge.csv", frame.to_csv(index=False).encode())
+    frame = pd.DataFrame({"feature": range(12), "target": ["low" if value < 6 else "high" for value in range(12)]})
+    dataset = datasets.upload("logistic.csv", frame.to_csv(index=False).encode())
 
     result = service.train(TrainingRequest(
         dataset_id=dataset.id,
-        model_name="Ridge Test",
+        model_name="Logistic Regression Test",
+        problem_type="classification",
         target_column="target",
         feature_columns=["feature"],
-        algorithm="ridge",
+        algorithm="logistic_regression",
         cv_folds=3,
+        hyperparameters={"penalty": "l2", "solver": "lbfgs", "C": 1.0},
     ))
 
-    assert result.problem_type == "regression"
-    assert result.algorithm == "ridge"
-    assert result.validation_metrics["r2"] > 0.99
+    assert result.problem_type == "classification"
+    assert result.algorithm == "logistic_regression"
+    assert result.validation_metrics["accuracy"] >= 0.5
 
 
 def test_classification_training(tmp_path) -> None:

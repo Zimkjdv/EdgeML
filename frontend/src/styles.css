@@ -738,6 +738,11 @@ body {
   border-radius: 7px;
   background: #fff1f2;
 }
+.dataset-list-table .el-button--danger.is-link {
+  padding: 7px 10px;
+  border-radius: 7px;
+  background: #fff1f2;
+}
 .trained-models-page > .workspace .el-table td:last-child .cell {
   display: flex;
   flex-wrap: wrap;

@@ -44,7 +44,7 @@ def request_payload() -> dict[str, object]:
         "model_name": "Queue Test",
         "target_column": "target",
         "feature_columns": ["feature"],
-        "algorithm": "ridge",
+        "algorithm": "random_forest",
     }
 
 

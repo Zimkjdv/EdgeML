@@ -46,8 +46,8 @@ class TrainingRequest(BaseModel):
     feature_columns: list[str] = Field(min_length=1)
     problem_type: Literal["regression", "classification"] = "regression"
     algorithm: Literal[
-        "random_forest", "gradient_boosting", "xgboost", "adaboost", "ridge",
-        "random_forest_classifier", "gradient_boosting_classifier", "xgboost_classifier", "adaboost_classifier",
+        "random_forest", "gradient_boosting", "xgboost", "adaboost",
+        "random_forest_classifier", "gradient_boosting_classifier", "xgboost_classifier", "adaboost_classifier", "logistic_regression",
     ]
     numeric_imputer: Literal["median", "mean", "most_frequent", "constant", "drop"] = "median"
     categorical_imputer: Literal["most_frequent", "constant"] = "most_frequent"
@@ -57,7 +57,7 @@ class TrainingRequest(BaseModel):
     dimension_reduction: Literal["none", "truncated_svd"] = "none"
     svd_components: int = Field(default=10, ge=2, le=100)
     test_dataset_id: str | None = None
-    hyperparameters: dict[str, int | float] = Field(default_factory=dict)
+    hyperparameters: dict[str, str | int | float] = Field(default_factory=dict)
 
 
 class TrainedModelSummary(BaseModel):

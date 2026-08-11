@@ -20,7 +20,7 @@ from sklearn.ensemble import (
     RandomForestRegressor,
 )
 from sklearn.impute import SimpleImputer
-from sklearn.linear_model import Ridge
+from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
     accuracy_score,
     f1_score,
@@ -341,13 +341,11 @@ class TrainingService:
 
     @staticmethod
     def _validate_request(frame: pd.DataFrame, request: TrainingRequest) -> None:
-        classifier_algorithm = request.algorithm.endswith("_classifier")
+        classifier_algorithm = request.algorithm.endswith("_classifier") or request.algorithm == "logistic_regression"
         if request.problem_type == "classification" and not classifier_algorithm:
             raise PredictionValidationError("Classification 必須使用分類演算法。")
         if request.problem_type == "regression" and classifier_algorithm:
             raise PredictionValidationError("Regression 不能使用分類演算法。")
-        if request.problem_type == "classification" and request.algorithm == "ridge":
-            raise PredictionValidationError("Ridge 目前僅支援 Regression。")
         if request.target_column not in frame:
             raise PredictionValidationError("找不到 target 欄位。")
         if request.target_column in request.feature_columns:
@@ -391,23 +389,32 @@ class TrainingService:
             "gradient_boosting": GradientBoostingRegressor(random_state=42),
             "xgboost": XGBRegressor(random_state=42, n_jobs=1),
             "adaboost": AdaBoostRegressor(random_state=42),
-            "ridge": Ridge(),
             "random_forest_classifier": RandomForestClassifier(n_estimators=200, random_state=42),
             "gradient_boosting_classifier": GradientBoostingClassifier(random_state=42),
             "xgboost_classifier": XGBClassifier(random_state=42, n_jobs=1, eval_metric="logloss"),
             "adaboost_classifier": AdaBoostClassifier(random_state=42),
+            "logistic_regression": LogisticRegression(max_iter=1000),
         }
         steps = [("preprocess", preprocessor)]
         if request.dimension_reduction == "truncated_svd":
             steps.append(("reduction", TruncatedSVD(n_components=request.svd_components, random_state=42)))
         model = defaults[request.algorithm]
         allowed = {
-            "random_forest": {"n_estimators", "max_depth", "min_samples_split"}, "gradient_boosting": {"n_estimators", "learning_rate", "max_depth", "subsample"}, "xgboost": {"n_estimators", "verbosity", "learning_rate", "max_depth", "gamma", "subsample"}, "adaboost": {"n_estimators", "learning_rate", "loss"}, "ridge": {"alpha"},
-            "random_forest_classifier": {"n_estimators", "max_depth", "min_samples_split"}, "gradient_boosting_classifier": {"n_estimators", "learning_rate", "max_depth", "subsample"}, "xgboost_classifier": {"n_estimators", "verbosity", "learning_rate", "max_depth", "gamma", "subsample"}, "adaboost_classifier": {"n_estimators", "learning_rate"},
+            "random_forest": {"n_estimators", "max_depth", "min_samples_split"}, "gradient_boosting": {"n_estimators", "learning_rate", "max_depth", "subsample"}, "xgboost": {"n_estimators", "verbosity", "learning_rate", "max_depth", "gamma", "subsample"}, "adaboost": {"n_estimators", "learning_rate", "loss"},
+            "random_forest_classifier": {"n_estimators", "max_depth", "min_samples_split"}, "gradient_boosting_classifier": {"n_estimators", "learning_rate", "max_depth", "subsample"}, "xgboost_classifier": {"n_estimators", "verbosity", "learning_rate", "max_depth", "gamma", "subsample"}, "adaboost_classifier": {"n_estimators", "learning_rate"}, "logistic_regression": {"penalty", "solver", "C"},
         }
         invalid = set(request.hyperparameters) - allowed[request.algorithm]
         if invalid: raise PredictionValidationError(f"不支援的超參數：{', '.join(invalid)}")
-        if request.hyperparameters: model.set_params(**request.hyperparameters)
+        model_params = dict(request.hyperparameters)
+        if request.algorithm == "logistic_regression":
+            for name in ("penalty", "solver"):
+                if isinstance(model_params.get(name), str):
+                    model_params[name] = model_params[name].lower()
+            if model_params.get("penalty") == "l1" and "solver" not in model_params:
+                model_params["solver"] = "liblinear"
+            if model_params.get("penalty") == "l1" and model_params.get("solver") == "lbfgs":
+                raise PredictionValidationError("Logistic Regression 使用 L1 penalty 時，solver 請改用 liblinear 或 saga。")
+        if model_params: model.set_params(**model_params)
         steps.append(("model", model))
         pipeline = Pipeline(steps)
         return EncodedTargetClassifier(pipeline) if request.algorithm == "xgboost_classifier" else pipeline
@@ -415,8 +422,8 @@ class TrainingService:
     @staticmethod
     def _manifest(model_id, request, completed_at, validation, test_metrics, features: pd.DataFrame) -> dict:
         algorithm_names = {
-            "random_forest": "Random Forest Regressor", "gradient_boosting": "Gradient Boosting Regressor", "xgboost": "XGBoost Regressor", "adaboost": "AdaBoost Regressor", "ridge": "Ridge Regressor",
-            "random_forest_classifier": "Random Forest Classifier", "gradient_boosting_classifier": "Gradient Boosting Classifier", "xgboost_classifier": "XGBoost Classifier", "adaboost_classifier": "AdaBoost Classifier",
+            "random_forest": "Random Forest Regressor", "gradient_boosting": "Gradient Boosting Regressor", "xgboost": "XGBoost Regressor", "adaboost": "AdaBoost Regressor",
+            "random_forest_classifier": "Random Forest Classifier", "gradient_boosting_classifier": "Gradient Boosting Classifier", "xgboost_classifier": "XGBoost Classifier", "adaboost_classifier": "AdaBoost Classifier", "logistic_regression": "Logistic Regression Classifier",
         }
         return {
             "id": model_id, "name": request.model_name, "version": "1.0.0", "framework": "sklearn",

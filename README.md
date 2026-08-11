@@ -30,7 +30,7 @@ EdgeML is a self-hosted, plugin-oriented platform for batch predictions from CSV
 ## v0.3 in progress
 
 - Add classification training with stratified cross-validation and classification metrics.
-- Add Ridge regression as a regularized linear baseline.
+- Add richer classification and regularized linear-model controls in the standalone AutoML platform.
 - Keep regression and classification model manifests compatible with the existing trained-model and prediction workflows.
 
 ## v0.5 completed
@@ -149,7 +149,7 @@ When updating an existing local environment after pulling the training module, r
 
 1. Upload a CSV in **數據集管理**, inspect columns, and optionally rename its display name.
 2. In **模型訓練**, choose one numeric target and check the feature columns to use.
-3. Select a regression algorithm. XGBoost exposes optional hyperparameter fields; leaving them empty uses native XGBoost defaults.
+3. Select a regression algorithm. Gradient Boosting exposes `n_estimators` and `learning_rate`; XGBoost exposes its optional hyperparameter fields. Leaving fields empty uses the estimator defaults.
 4. Review the background-job progress, then inspect the Draft model metrics.
 5. Publish the model to make it available in **Prediction**.
 
