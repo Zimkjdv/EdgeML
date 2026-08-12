@@ -1,7 +1,7 @@
 @echo off
 setlocal
 
-rem EdgeML local development launcher with Docker Redis and training worker
+rem EdgeML hybrid development launcher: Docker Redis plus local Backend, Frontend, and Worker
 set "PROJECT_ROOT=%~dp0"
 set "BACKEND_DIR=%PROJECT_ROOT%backend"
 
@@ -37,7 +37,7 @@ if errorlevel 1 exit /b 1
 echo Starting EdgeML Training Worker...
 start "EdgeML Training Worker" /D "%BACKEND_DIR%" cmd /k ""%PYTHON_EXE%" -m app.workers.training_worker"
 
-echo Redis, Backend, Frontend, and Training Worker have been started.
+echo Docker Redis plus local Backend, Frontend, and Training Worker have been started.
 echo API docs: http://localhost:8000/docs
 echo Frontend: http://localhost:5173
 endlocal

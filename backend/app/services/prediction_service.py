@@ -7,7 +7,7 @@ from sklearn.metrics import accuracy_score, f1_score, mean_absolute_error, mean_
 
 from app.domain.errors import PredictionValidationError
 from app.domain.model_catalog import ModelCatalog
-from app.domain.schemas import ModelSummary, PredictionHistoryRecord, PredictionOutput
+from app.domain.schemas import JsonPredictionOutput, ModelSummary, PredictionHistoryRecord, PredictionOutput
 from app.infrastructure.predictor_factory import PredictorFactory
 from app.repositories.prediction_history import PredictionHistoryRepository
 
@@ -36,6 +36,45 @@ class PredictionService:
         except (UnicodeDecodeError, pd.errors.ParserError, ValueError) as exc:
             raise PredictionValidationError("The uploaded file is not a valid UTF-8 CSV.") from exc
 
+        frame, predictions, metrics, evaluation_column, dropped_rows = self._predict_frame(frame, manifest, ground_truth_column)
+        frame[manifest.prediction_column] = predictions
+        if manifest.problem_type == "regression":
+            frame[manifest.prediction_column] = pd.Series(predictions, index=frame.index).round(4)
+        if evaluation_column and manifest.problem_type == "regression":
+            actual_numeric = pd.to_numeric(frame[evaluation_column], errors="raise")
+            frame["prediction_error"] = (pd.Series(predictions, index=frame.index) - actual_numeric).round(4)
+        elif evaluation_column:
+            frame["prediction_correct"] = predictions == frame[evaluation_column]
+        csv_content = frame.to_csv(index=False).encode("utf-8")
+        self._record_history(manifest, source_filename, len(frame))
+        return PredictionOutput(filename=f"{manifest.name}_predictions.csv", csv_content=csv_content, metrics=metrics, ground_truth_column=evaluation_column, dropped_rows=dropped_rows)
+
+    def predict_json(self, model_id: str, records: list[dict], source_name: str | None = None, ground_truth_column: str | None = None) -> JsonPredictionOutput:
+        manifest = self._catalog.get(model_id)
+        frame = pd.DataFrame(records)
+        frame, predictions, metrics, evaluation_column, dropped_rows = self._predict_frame(frame, manifest, ground_truth_column)
+        frame[manifest.prediction_column] = predictions
+        if manifest.problem_type == "regression":
+            frame[manifest.prediction_column] = pd.Series(predictions, index=frame.index).round(4)
+        if evaluation_column and manifest.problem_type == "regression":
+            actual_numeric = pd.to_numeric(frame[evaluation_column], errors="raise")
+            frame["prediction_error"] = (pd.Series(predictions, index=frame.index) - actual_numeric).round(4)
+        elif evaluation_column:
+            frame["prediction_correct"] = predictions == frame[evaluation_column]
+        # Convert pandas/numpy values to JSON-safe Python values, including nulls.
+        output_frame = frame.astype(object).where(pd.notna(frame), None)
+        self._record_history(manifest, source_name or "json-api", len(frame))
+        return JsonPredictionOutput(
+            model_id=manifest.id,
+            model_name=manifest.name,
+            prediction_column=manifest.prediction_column,
+            records=output_frame.to_dict(orient="records"),
+            metrics=metrics,
+            ground_truth_column=evaluation_column,
+            dropped_rows=dropped_rows,
+        )
+
+    def _predict_frame(self, frame: pd.DataFrame, manifest, ground_truth_column: str | None):
         self._validate_frame(frame, manifest.features)
         # ``None`` means automatic detection (the manifest target is preferred).
         # An empty form value explicitly disables evaluation, which lets the UI
@@ -60,30 +99,22 @@ class PredictionService:
         feature_frame = frame[[feature.name for feature in manifest.features]]
         predictor = self._predictor_factory.create(manifest)
         predictions = predictor.predict(feature_frame)
-        output_predictions = predictions
-        if manifest.problem_type == "regression":
-            output_predictions = pd.Series(predictions, index=frame.index).round(4)
-        frame[manifest.prediction_column] = output_predictions
         metrics: dict[str, float] = {}
         if evaluation_column:
             metrics = self._evaluate_predictions(manifest.problem_type, frame[evaluation_column], predictions)
-            if manifest.problem_type == "regression":
-                actual_numeric = pd.to_numeric(frame[evaluation_column], errors="raise")
-                frame["prediction_error"] = (pd.Series(predictions, index=frame.index) - actual_numeric).round(4)
-            else:
-                frame["prediction_correct"] = predictions == frame[evaluation_column]
-        csv_content = frame.to_csv(index=False).encode("utf-8")
+        return frame, predictions, metrics, evaluation_column, dropped_rows
+
+    def _record_history(self, manifest, source_filename: str, row_count: int) -> None:
         self._history_repository.add(
             PredictionHistoryRecord(
                 id=str(uuid4()),
                 model_id=manifest.id,
                 model_name=manifest.name,
                 source_filename=source_filename.replace("\\", "/").rsplit("/", 1)[-1],
-                row_count=len(frame),
+                row_count=row_count,
                 created_at=datetime.now(timezone.utc),
             )
         )
-        return PredictionOutput(filename=f"{manifest.name}_predictions.csv", csv_content=csv_content, metrics=metrics, ground_truth_column=evaluation_column, dropped_rows=dropped_rows)
 
     @staticmethod
     def _evaluate_predictions(problem_type: str, actual, predictions) -> dict[str, float]:

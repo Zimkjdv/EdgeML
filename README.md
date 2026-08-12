@@ -19,6 +19,8 @@ EdgeML is a self-hosted, plugin-oriented platform for batch predictions from CSV
 
 The latest Prediction update rounds regression `prediction` and `prediction_error` values to four decimal places in the returned CSV. Full-precision values remain in the evaluation calculations. Long prediction-preview headers and cell values expose tooltips so Chinese and long feature names remain readable.
 
+Prediction clients can use either `POST /api/predict` for CSV upload/download or `POST /api/predict/json` for direct JSON `data` from a database or service integration.
+
 ## v0.1 completed
 
 - Model discovery from `backend/ml_models/`
@@ -123,6 +125,22 @@ Full local training workflow (Docker Redis + FastAPI + frontend + local training
 ```
 
 `start-dev-redis.bat` starts only the Redis container through Docker Compose, then calls `start-dev.bat` and opens a separate training-worker terminal. It automatically uses `backend/.venv` when present, falling back to `backend/.venv-local`. Docker Desktop must be running before using this launcher.
+
+Full Docker runtime (Backend, Frontend, Redis, and Worker):
+
+```powershell
+.\start-dev-docker.bat
+```
+
+The Docker launcher starts existing images without rebuilding. You can pass a worker replica count, for example `.\start-dev-docker.bat 2`.
+
+After local development and testing are complete, rebuild and deploy the whole project with:
+
+```powershell
+.\deploy-docker.bat
+```
+
+This runs `docker compose up -d --build --remove-orphans`. Pass a worker replica count when needed, for example `.\deploy-docker.bat 2`. Do not run the hybrid launcher and the full Docker runtime at the same time because both use ports 8000 and 5173, and both may consume the same Redis training queue.
 
 Three deterministic example model packages are included:
 

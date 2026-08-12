@@ -28,6 +28,23 @@ Every successful request also writes prediction metadata to the configured histo
 
 Errors use JSON with `detail` and appropriate HTTP status codes: 400 for invalid input, 404 for an unknown model, and 422 for schema/type validation failures.
 
+## `POST /api/predict/json`
+
+Use this endpoint when the caller already has data from a database, service, or in-memory application. It accepts JSON instead of a CSV upload:
+
+```json
+{
+  "model_id": "house-price-v1",
+  "source_name": "sales-service",
+  "data": [
+    {"Area": 80, "Room": 2, "Age": 15},
+    {"Area": 120, "Room": 3, "Age": 8}
+  ]
+}
+```
+
+`ground_truth_column` is optional and enables evaluation when each data item includes that field. The response contains `model_id`, `model_name`, `prediction_column`, a `records` array with the original fields plus predictions, `metrics`, `ground_truth_column`, and `dropped_rows`. Rows missing required feature values (or the selected Ground Truth value) are excluded and counted in `dropped_rows`. The endpoint writes metadata-only prediction history with `source_name` (or `json-api` when omitted). For backward compatibility, the initial `records` request field is still accepted; new clients should use `data`.
+
 ## Model registry APIs
 
 - `GET /api/model-registry`: list all registered model packages and lifecycle status.

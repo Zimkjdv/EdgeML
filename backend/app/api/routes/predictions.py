@@ -8,7 +8,7 @@ from app.api.dependencies import get_prediction_service
 from app.core.observability import record_prediction
 from app.core.config import get_settings
 from app.domain.errors import ModelNotFoundError, PredictionValidationError
-from app.domain.schemas import PredictionHistoryRecord
+from app.domain.schemas import JsonPredictionOutput, JsonPredictionRequest, PredictionHistoryRecord
 from app.services.prediction_service import PredictionService
 
 router = APIRouter()
@@ -19,6 +19,29 @@ def prediction_history(
     service: PredictionService = Depends(get_prediction_service),
 ) -> list[PredictionHistoryRecord]:
     return service.list_history()
+
+
+@router.post("/predict/json", response_model=JsonPredictionOutput)
+def predict_json(
+    request: JsonPredictionRequest,
+    service: PredictionService = Depends(get_prediction_service),
+) -> JsonPredictionOutput:
+    try:
+        return service.predict_json(
+            model_id=request.model_id,
+            records=request.input_data,
+            source_name=request.source_name,
+            ground_truth_column=request.ground_truth_column,
+        )
+    except ModelNotFoundError as exc:
+        record_prediction("not_found")
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except PredictionValidationError as exc:
+        record_prediction("validation_error")
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception:
+        record_prediction("error")
+        raise
 
 
 @router.post("/predict", response_class=Response)

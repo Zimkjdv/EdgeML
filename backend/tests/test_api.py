@@ -61,6 +61,71 @@ def test_predict_returns_csv() -> None:
     assert "filename*=UTF-8''HousePrice_predictions.csv" in response.headers["content-disposition"]
 
 
+def test_predict_json_returns_prediction_records() -> None:
+    repository = InMemoryPredictionHistoryRepository()
+    test_client = client(repository)
+    response = test_client.post(
+        "/api/predict/json",
+        json={
+            "model_id": "house-price-v1",
+            "source_name": "sales-service",
+            "data": [{"Area": 80, "Room": 2, "Age": 15}, {"Area": 120, "Room": 3, "Age": 8}],
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["model_id"] == "house-price-v1"
+    assert payload["prediction_column"] == "prediction"
+    assert len(payload["records"]) == 2
+    assert "prediction" in payload["records"][0]
+    assert payload["metrics"] == {}
+    assert payload["dropped_rows"] == 0
+    assert repository.records[0].source_filename == "sales-service"
+
+
+def test_predict_json_supports_ground_truth_and_drops_incomplete_rows() -> None:
+    response = client().post(
+        "/api/predict/json",
+        json={
+            "model_id": "house-price-v1",
+            "data": [
+                {"Area": 80, "Room": 2, "Age": 10, "Price": 180000},
+                {"Area": None, "Room": 3, "Age": 8, "Price": 210000},
+                {"Area": 90, "Room": 2, "Age": 8, "Price": 210000},
+            ],
+            "ground_truth_column": "Price",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload["records"]) == 2
+    assert payload["dropped_rows"] == 1
+    assert {"mae", "rmse", "r2"}.issubset(payload["metrics"])
+    assert "prediction_error" in payload["records"][0]
+
+
+def test_predict_json_rejects_missing_feature() -> None:
+    response = client().post(
+        "/api/predict/json",
+        json={"model_id": "house-price-v1", "data": [{"Area": 80, "Room": 2}]},
+    )
+
+    assert response.status_code == 422
+    assert "Age" in response.json()["detail"]
+
+
+def test_predict_json_accepts_legacy_records_alias() -> None:
+    response = client().post(
+        "/api/predict/json",
+        json={"model_id": "house-price-v1", "records": [{"Area": 80, "Room": 2, "Age": 15}]},
+    )
+
+    assert response.status_code == 200
+    assert len(response.json()["records"]) == 1
+
+
 def test_predict_rejects_missing_column() -> None:
     response = client().post(
         "/api/predict",

@@ -27,4 +27,8 @@ For Prediction-only development, run `start-dev.bat` in the repository root afte
 
 For local development with model training, run `start-dev-redis.bat`. It starts Docker Compose Redis, then launches the same Backend and Frontend plus a local Training Worker. Docker Desktop must be running. Both launchers prefer `backend/.venv` and fall back to `backend/.venv-local`.
 
+For a complete Docker runtime without rebuilding, run `start-dev-docker.bat`. After local development has been tested, use `deploy-docker.bat` to rebuild and deploy the complete Compose project. Both scripts accept an optional worker replica count, such as `deploy-docker.bat 2`.
+
+Do not run the hybrid local launcher together with the full Docker runtime: the local and Docker Backend/Frontend both bind ports 8000/5173, and local/Docker workers can consume the same Redis queue. Choose one runtime mode at a time.
+
 For production, terminate TLS at the organization-approved reverse proxy and mount only trusted model artifacts read-only.
