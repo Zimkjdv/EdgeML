@@ -24,11 +24,16 @@ if exist "%BACKEND_DIR%\.venv\Scripts\python.exe" (
 )
 
 echo Starting Docker Redis...
-docker compose -f "%PROJECT_ROOT%docker-compose.yml" up -d redis
+docker compose -f "%PROJECT_ROOT%docker-compose.yml" ps --services --filter status=running | findstr /x /c:"redis" >nul
 if errorlevel 1 (
-  echo [ERROR] Redis could not be started. Check that Docker Desktop is running.
-  pause
-  exit /b 1
+  docker compose -f "%PROJECT_ROOT%docker-compose.yml" up -d redis
+  if errorlevel 1 (
+    echo [ERROR] Redis could not be started. Check that Docker Desktop is running.
+    pause
+    exit /b 1
+  )
+) else (
+  echo Docker Redis is already running. Skipping Redis startup.
 )
 
 call "%PROJECT_ROOT%start-dev.bat"

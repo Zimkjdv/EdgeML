@@ -15,11 +15,11 @@ EdgeML is a self-hosted, plugin-oriented platform for batch predictions from CSV
 | v0.5 Model Registry | Completed | Trusted model registry with publish, enable, disable, and unregister lifecycle controls |
 | v0.7.1 Observability | Completed | Health endpoints, request logging, and Prometheus metrics |
 | v0.7.2 Queue Workers | Completed | Redis-backed asynchronous training worker with Docker end-to-end verification |
-| v0.7.3 Queue Operations | In progress | Backend retry, dead-letter routing, graceful shutdown, queue-control APIs, and Queue Operations UI; capacity management remains next |
+| v0.7.3 Queue Operations | In progress | Backend retry, dead-letter routing, graceful shutdown, queue-control APIs, Queue Operations UI, and worker-capacity controls; runtime integration coverage remains next |
 
 The latest Prediction update rounds regression `prediction` and `prediction_error` values to four decimal places in the returned CSV. Full-precision values remain in the evaluation calculations. Long prediction-preview headers and cell values expose tooltips so Chinese and long feature names remain readable.
 
-Prediction clients can use either `POST /api/predict` for CSV upload/download or `POST /api/predict/json` for direct JSON `data` from a database or service integration.
+Prediction clients can use either `POST /api/predict` for CSV upload/download or `POST /api/predict/json` for direct JSON `data` from a database or service integration. The JSON endpoint returns prediction records and evaluation metadata without creating a temporary CSV file.
 
 ## v0.1 completed
 
@@ -76,10 +76,13 @@ Prediction clients can use either `POST /api/predict` for CSV upload/download or
 - Backend reliability controls for bounded retry, dead-letter routing, and graceful worker shutdown are implemented.
 - Queue Operations APIs now expose queue depths, dead-letter metadata, manual requeue, and cancellation of queued jobs.
 - The frontend now includes a Queue Operations page for queue depth, queued/processing IDs, retry attempts, dead-letter inspection, requeue, and cancellation.
+- Queue Operations refreshes automatically and supports running multiple Docker worker replicas against the shared Redis queue.
+- Windows launchers now cover the hybrid Redis/local workflow, full Docker startup, and rebuild/deploy flows; the hybrid launcher skips Redis startup when the Redis container is already running.
+- Remaining v0.7.3 work is runtime integration coverage and richer capacity controls.
 
 ## Future roadmap
 
-- v0.7.3 in progress: bounded retries, exponential backoff, dead-letter routing, graceful worker shutdown, Queue Operations APIs, and the initial Queue Operations UI are implemented.
+- v0.7.3 in progress: bounded retries, exponential backoff, dead-letter routing, graceful worker shutdown, Queue Operations APIs, Queue Operations UI, and worker replica guidance are implemented.
 - v0.7.3 follow-up: add runtime integration tests and richer worker-capacity controls.
 - v0.8: add a frontend observability dashboard for API health, registry availability, training activity, prediction outcomes, and operational errors.
 
@@ -107,6 +110,30 @@ docker compose up -d --build --scale worker=3
 ```
 
 Each worker consumes the same Redis-backed queue. The Queue Operations page shows the combined queue state; use `docker compose ps worker` to inspect the worker replicas.
+
+## JSON prediction API example
+
+`POST /api/predict/json` accepts records from a database or another service and returns JSON. The request uses `data` as the input array:
+
+```json
+{
+  "model_id": "house-price-v1",
+  "source_name": "sales-service",
+  "data": [
+    {"Area": 80, "Room": 2, "Age": 15},
+    {"Area": 120, "Room": 3, "Age": 8}
+  ]
+}
+```
+
+For a runnable Python client, install `requests` in the environment where the script runs and execute:
+
+```powershell
+python -m pip install requests
+python predict_api_example.py
+```
+
+The response includes `model_name`, `prediction_column`, a `records` array containing predictions, optional evaluation `metrics`, and `dropped_rows`. The legacy `records` request field is still accepted for compatibility, but new integrations should send `data`.
 
 ## Windows development launchers
 
