@@ -2,23 +2,35 @@
 
 from __future__ import annotations
 
+from urllib.parse import quote
+
 import requests
 
+API_ROOT = "http://localhost:8000/api"
+PREDICT_API_URL = f"{API_ROOT}/predict/json"
 
-API_URL = "http://localhost:8000/api/predict/json"
+
+def get_model_id_by_name(model_name: str) -> str:
+    """Resolve a model display name through GET /api/models/by-name/{model_name}."""
+    encoded_name = quote(model_name, safe="")
+    response = requests.get(f"{API_ROOT}/models/by-name/{encoded_name}", timeout=30)
+    if not response.ok:
+        print(f"Model lookup failed ({response.status_code}): {response.text}")
+        response.raise_for_status()
+    return response.json()["id"]
 
 
 def main() -> None:
+    model_id = get_model_id_by_name("HousePrice")
     payload = {
-        "model_id": "house-price-v1",
-        "source_name": "sales-service",
+        "model_id": model_id,
         "data": [
             {"Area": 80, "Room": 2, "Age": 15},
             {"Area": 120, "Room": 3, "Age": 8},
         ],
     }
 
-    response = requests.post(API_URL, json=payload, timeout=60)
+    response = requests.post(PREDICT_API_URL, json=payload, timeout=60)
     if not response.ok:
         print(f"API request failed ({response.status_code}): {response.text}")
         response.raise_for_status()
