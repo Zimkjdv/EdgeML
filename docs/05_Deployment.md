@@ -1,10 +1,19 @@
 # Deployment
 
-Run the complete stack with:
+On Windows, use the deployment launcher so the shared ML base is built before the application images:
 
-```bash
-docker compose up --build
+```powershell
+.\deploy-docker.bat
 ```
+
+If you use Docker Compose directly, build the base image first:
+
+```powershell
+docker build -f backend/Dockerfile.base -t edgeml-ml-base:latest ./backend
+docker compose up -d --build
+```
+
+`edgeml-ml-base` contains the common Python ML dependencies used by Backend and Worker. It is a Docker build image, not a running container. Backend and Worker retain separate containers while sharing the common image layers. Use `deploy-docker.bat` after cloning or after changing the base dependencies; `start-dev-docker.bat` starts existing images only.
 
 The Docker containers listen internally on Backend port `8000`, Frontend Nginx port `80`, and Redis port `6379`. The default host mappings are Backend `8010`, Frontend `5180`, and Redis `6380`. Set `EDGEML_MODELS_ROOT` to change the deployment model path and `EDGEML_MAX_UPLOAD_BYTES` to limit CSV upload size.
 

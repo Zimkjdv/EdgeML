@@ -14,6 +14,14 @@ if errorlevel 1 (
 )
 
 cd /d "%PROJECT_ROOT%"
+docker image inspect edgeml-ml-base:latest >nul 2>nul
+if errorlevel 1 (
+  echo [ERROR] edgeml-ml-base:latest was not found.
+  echo Run .\deploy-docker.bat once to build the shared ML base and application images.
+  pause
+  exit /b 1
+)
+
 echo Starting EdgeML Docker services with %WORKER_REPLICAS% worker replica(s)...
 docker compose up -d --scale worker=%WORKER_REPLICAS%
 if errorlevel 1 (

@@ -1,8 +1,6 @@
-FROM python:3.12-slim
+FROM edgeml-ml-base:latest
 
 WORKDIR /app
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 RUN python scripts/build_example_models.py
 EXPOSE 8000

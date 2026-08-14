@@ -14,6 +14,14 @@ if errorlevel 1 (
 )
 
 cd /d "%PROJECT_ROOT%"
+echo Building shared EdgeML ML base image...
+docker build -f backend\Dockerfile.base -t edgeml-ml-base:latest backend
+if errorlevel 1 (
+    echo [ERROR] Shared ML base image build failed.
+    pause
+    exit /b 1
+)
+
 echo Building and deploying EdgeML with %WORKER_REPLICAS% worker replica(s)...
 docker compose up -d --build --remove-orphans --scale worker=%WORKER_REPLICAS%
 if errorlevel 1 (

@@ -123,13 +123,42 @@ Start Docker Desktop before using `start-dev-redis.bat`. The launcher starts iso
 
 ### New Windows computer: full Docker
 
-The full Docker runtime does not require a local Python virtual environment or frontend `node_modules`; Docker builds those dependencies inside the images. After Docker Desktop is running, perform the first build and start with:
+The full Docker runtime does not require a local Python virtual environment or frontend `node_modules`; Docker builds those dependencies inside the images. The Backend and Worker share the `edgeml-ml-base` image, which contains the common Python ML runtime. `edgeml-ml-base` is a build image, not a running container. After Docker Desktop is running, perform the first build and start with:
 
 ```powershell
 .\deploy-docker.bat
 ```
 
-This builds and starts Backend, Frontend, Redis, and Worker. `deploy-docker.bat` is reusable, not a one-time initializer: whenever local development reaches a stable milestone, run it again to rebuild the images and deploy the current workspace. If you specifically want to use `start-dev-docker.bat` the first time, run `docker compose build` once beforehand.
+This builds the shared `edgeml-ml-base` first, then builds and starts Backend, Frontend, Redis, and Worker. `deploy-docker.bat` is reusable, not a one-time initializer: whenever local development reaches a stable milestone, run it again to rebuild the base and application images and deploy the current workspace. `start-dev-docker.bat` starts existing images only; run `deploy-docker.bat` after cloning or whenever the base image is missing.
+
+### Shared ML base image
+
+The Docker runtime separates the common Python/ML environment from the application services:
+
+```text
+edgeml-ml-base
+        ├── edge-backend
+        └── edge-worker
+```
+
+`edgeml-ml-base` contains the pinned Python dependencies used by Backend and Worker, including Pandas, Scikit-learn, SciPy, and XGBoost. It is a build image, not a running container. The running containers remain independent:
+
+```text
+edge-backend    FastAPI prediction and training APIs
+edge-worker     Redis-backed asynchronous training worker
+edge-frontend   Vue/Nginx frontend
+edge-redis      Redis queue and state store
+```
+
+This layout keeps Backend and Worker on the same dependency versions, speeds up later builds when ML dependencies have not changed, and allows Docker to share the common read-only layers. Docker Desktop may show the base, Backend, and Worker images with similar virtual sizes; use `docker system df` to inspect actual shared disk usage.
+
+When `requirements.txt` changes, rebuild the base and application images with:
+
+```powershell
+.\deploy-docker.bat
+```
+
+The shared base improves dependency consistency and build caching; it does not reduce the RAM used by the Backend and Worker processes, and it does not create an additional running service.
 
 ## Endpoints and port mapping
 
