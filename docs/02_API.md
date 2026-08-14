@@ -12,6 +12,18 @@ Every HTTP response includes an `X-Request-ID` header. Clients may provide a bou
 
 Returns every active model registered in the configured model registry.
 
+## Model ID lookup APIs
+
+- `GET /api/models/ids`: returns a JSON array containing the IDs of all active models.
+- `GET /api/models/by-name/{model_name}`: resolves a model display name to its ID. The `by-name` segment intentionally uses kebab-case for URL readability and should remain unchanged for API clients. Matching ignores leading/trailing whitespace and letter case. The response is `{ "name": "HousePrice", "id": "house-price-v1" }`; an unknown name returns `404`.
+
+Examples:
+
+```text
+GET /api/models/ids
+GET /api/models/by-name/HousePrice
+```
+
 ## `POST /api/predict`
 
 Multipart form fields:

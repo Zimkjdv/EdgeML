@@ -31,6 +31,16 @@ class FileModelRegistry:
                 return self._manifest(entry)
         raise ModelNotFoundError(f"Model '{model_id}' was not found.")
 
+    def find_id_by_name(self, name: str) -> str:
+        normalized_name = name.strip().casefold()
+        for entry in self._entries():
+            if entry["status"] != "active":
+                continue
+            manifest = self._manifest(entry)
+            if manifest.name.strip().casefold() == normalized_name:
+                return manifest.id
+        raise ModelNotFoundError(f"Model with name '{name}' was not found.")
+
     def list_registry(self) -> list[ModelRegistrySummary]:
         entries = [self._registry_summary(entry) for entry in self._entries()]
         return sorted(entries, key=lambda item: item.name.lower())

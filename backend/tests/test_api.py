@@ -48,6 +48,26 @@ def test_list_models() -> None:
     }.issubset({model["id"] for model in response.json()})
 
 
+def test_list_model_ids() -> None:
+    response = client().get("/api/models/ids")
+
+    assert response.status_code == 200
+    assert {"house-price-v1", "credit-risk-v1", "customer-churn-v1"}.issubset(set(response.json()))
+
+
+def test_lookup_model_id_by_name() -> None:
+    response = client().get("/api/models/by-name/houseprice")
+
+    assert response.status_code == 200
+    assert response.json() == {"name": "houseprice", "id": "house-price-v1"}
+
+
+def test_lookup_model_id_by_unknown_name_returns_not_found() -> None:
+    response = client().get("/api/models/by-name/does-not-exist")
+
+    assert response.status_code == 404
+
+
 def test_predict_returns_csv() -> None:
     csv_path = Path(__file__).resolve().parents[1] / "sample_data" / "house_price_input.csv"
     response = client().post(

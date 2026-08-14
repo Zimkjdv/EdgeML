@@ -26,6 +26,12 @@ class PredictionService:
     def list_models(self) -> list[ModelSummary]:
         return self._catalog.list()
 
+    def list_model_ids(self) -> list[str]:
+        return [model.id for model in self._catalog.list()]
+
+    def model_id_by_name(self, name: str) -> str:
+        return self._catalog.find_id_by_name(name)
+
     def list_history(self) -> list[PredictionHistoryRecord]:
         return self._history_repository.list()
 

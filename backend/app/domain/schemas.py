@@ -42,6 +42,11 @@ class ModelSummary(BaseModel):
     description: str
 
 
+class ModelIdLookup(BaseModel):
+    name: str
+    id: str
+
+
 class ModelRegistrySummary(ModelSummary):
     package_name: str
     status: Literal["active", "disabled"]

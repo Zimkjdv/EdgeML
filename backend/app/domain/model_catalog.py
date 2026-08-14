@@ -12,6 +12,8 @@ class ModelCatalog(Protocol):
 
     def get(self, model_id: str) -> ModelManifest: ...
 
+    def find_id_by_name(self, name: str) -> str: ...
+
 
 class ModelRegistry(ModelCatalog, Protocol):
     """Registry operations used by model publication and administration."""
