@@ -21,7 +21,7 @@ The latest Prediction update rounds regression `prediction` and `prediction_erro
 
 Prediction clients can use either `POST /api/predict` for CSV upload/download or `POST /api/predict/json` for direct JSON `data` from a database or service integration. The JSON endpoint returns prediction records and evaluation metadata without creating a temporary CSV file.
 
-For integrations that need to discover models, use `GET /api/models/ids` to retrieve all active model IDs, or `GET /api/models/by-name/{model_name}` to resolve a display name such as `HousePrice` to its stable model ID. The `by-name` segment intentionally uses kebab-case for a readable and consistent URL; keep this path unchanged in clients.
+For integrations that need to discover models, use `GET /api/models/ids` to retrieve all active model IDs, or `GET /api/models/by-name/{model_name}` to resolve a display name such as `HousePrice` to its stable model ID. The ID-list endpoint returns a JSON array such as `["house-price-v1", "credit-risk-v1"]`, which can be used to populate a client-side model selector. The `by-name` segment intentionally uses kebab-case for a readable and consistent URL; keep this path unchanged in clients.
 
 ## v0.1 completed
 

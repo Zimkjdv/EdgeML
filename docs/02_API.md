@@ -14,7 +14,7 @@ Returns every active model registered in the configured model registry.
 
 ## Model ID lookup APIs
 
-- `GET /api/models/ids`: returns a JSON array containing the IDs of all active models.
+- `GET /api/models/ids`: returns a JSON array containing the IDs of all active models. Use this endpoint when a client needs to populate a model-ID selector or cache the available IDs.
 - `GET /api/models/by-name/{model_name}`: resolves a model display name to its ID. The `by-name` segment intentionally uses kebab-case for URL readability and should remain unchanged for API clients. Matching ignores leading/trailing whitespace and letter case. The response is `{ "name": "HousePrice", "id": "house-price-v1" }`; an unknown name returns `404`.
 
 Examples:
@@ -22,6 +22,12 @@ Examples:
 ```text
 GET /api/models/ids
 GET /api/models/by-name/HousePrice
+```
+
+`GET /api/models/ids` response example:
+
+```json
+["house-price-v1", "credit-risk-v1", "customer-churn-v1"]
 ```
 
 ## `POST /api/predict`
