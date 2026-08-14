@@ -8,6 +8,14 @@ docker compose up --build
 
 The Docker containers listen internally on Backend port `8000`, Frontend Nginx port `80`, and Redis port `6379`. The default host mappings are Backend `8010`, Frontend `5180`, and Redis `6380`. Set `EDGEML_MODELS_ROOT` to change the deployment model path and `EDGEML_MAX_UPLOAD_BYTES` to limit CSV upload size.
 
+Local development uses different host endpoints:
+
+| Runtime | Frontend | API docs | Redis |
+| --- | --- | --- | --- |
+| Prediction-only (`start-dev.bat`) | `http://localhost:5173` | `http://localhost:8000/docs` | Not required |
+| Hybrid training (`start-dev-redis.bat`) | `http://localhost:5173` | `http://localhost:8000/docs` | `localhost:6381` |
+| Full Docker (`start-dev-docker.bat`) | `http://localhost:5180` | `http://localhost:8010/docs` | `localhost:6380` |
+
 Training workers retry transient infrastructure failures with bounded exponential backoff. The defaults are three total attempts, a two-second initial delay, and a 60-second maximum delay. Override them with `EDGEML_TRAINING_MAX_ATTEMPTS`, `EDGEML_TRAINING_RETRY_BACKOFF_SECONDS`, and `EDGEML_TRAINING_RETRY_BACKOFF_MAX_SECONDS`. Deterministic validation and model errors are marked failed without retry; terminal failures are retained in the Redis dead-letter list (`<queue-name>:dead-letter`) for later inspection. On SIGTERM or SIGINT, the worker stops consuming new jobs and exits after the current job lifecycle is finalized.
 
 ## Worker capacity
@@ -27,7 +35,7 @@ For Prediction-only development, run `start-dev.bat` in the repository root afte
 
 For local development with model training, run `start-dev-redis.bat`. It starts an isolated Docker Redis project on host port `6381`, sets the local `EDGEML_REDIS_URL`, then launches the local Backend on `8000`, Frontend on `5173`, and Training Worker. Docker Desktop must be running. Both launchers prefer `backend/.venv` and fall back to `backend/.venv-local`.
 
-For a complete Docker runtime without rebuilding, run `start-dev-docker.bat`. After local development has been tested, use `deploy-docker.bat` to rebuild and deploy the complete Compose project. Both scripts accept an optional worker replica count, such as `deploy-docker.bat 2`.
+For a complete Docker runtime without rebuilding, run `start-dev-docker.bat`. Whenever local development reaches a stable milestone, use `deploy-docker.bat` to rebuild and deploy the current workspace to the complete Compose project. It is reusable throughout development, not only for the first setup. Both scripts accept an optional worker replica count, such as `deploy-docker.bat 2`; Git commit and push remain separate operations.
 
 The hybrid local launcher and full Docker runtime can run together because they use separate host ports and Redis queues: local `8000`/`5173`/`6381`, Docker `8010`/`5180`/`6380`. Their data directories and worker processes remain independent.
 
