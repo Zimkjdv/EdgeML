@@ -96,7 +96,7 @@ For integrations that need to discover models, use `GET /api/models/ids` to retr
 docker compose up --build
 ```
 
-Open http://localhost:5173. The API is available at http://localhost:8000 and its OpenAPI UI at http://localhost:8000/docs.
+Open the Docker frontend at http://localhost:5180. The Docker API is available at http://localhost:8010 and its OpenAPI UI at http://localhost:8010/docs. These are host mappings; containers continue to use Backend `8000`, Frontend `80`, and Redis `6379` internally.
 
 The Docker Compose setup runs the complete v0.7.2 workflow:
 
@@ -155,7 +155,7 @@ Full local training workflow (Docker Redis + FastAPI + frontend + local training
 .\start-dev-redis.bat
 ```
 
-`start-dev-redis.bat` starts only the Redis container through Docker Compose, then calls `start-dev.bat` and opens a separate training-worker terminal. It automatically uses `backend/.venv` when present, falling back to `backend/.venv-local`. Docker Desktop must be running before using this launcher.
+`start-dev-redis.bat` starts an isolated hybrid Redis container on host port `6381`, then calls `start-dev.bat` and opens a separate training-worker terminal. The local Backend and Worker inherit `EDGEML_REDIS_URL=redis://localhost:6381/0`. It automatically uses `backend/.venv` when present, falling back to `backend/.venv-local`. Docker Desktop must be running before using this launcher.
 
 Full Docker runtime (Backend, Frontend, Redis, and Worker):
 
@@ -171,7 +171,7 @@ After local development and testing are complete, rebuild and deploy the whole p
 .\deploy-docker.bat
 ```
 
-This runs `docker compose up -d --build --remove-orphans`. Pass a worker replica count when needed, for example `.\deploy-docker.bat 2`. Do not run the hybrid launcher and the full Docker runtime at the same time because both use ports 8000 and 5173, and both may consume the same Redis training queue.
+This runs `docker compose up -d --build --remove-orphans`. Pass a worker replica count when needed, for example `.\deploy-docker.bat 2`. The full Docker runtime uses host ports `8010` (API), `5180` (Frontend), and `6380` (Redis), so it can run beside the hybrid launcher, which uses local `8000`／`5173` and isolated Redis `6381`.
 
 Three deterministic example model packages are included:
 
@@ -188,7 +188,8 @@ The asynchronous training API uses Redis by default. You can run the complete st
 For the hybrid local workflow, Redis can be started manually:
 
 ```powershell
-docker compose up -d redis
+docker compose -p edgeml-hybrid-redis -f docker-compose.hybrid-redis.yml up -d redis
+$env:EDGEML_REDIS_URL = "redis://localhost:6381/0"
 ```
 
 Alternatively, use `start-dev-redis.bat` from the project root to start Redis, Backend, Frontend, and the local worker together.

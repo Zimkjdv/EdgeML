@@ -18,7 +18,7 @@ echo Starting EdgeML Docker services with %WORKER_REPLICAS% worker replica(s)...
 docker compose up -d --scale worker=%WORKER_REPLICAS%
 if errorlevel 1 (
   echo [ERROR] Docker services could not be started.
-  echo If local Backend or Frontend is running, stop it before starting Docker.
+  echo Check that Docker host ports 8010, 5180, and 6380 are available.
   pause
   exit /b 1
 )
@@ -26,6 +26,6 @@ if errorlevel 1 (
 docker compose ps
 echo.
 echo EdgeML Docker services are running.
-echo Frontend: http://localhost:5173
-echo API docs: http://localhost:8000/docs
+echo Frontend: http://localhost:5180
+echo API docs: http://localhost:8010/docs
 endlocal
