@@ -31,6 +31,7 @@ For integrations that need to discover models, use `GET /api/models/ids` to retr
 - CSV batch prediction for trusted sklearn artifacts
 - Optional Ground Truth scoring during prediction (regression metrics and row-level errors)
 - Prediction preview keeps compact columns and provides tooltips for full headers and values
+- Prediction page shows CSV upload progress and processing status
 - Stateless API: prediction results are returned directly as CSV
 - Vue 3 interface with upload, preview, and download
 - Dataset upload and profile pages with Chinese CSV encoding support

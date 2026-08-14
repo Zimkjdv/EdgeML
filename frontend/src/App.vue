@@ -28,6 +28,7 @@ const selectedDataset = ref<Dataset | null>(null)
 const predictionModelId = ref('')
 const predictionFile = ref<File | null>(null)
 const predictionLoading = ref(false)
+const predictionUploadProgress = ref(0)
 const previewColumns = ref<string[]>([])
 const previewRows = ref<Record<string, string>[]>([])
 const predictionFileColumns = ref<string[]>([])
@@ -250,6 +251,7 @@ const parseCsvRows = (csv: string) => {
 const selectPredictionFile = async (file: { raw?: File }) => {
   predictionFile.value = file.raw ?? null
   outputBlob.value = null
+  predictionUploadProgress.value = 0
   previewColumns.value = []
   previewRows.value = []
   predictionFileColumns.value = []
@@ -286,18 +288,39 @@ const parseCsvLine = (line: string) => {
 const runPrediction = async () => {
   if (!predictionModelId.value || !predictionFile.value) return ElMessage.warning('請選擇模型與 CSV 檔案。')
   predictionLoading.value = true
+  predictionUploadProgress.value = 0
   try {
     const form = new FormData(); form.append('model_id', predictionModelId.value); form.append('file', predictionFile.value)
     form.append('ground_truth_column', groundTruthColumn.value)
-    const response = await fetch('/api/predict', { method: 'POST', body: form })
-    if (!response.ok) { const error = await response.json(); throw new Error(error.detail ?? '預測失敗。') }
-    const metricsHeader = response.headers.get('X-Prediction-Metrics')
+    const response = await new Promise<XMLHttpRequest>((resolve, reject) => {
+      const request = new XMLHttpRequest()
+      request.open('POST', '/api/predict')
+      request.responseType = 'blob'
+      request.upload.addEventListener('progress', (event) => {
+        if (event.lengthComputable) predictionUploadProgress.value = Math.round((event.loaded / event.total) * 100)
+      })
+      request.addEventListener('load', async () => {
+        if (request.status >= 200 && request.status < 300) {
+          predictionUploadProgress.value = 100
+          resolve(request)
+          return
+        }
+        let detail = '預測失敗。'
+        if (request.response instanceof Blob) {
+          try { detail = JSON.parse(await request.response.text()).detail ?? detail } catch { /* keep fallback */ }
+        }
+        reject(new Error(detail))
+      })
+      request.addEventListener('error', () => reject(new Error('無法連線至預測服務。')))
+      request.send(form)
+    })
+    const metricsHeader = response.getResponseHeader('X-Prediction-Metrics')
     evaluationMetrics.value = metricsHeader && metricsHeader !== '{}' ? JSON.parse(metricsHeader) : null
-    evaluationGroundTruth.value = decodeURIComponent(response.headers.get('X-Prediction-Ground-Truth') ?? '')
-    const droppedRows = Number(response.headers.get('X-Prediction-Dropped-Rows') ?? '0')
+    evaluationGroundTruth.value = decodeURIComponent(response.getResponseHeader('X-Prediction-Ground-Truth') ?? '')
+    const droppedRows = Number(response.getResponseHeader('X-Prediction-Dropped-Rows') ?? '0')
     if (Number.isFinite(droppedRows)) predictionFileStats.value.missingRows = droppedRows
-    outputBlob.value = await response.blob(); predictionFileStats.value.predictedRows = parseCsvPreview(await outputBlob.value.text()); await refreshPredictionHistory(); ElMessage.success('預測已完成。')
-  } catch (error) { ElMessage.error(error instanceof Error ? error.message : '預測失敗。') } finally { predictionLoading.value = false }
+    outputBlob.value = response.response as Blob; predictionFileStats.value.predictedRows = parseCsvPreview(await outputBlob.value.text()); await refreshPredictionHistory(); ElMessage.success('預測已完成。')
+  } catch (error) { predictionUploadProgress.value = 0; ElMessage.error(error instanceof Error ? error.message : '預測失敗。') } finally { predictionLoading.value = false }
 }
 const downloadPrediction = () => {
   if (!outputBlob.value) return
@@ -390,7 +413,7 @@ onMounted(async () => {
     <section v-if="activePage === 'prediction'">
       <el-card class="workspace prediction-workspace"><template #header>{{ t('predictionWorkspace') }}</template><el-form label-position="top">
         <el-form-item :label="t('publishedModel')"><el-select v-model="predictionModelId" class="full-width" :placeholder="t('selectModel')"><el-option v-for="model in models" :key="model.id" :value="model.id" :label="`${model.name} · ${model.version}`" /></el-select><p v-if="selectedPredictionModel" class="helper">{{ selectedPredictionModel.description }}｜{{ locale === 'zh-TW' ? '需要欄位' : 'Required features' }}：{{ selectedPredictionModel.features.map(f => f.name).join('、') }}</p></el-form-item>
-        <el-form-item :label="t('inputCsv')"><div class="prediction-upload-block"><div class="prediction-drop-zone"><el-upload :auto-upload="false" accept=".csv,text/csv" :limit="1" :on-change="selectPredictionFile"><el-button :icon="UploadFilled">{{ t('chooseCsv') }}</el-button></el-upload></div><div v-if="predictionFileStats.totalRows" class="prediction-file-stats"><el-tag type="info" effect="light">{{ t('uploadedRows') }}：{{ predictionFileStats.totalRows }}</el-tag><el-tag :type="predictionFileStats.missingRows ? 'warning' : 'success'" effect="light">{{ t('missingRowsDropped') }}：{{ predictionFileStats.missingRows }}</el-tag><el-tag type="success" effect="light">{{ t('rowsToPredict') }}：{{ predictionFileStats.predictedRows }}</el-tag></div><div v-if="predictionFileColumns.length" class="ground-truth-panel"><div class="ground-truth-heading"><span>{{ t('groundTruth') }}</span><el-tag size="small" effect="plain">{{ t('optional') }}</el-tag></div><el-select v-model="groundTruthColumn" class="full-width" clearable :placeholder="t('groundTruthPlaceholder')"><el-option v-for="column in groundTruthCandidates" :key="column" :label="column" :value="column" /></el-select><p class="helper">{{ t('groundTruthHint') }}</p></div></div></el-form-item>
+        <el-form-item :label="t('inputCsv')"><div class="prediction-upload-block"><div class="prediction-drop-zone"><el-upload :auto-upload="false" accept=".csv,text/csv" :limit="1" :on-change="selectPredictionFile"><el-button :icon="UploadFilled">{{ t('chooseCsv') }}</el-button></el-upload></div><div v-if="predictionFileStats.totalRows" class="prediction-file-stats"><el-tag type="info" effect="light">{{ t('uploadedRows') }}：{{ predictionFileStats.totalRows }}</el-tag><el-tag :type="predictionFileStats.missingRows ? 'warning' : 'success'" effect="light">{{ t('missingRowsDropped') }}：{{ predictionFileStats.missingRows }}</el-tag><el-tag type="success" effect="light">{{ t('rowsToPredict') }}：{{ predictionFileStats.predictedRows }}</el-tag></div><div v-if="predictionUploadProgress || predictionLoading" class="prediction-upload-progress"><div class="prediction-progress-heading"><span>{{ t('uploadProgress') }}</span><strong>{{ predictionUploadProgress }}%</strong></div><el-progress :percentage="predictionUploadProgress" :status="predictionLoading ? undefined : 'success'" :show-text="false" /><p class="helper">{{ predictionLoading && predictionUploadProgress >= 100 ? t('predictionProcessing') : '' }}</p></div><div v-if="predictionFileColumns.length" class="ground-truth-panel"><div class="ground-truth-heading"><span>{{ t('groundTruth') }}</span><el-tag size="small" effect="plain">{{ t('optional') }}</el-tag></div><el-select v-model="groundTruthColumn" class="full-width" clearable :placeholder="t('groundTruthPlaceholder')"><el-option v-for="column in groundTruthCandidates" :key="column" :label="column" :value="column" /></el-select><p class="helper">{{ t('groundTruthHint') }}</p></div></div></el-form-item>
         <div class="prediction-actions"><el-button type="primary" :loading="predictionLoading" @click="runPrediction">{{ t('runPrediction') }}</el-button><el-button :icon="Download" :disabled="!outputBlob" @click="downloadPrediction">{{ t('downloadCsv') }}</el-button></div>
       </el-form></el-card>
       <el-card v-if="previewColumns.length" class="result-card prediction-preview-card"><template #header><div class="result-heading">預測結果預覽 <span>前 10 筆</span></div></template><el-table :data="previewRows" max-height="360"><el-table-column v-for="column in previewColumns" :key="column" :prop="column" :label="column" show-overflow-tooltip><template #header><el-tooltip :content="column" placement="top"><span class="preview-column-header">{{ column }}</span></el-tooltip></template></el-table-column></el-table></el-card>

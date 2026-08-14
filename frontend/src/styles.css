@@ -630,6 +630,9 @@ body {
 .prediction-evaluation-card { border-color: #cfe7d8; background: linear-gradient(135deg, #ffffff, #f7fcf8); }
 .prediction-preview-card .preview-column-header { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: help; }
 .prediction-preview-card .el-table .cell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prediction-upload-progress { display: grid; gap: 8px; padding: 12px 14px; border: 1px solid #dce9f6; border-radius: 11px; background: #f8fbff; }
+.prediction-progress-heading { display: flex; justify-content: space-between; align-items: center; color: #315b89; font-size: 13px; }
+.prediction-progress-heading strong { color: #1f7a4d; }
 .prediction-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 2px; padding-top: 20px; border-top: 1px solid #e8eef6; }
 .prediction-actions .el-button { min-width: 144px; height: 44px; margin: 0; border-radius: 10px; font-weight: 750; }
 .prediction-actions .el-button--primary { box-shadow: 0 8px 16px rgba(64, 158, 255, .2); }
