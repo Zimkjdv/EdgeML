@@ -141,6 +141,52 @@ The response includes `model_name`, `prediction_column`, a `records` array conta
 
 ## Windows development launchers
 
+### First-time setup on a new Windows computer
+
+Install Git, Python 3.12, Node.js LTS, and Docker Desktop first. Then run the following commands from PowerShell:
+
+```powershell
+git clone https://github.com/Zimkjdv/EdgeML.git
+cd EdgeML
+
+cd backend
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+# Optional: rebuild the deterministic example model packages.
+.\.venv\Scripts\python.exe scripts/build_example_models.py
+
+cd ..\frontend
+npm.cmd install
+
+cd ..
+```
+
+Start Docker Desktop before launching the hybrid environment. The launcher automatically starts the isolated Redis container, applies `EDGEML_REDIS_URL=redis://localhost:6381/0`, and uses the local `.venv` for Backend and Worker:
+
+```powershell
+.\start-dev-redis.bat
+```
+
+The first-time setup is only required once per computer. Later starts only need `.\start-dev-redis.bat`.
+
+### First full Docker start
+
+The full Docker runtime does not require a local Python virtual environment or frontend `node_modules`; Docker builds those dependencies inside the images. After Docker Desktop is running, perform the first build and start with:
+
+```powershell
+.\deploy-docker.bat
+```
+
+This builds and starts Backend, Frontend, Redis, and Worker. The Docker endpoints are:
+
+```text
+Frontend: http://localhost:5180
+API docs: http://localhost:8010/docs
+Redis:    localhost:6380
+```
+
+After the images have been built, use `.\start-dev-docker.bat` for subsequent starts without rebuilding. If you specifically want to use `start-dev-docker.bat` the first time, run `docker compose build` once beforehand.
+
 After completing the one-time local setup below, choose the launcher that matches the workflow:
 
 Prediction-only (FastAPI + frontend, no Redis or training worker):
