@@ -208,7 +208,7 @@ The equivalent Compose command is:
 docker compose up -d --build --scale worker=3
 ```
 
-Each worker consumes the same Docker Redis-backed queue. The Queue Operations page shows combined queue state; use `docker compose ps worker` to inspect replicas. To stop the full Docker runtime without deleting volumes, run `docker compose down`.
+Each worker consumes the same Docker Redis-backed queue. The Queue Operations page shows combined queue state; use `docker compose ps worker` to inspect replicas. All Docker services use `restart: unless-stopped`, so they restart after a Docker daemon or host reboot and remain stopped only after an explicit `docker compose stop`/`down`. To stop the full Docker runtime without deleting volumes, run `docker compose down`.
 
 Three deterministic example model packages are included:
 

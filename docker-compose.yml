@@ -1,6 +1,7 @@
 services:
   redis:
     image: redis:7-alpine
+    restart: unless-stopped
     ports:
       - "6380:6379"
     healthcheck:
@@ -12,6 +13,7 @@ services:
   backend:
     build:
       context: ./backend
+    restart: unless-stopped
     environment:
       EDGEML_MODELS_ROOT: /app/ml_models
       EDGEML_TRAINED_MODELS_ROOT: /app/data/trained_models
@@ -32,6 +34,7 @@ services:
     build:
       context: ./backend
     command: ["python", "-m", "app.workers.training_worker"]
+    restart: unless-stopped
     environment:
       EDGEML_MODELS_ROOT: /app/ml_models
       EDGEML_TRAINED_MODELS_ROOT: /app/data/trained_models
@@ -49,6 +52,7 @@ services:
   frontend:
     build:
       context: ./frontend
+    restart: unless-stopped
     depends_on:
       - backend
     ports:

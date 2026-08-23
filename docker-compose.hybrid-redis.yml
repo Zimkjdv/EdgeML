@@ -1,6 +1,7 @@
 services:
   redis:
     image: redis:7-alpine
+    restart: unless-stopped
     ports:
       - "6381:6379"
     healthcheck:

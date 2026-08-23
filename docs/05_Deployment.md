@@ -17,6 +17,8 @@ docker compose up -d --build
 
 The Docker containers listen internally on Backend port `8000`, Frontend Nginx port `80`, and Redis port `6379`. The default host mappings are Backend `8010`, Frontend `5180`, and Redis `6380`. Set `EDGEML_MODELS_ROOT` to change the deployment model path and `EDGEML_MAX_UPLOAD_BYTES` to limit CSV upload size.
 
+Every service in `docker-compose.yml` and the hybrid Redis compose file uses `restart: unless-stopped`. Docker will restart the service after a daemon or host restart, while an explicit `docker compose stop` or `docker compose down` keeps it stopped until started again.
+
 Local development uses different host endpoints:
 
 | Runtime | Frontend | API docs | Redis |
