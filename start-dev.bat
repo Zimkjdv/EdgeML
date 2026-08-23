@@ -5,6 +5,13 @@ rem EdgeML local development launcher (Windows)
 set "PROJECT_ROOT=%~dp0"
 set "BACKEND_DIR=%PROJECT_ROOT%backend"
 set "FRONTEND_DIR=%PROJECT_ROOT%frontend"
+
+rem Load the optional root .env file so local and Docker launches share settings.
+if exist "%PROJECT_ROOT%.env" (
+  for /f "usebackq eol=# tokens=1,* delims==" %%A in ("%PROJECT_ROOT%.env") do (
+    if /I "%%A"=="EDGEML_API_TOKEN" set "EDGEML_API_TOKEN=%%B"
+  )
+)
 if defined EDGEML_API_TOKEN set "VITE_EDGEML_API_TOKEN=%EDGEML_API_TOKEN%"
 
 if exist "%BACKEND_DIR%\.venv\Scripts\python.exe" (

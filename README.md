@@ -120,7 +120,7 @@ Choose one of these runtime modes for normal development:
 
 The Docker host mappings are different from the container ports. Containers use Backend `8000`, Frontend Nginx `80`, and Redis `6379` internally. Redis uses a named volume with AOF enabled so queue and dead-letter state survives container recreation. The hybrid launcher uses a separate Redis project and queue, so it can run beside the full Docker runtime.
 
-For a trusted internal deployment, set `EDGEML_API_TOKEN` before `deploy-docker.bat` to require a Bearer token or `X-API-Key` on `/api/*` routes. The default is disabled for local development; browser-embedded tokens are not a substitute for a production reverse proxy.
+For API authentication, copy `.env.example` to `.env` and replace the placeholder `EDGEML_API_TOKEN`. Docker Compose and the local launchers load this file automatically. The token requires a Bearer token or `X-API-Key` on `/api/*` routes. The default is disabled for local development; browser-embedded tokens are not a substitute for a production reverse proxy.
 
 ## First-time setup
 

@@ -19,7 +19,7 @@ The Docker containers listen internally on Backend port `8000`, Frontend Nginx p
 
 Every service in `docker-compose.yml` and the hybrid Redis compose file uses `restart: unless-stopped`. Docker will restart the service after a daemon or host restart, while an explicit `docker compose stop` or `docker compose down` keeps it stopped until started again.
 
-To enable optional API authentication, set `EDGEML_API_TOKEN` before running `deploy-docker.bat`. The same value is passed to the Backend and embedded into the frontend build so browser requests can authenticate; because browser-held tokens are not secrets, use a reverse proxy for stronger production authentication.
+To enable optional API authentication, copy `.env.example` to `.env` and replace `EDGEML_API_TOKEN`. Docker Compose and the local launchers load this file automatically. The same value is passed to the Backend and embedded into the frontend build so browser requests can authenticate; because browser-held tokens are not secrets, use a reverse proxy for stronger production authentication.
 
 Local development uses different host endpoints:
 
