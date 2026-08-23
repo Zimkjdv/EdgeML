@@ -32,6 +32,43 @@ Example creation request:
 
 Token metadata is stored in the configured SQLite file (`backend/data/api_tokens.sqlite3` by default). The raw token is never persisted. On a fresh deployment, set `EDGEML_API_TOKEN` before opening the management page so the first managed token can be created.
 
+### Windows CMD smoke test
+
+After restarting the local launcher with the `.env` token, use these commands. For the full Docker runtime, replace port `8000` with `8010`.
+
+Health probes are anonymous:
+
+```cmd
+curl.exe -i http://localhost:8000/health
+```
+
+An API request without a token should return `401`:
+
+```cmd
+curl.exe -i http://localhost:8000/api/models
+```
+
+Call the API with either supported authentication header:
+
+```cmd
+curl.exe -i http://localhost:8000/api/models ^
+  -H "Authorization: Bearer your-env-token"
+
+curl.exe -i http://localhost:8000/api/models ^
+  -H "X-API-Key: your-env-token"
+```
+
+Create a managed token with the bootstrap token. The returned `token` value is shown only once:
+
+```cmd
+curl.exe -X POST "http://localhost:8000/api/auth/tokens" ^
+  -H "Authorization: Bearer your-env-token" ^
+  -H "Content-Type: application/json" ^
+  -d "{\"name\":\"CLI Test Token\",\"scopes\":[\"api\",\"tokens:manage\"]}"
+```
+
+Use that returned value in place of `your-managed-token` for subsequent `/api/*` requests. If `.env` changes, restart local services or rerun `deploy-docker.bat` so the Docker frontend is rebuilt with the new browser token.
+
 ## `GET /api/models`
 
 Returns every active model registered in the configured model registry.
