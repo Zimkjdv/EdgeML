@@ -13,6 +13,7 @@ type TrainedModel = { id: string; name: string; completed_at: string; target_col
 type ModelRegistryItem = { id: string; name: string; version: string; framework: string; problem_type: string; target: string; description: string; package_name: string; status: 'active' | 'disabled'; registered_at: string }
 type QueueStatus = { queue_name: string; queued_count: number; processing_count: number; dead_letter_count: number; queued_job_ids: string[]; processing_job_ids: string[] }
 type DeadLetterJob = { job_id: string; status: string; attempt: number; message: string; error?: string | null; queued_at?: string | null; started_at?: string | null; completed_at?: string | null }
+type ApiToken = { id: string; name: string; token_prefix: string; scopes: string[]; created_at: string; expires_at?: string | null; last_used_at?: string | null; revoked_at?: string | null; status: 'active' | 'expired' | 'revoked' }
 
 const activePage = ref('prediction')
 const models = ref<PredictionModel[]>([])
@@ -20,6 +21,10 @@ const datasets = ref<Dataset[]>([])
 const predictionHistory = ref<PredictionHistoryRecord[]>([])
 const trainedModels = ref<TrainedModel[]>([])
 const registryModels = ref<ModelRegistryItem[]>([])
+const apiTokens = ref<ApiToken[]>([])
+const newApiToken = ref('')
+const apiTokenForm = ref({ name: '', scopes: ['api'] as string[], expiresAt: '' })
+const apiTokenLoading = ref(false)
 const queueStatus = ref<QueueStatus | null>(null)
 const deadLetterJobs = ref<DeadLetterJob[]>([])
 const queueLoading = ref(false)
@@ -184,6 +189,7 @@ const refreshModels = async () => {
 const refreshDatasets = async () => { datasets.value = await api<Dataset[]>('/api/datasets') }
 const refreshTrainedModels = async () => { trainedModels.value = await api<TrainedModel[]>('/api/trained-models') }
 const refreshRegistry = async () => { registryModels.value = await api<ModelRegistryItem[]>('/api/model-registry') }
+const refreshApiTokens = async () => { apiTokens.value = await api<ApiToken[]>('/api/auth/tokens') }
 const refreshPredictionHistory = async () => { predictionHistory.value = await api<PredictionHistoryRecord[]>('/api/prediction-history') }
 const refreshQueue = async () => {
   queueLoading.value = true
@@ -233,6 +239,7 @@ const startQueueAutoRefresh = () => {
   }, 5000)
 }
 watch(activePage, (page) => { page === 'queue' ? startQueueAutoRefresh() : stopQueueAutoRefresh() })
+watch(activePage, (page) => { if (page === 'tokens') refreshApiTokens().catch((error) => ElMessage.error(error instanceof Error ? error.message : t('tokenManagementRequired'))) })
 
 const detectGroundTruthColumn = () => {
   const columns = predictionFileColumns.value
@@ -399,6 +406,35 @@ const unregisterModel = async (model: ModelRegistryItem) => {
     await api<void>(`/api/model-registry/${model.id}`, { method: 'DELETE' }); await refreshRegistry(); await refreshModels(); ElMessage.success('模型已從註冊庫移除。')
   } catch (error) { if (error !== 'cancel' && error !== 'close') ElMessage.error(error instanceof Error ? error.message : '移除模型失敗。') }
 }
+const createApiToken = async () => {
+  if (!apiTokenForm.value.name.trim()) return ElMessage.warning(t('tokenName'))
+  apiTokenLoading.value = true
+  try {
+    const created = await api<ApiToken & { token: string }>('/api/auth/tokens', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: apiTokenForm.value.name, scopes: apiTokenForm.value.scopes, expires_at: apiTokenForm.value.expiresAt ? new Date(apiTokenForm.value.expiresAt).toISOString() : null }),
+    })
+    newApiToken.value = created.token
+    apiTokenForm.value.name = ''
+    apiTokenForm.value.expiresAt = ''
+    await refreshApiTokens()
+    ElMessage.success(t('tokenCreated'))
+  } catch (error) { ElMessage.error(error instanceof Error ? error.message : 'Token creation failed.') }
+  finally { apiTokenLoading.value = false }
+}
+const copyApiToken = async () => {
+  if (!newApiToken.value) return
+  await navigator.clipboard.writeText(newApiToken.value)
+  ElMessage.success(t('copyToken'))
+}
+const revokeApiToken = async (token: ApiToken) => {
+  try {
+    await ElMessageBox.confirm(`${t('revokeToken')}「${token.name}」？`, t('revokeToken'), { type: 'warning', confirmButtonText: t('revokeToken'), cancelButtonText: '取消' })
+    await api<ApiToken>(`/api/auth/tokens/${token.id}`, { method: 'DELETE' })
+    await refreshApiTokens()
+    ElMessage.success(t('revokedToken'))
+  } catch (error) { if (error !== 'cancel' && error !== 'close') ElMessage.error(error instanceof Error ? error.message : 'Token revoke failed.') }
+}
 
 onMounted(async () => {
   try { await Promise.all([refreshModels(), refreshDatasets(), refreshTrainedModels(), refreshRegistry(), refreshPredictionHistory()]) }
@@ -410,7 +446,7 @@ onMounted(async () => {
   <main class="page-shell" :class="locale === 'en' ? 'locale-en' : 'locale-zh'">
     <section class="hero"><p class="eyebrow">{{ t('brandTag') }}</p><h1>{{ t('brandTitle') }}</h1><p>{{ t('brandDescription') }}</p></section>
     <el-menu :default-active="activePage" mode="horizontal" :ellipsis="false" class="nav" @select="(key: string) => activePage = key">
-      <el-menu-item index="prediction">{{ t('prediction') }}</el-menu-item><el-menu-item index="history">{{ t('history') }}</el-menu-item><el-menu-item index="datasets">{{ t('datasets') }}</el-menu-item><el-menu-item index="training">{{ t('training') }}</el-menu-item><el-menu-item index="trained">{{ t('trainedModels') }}</el-menu-item><el-menu-item index="registry">{{ t('registry') }}</el-menu-item><el-menu-item index="queue">{{ t('queue') }}</el-menu-item><el-button class="language-switch" plain @click.stop="toggleLocale">{{ t('language') }}</el-button>
+      <el-menu-item index="prediction">{{ t('prediction') }}</el-menu-item><el-menu-item index="history">{{ t('history') }}</el-menu-item><el-menu-item index="datasets">{{ t('datasets') }}</el-menu-item><el-menu-item index="training">{{ t('training') }}</el-menu-item><el-menu-item index="trained">{{ t('trainedModels') }}</el-menu-item><el-menu-item index="registry">{{ t('registry') }}</el-menu-item><el-menu-item index="queue">{{ t('queue') }}</el-menu-item><el-menu-item index="tokens">{{ t('apiTokens') }}</el-menu-item><el-button class="language-switch" plain @click.stop="toggleLocale">{{ t('language') }}</el-button>
     </el-menu>
 
     <section v-if="activePage === 'prediction'">
@@ -501,6 +537,34 @@ onMounted(async () => {
           <el-table-column :label="t('actions')" width="196" class-name="registry-actions-cell"><template #default="scope"><div class="registry-actions"><el-button link :type="scope.row.status === 'active' ? 'warning' : 'success'" @click="updateRegistryStatus(scope.row)">{{ scope.row.status === 'active' ? t('disable') : t('enable') }}</el-button><el-button link type="danger" @click="unregisterModel(scope.row)">{{ t('unregister') }}</el-button></div></template></el-table-column>
         </el-table>
         <el-empty v-if="!registryModels.length" :description="t('registryEmpty')" />
+      </el-card>
+    </section>
+    <section v-else-if="activePage === 'tokens'" class="tokens-page">
+      <el-card class="workspace token-workspace" v-loading="apiTokenLoading">
+        <template #header><div class="result-heading"><span>{{ t('apiTokenManagement') }}</span><el-tag type="info" effect="light">{{ apiTokens.length }} {{ t('apiTokens') }}</el-tag></div></template>
+        <p class="registry-intro">{{ t('apiTokenHint') }}</p>
+        <el-alert v-if="newApiToken" type="success" :closable="false" class="token-created-alert">
+          <template #title>{{ t('tokenShownOnce') }}</template>
+          <div class="token-value-row"><code>{{ newApiToken }}</code><el-button size="small" type="primary" plain @click="copyApiToken">{{ t('copyToken') }}</el-button></div>
+        </el-alert>
+        <el-card class="token-create-card" shadow="never">
+          <template #header>{{ t('createApiToken') }}</template>
+          <el-form label-position="top" @submit.prevent="createApiToken">
+            <el-form-item :label="t('tokenName')"><el-input v-model="apiTokenForm.name" maxlength="80" show-word-limit /></el-form-item>
+            <el-form-item :label="t('tokenScopes')"><el-checkbox-group v-model="apiTokenForm.scopes"><el-checkbox label="api">{{ t('apiScope') }}</el-checkbox><el-checkbox label="tokens:manage">{{ t('tokenManagementScope') }}</el-checkbox></el-checkbox-group></el-form-item>
+            <el-form-item :label="t('expiresAt')"><el-date-picker v-model="apiTokenForm.expiresAt" type="datetime" value-format="YYYY-MM-DDTHH:mm:ss" :placeholder="t('noExpiry')" /></el-form-item>
+            <el-button type="primary" :loading="apiTokenLoading" @click="createApiToken">{{ t('createApiToken') }}</el-button>
+          </el-form>
+        </el-card>
+        <el-table :data="apiTokens" stripe class="token-table">
+          <el-table-column prop="name" :label="t('tokenName')" min-width="180" />
+          <el-table-column prop="token_prefix" :label="t('tokenPrefix')" min-width="150" />
+          <el-table-column :label="t('tokenScopes')" min-width="170"><template #default="scope"><el-tag v-for="item in scope.row.scopes" :key="item" size="small" effect="plain">{{ item }}</el-tag></template></el-table-column>
+          <el-table-column prop="created_at" :label="t('createdAt')" min-width="190"><template #default="scope">{{ formatDate(scope.row.created_at) }}</template></el-table-column>
+          <el-table-column :label="t('tokenStatus')" width="120"><template #default="scope"><el-tag :type="scope.row.status === 'active' ? 'success' : 'info'">{{ scope.row.status === 'active' ? t('activeToken') : scope.row.status === 'expired' ? t('expiredToken') : t('revokedToken') }}</el-tag></template></el-table-column>
+          <el-table-column :label="t('actions')" width="140"><template #default="scope"><el-button link type="danger" :disabled="scope.row.status !== 'active'" @click="revokeApiToken(scope.row)">{{ t('revokeToken') }}</el-button></template></el-table-column>
+        </el-table>
+        <el-empty v-if="!apiTokens.length" :description="t('noApiTokens')" />
       </el-card>
     </section>
   </main>

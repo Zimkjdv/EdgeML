@@ -466,6 +466,10 @@ body {
   .nav { overflow-x: hidden; padding-right: 112px; }
   .nav .el-menu-item { flex: 1 1 0; min-width: 0; padding-right: 6px; padding-left: 6px; font-size: 15px; letter-spacing: 0; }
   .locale-zh .nav .el-menu-item { padding-right: 6px; padding-left: 6px; font-size: 16px; letter-spacing: .01em; }
+  /* English labels have different intrinsic widths; keep each item intact
+     instead of allowing a long label to paint over its neighbour. */
+  .locale-en .nav { overflow-x: auto; }
+  .locale-en .nav .el-menu-item { flex: 0 0 auto; min-width: max-content; padding-right: 10px; padding-left: 10px; }
 }
 .workspace, .result-card {
   border: 1px solid #e0e8f3;
@@ -1035,8 +1039,96 @@ body {
   transform: translateY(-1px);
 }
 .registry-workspace .el-empty { min-height: 180px; }
+
+/* API token management workspace */
+.token-workspace {
+  border: 1px solid #d8e6f5;
+  box-shadow: 0 18px 42px rgba(33, 78, 125, .10);
+}
+.token-workspace .el-card__header {
+  padding: 24px 30px;
+  border-bottom: 1px solid #e3edf7;
+  background: linear-gradient(135deg, #f7fbff 0%, #eef6ff 100%);
+}
+.token-workspace .result-heading { align-items: center; gap: 18px; color: #123f73; font-size: 22px; font-weight: 800; }
+.token-workspace .result-heading > span { color: #123f73; font-size: 22px; font-weight: 800; }
+.token-workspace .result-heading .el-tag { margin-left: auto; border-color: #b9d8f8; background: #fff; color: #2c76bd; font-size: 14px; font-weight: 700; }
+.token-workspace .el-card__body { padding: 26px 30px 30px; }
+.token-created-alert {
+  margin: 0 0 22px;
+  border: 1px solid #bde5ce;
+  background: linear-gradient(135deg, #f0fff6 0%, #eafaf2 100%);
+}
+.token-created-alert .el-alert__title { color: #187647; font-weight: 750; }
+.token-value-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+.token-value-row code {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 11px;
+  border: 1px solid #c5dfd0;
+  border-radius: 8px;
+  background: #fff;
+  color: #205b3e;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.token-create-card {
+  margin-bottom: 24px;
+  border: 1px solid #d7e4f2;
+  border-radius: 12px;
+  background: #fbfdff;
+}
+.token-create-card .el-card__header {
+  padding: 16px 20px;
+  border-bottom: 1px solid #e3edf7;
+  background: #f4f9ff;
+  color: #164b80;
+  font-size: 17px;
+  font-weight: 750;
+}
+.token-create-card .el-card__body { padding: 20px; }
+.token-create-card .el-form { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(280px, 1.3fr) minmax(220px, .9fr) auto; gap: 16px; align-items: end; }
+.token-create-card .el-form-item { margin-bottom: 0; }
+.token-create-card .el-checkbox-group { display: flex; flex-wrap: wrap; gap: 8px 18px; min-height: 32px; align-items: center; }
+.token-create-card .el-date-editor { width: 100%; }
+.token-table {
+  border: 1px solid #d7e4f2;
+  border-radius: 14px;
+  overflow: hidden;
+}
+.token-table .el-table__inner-wrapper::before { display: none; }
+.token-table th.el-table__cell {
+  height: 54px;
+  padding: 0 10px;
+  background: #edf5ff;
+  color: #164b80;
+  font-size: 14px;
+  font-weight: 800;
+}
+.token-table td.el-table__cell {
+  height: 60px;
+  padding: 0 10px;
+  color: #345779;
+  font-size: 14px;
+}
+.token-table .el-table__row:nth-child(even) td.el-table__cell { background: #fbfdff; }
+.token-table .el-table__row:hover td.el-table__cell { background: #f1f8ff !important; }
+.token-table .el-tag { margin: 2px 4px 2px 0; border-radius: 999px; }
+.token-table .el-button { font-weight: 700; }
+.token-workspace .el-empty { min-height: 150px; }
 @media (max-width: 700px) {
   .registry-workspace .el-card__body { padding: 18px; overflow-x: auto; }
   .registry-workspace .el-card__header { padding: 18px; }
   .registry-table { min-width: 1180px; }
+  .token-workspace .el-card__body { padding: 18px; overflow-x: auto; }
+  .token-workspace .el-card__header { padding: 18px; }
+  .token-create-card .el-form { display: block; }
+  .token-create-card .el-form-item { margin-bottom: 18px; }
+  .token-table { min-width: 860px; }
 }

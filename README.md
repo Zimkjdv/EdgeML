@@ -13,6 +13,7 @@ EdgeML is a self-hosted, plugin-oriented platform for batch predictions from CSV
 | v0.3 Classification and training controls | In progress | Classification training and Logistic Regression are implemented; Ridge and richer model controls remain planned |
 | v0.4 Explainability | Deferred | SHAP-backed explainability and prediction insights |
 | v0.5 Model Registry | Completed | Trusted model registry with publish, enable, disable, and unregister lifecycle controls |
+| v0.6 API Authentication | In progress | SQLite-backed API token generation, listing, one-time display, scoped access, and revocation |
 | v0.7.1 Observability | Completed | Health endpoints, request logging, and Prometheus metrics |
 | v0.7.2 Queue Workers | Completed | Redis-backed asynchronous training worker with Docker end-to-end verification |
 | v0.7.3 Queue Operations | In progress | Backend retry, dead-letter routing, graceful shutdown, queue-control APIs, Queue Operations UI, and worker-capacity controls; runtime integration coverage remains next |
@@ -64,6 +65,14 @@ For integrations that need to discover models, use `GET /api/models/ids` to retr
 - Refine the registry table with compact responsive columns, clear status badges, action buttons, and hover details for truncated values.
 - Published model artifacts remain operator-controlled files; registry removal never accepts or deletes serialized artifacts through HTTP.
 
+### v0.6 in progress
+
+- Add a SQLite-backed API Token management page for creating, listing, and revoking tokens.
+- Store token hashes only; the complete token is returned once when it is created.
+- Support `api` and `tokens:manage` scopes, with `EDGEML_API_TOKEN` retained as the bootstrap management token.
+- Keep health probes anonymous and protect `/api/*` routes after the first managed token exists.
+- A reverse proxy remains recommended for production authentication because browser-held tokens are not secrets.
+
 ### Completed v0.7.1 Observability
 
 - Structured JSON request and training-job logs with request IDs.
@@ -92,12 +101,12 @@ The current implementation is suitable for local and controlled self-hosted use.
 - **P0 reliability:** add runtime integration tests for Redis restart, worker recovery, retry, dead-letter replay, and graceful shutdown; make processing recovery atomic when multiple workers start together.
 - **P0 data durability:** persist the Redis queue and dead-letter list, and replace process-local file writes with atomic or database-backed repositories before running multiple Backend replicas.
 - **P0 input safety:** enforce JSON request body, row, column, and value-size limits in addition to the existing CSV byte limit.
-- **P0 access control:** add optional API-token authentication and explicit authorization boundaries before exposing model registry and queue operations outside a trusted network.
+- **P0 access control:** refine token scopes and add an external identity/reverse-proxy integration before exposing model registry and queue operations outside a trusted network.
 - **P1 operations:** add service healthchecks, resource limits, log rotation, Redis authentication, backup/restore procedures, and immutable Docker image tags.
 - **P1 frontend quality:** split the monolithic `App.vue`, move all labels to structured i18n keys, add frontend unit/E2E tests, and code-split the large production bundle.
 - **P2 product roadmap:** complete Ridge and richer AutoML controls where they belong, then continue the planned standalone AutoML extraction and v0.8 observability dashboard.
 
-The recommended next implementation order is runtime integration coverage, queue recovery correctness, Redis persistence, input limits, and optional authentication. These changes reduce operational risk without changing the `ModelCatalog` or `PredictionService` application boundaries.
+The recommended next implementation order is runtime integration coverage, queue recovery correctness, Redis persistence, input limits, and stronger external authentication. These changes reduce operational risk without changing the `ModelCatalog` or `PredictionService` application boundaries.
 
 ## Runtime selection
 

@@ -12,6 +12,26 @@ Every HTTP response includes an `X-Request-ID` header. Clients may provide a bou
 
 Set `EDGEML_API_TOKEN` to protect all `/api/*` routes. Clients may send either `Authorization: Bearer <token>` or `X-API-Key: <token>`. Health probes remain available without a token. The default empty setting keeps local development unauthenticated. When the Docker frontend is built with the same token, the token is embedded in its static JavaScript bundle; use a reverse proxy or another server-side authentication layer when the browser must not hold a credential.
 
+### Token management APIs
+
+The frontend **API Token Management** page uses the following endpoints. The bootstrap token or an existing token with the `tokens:manage` scope is required:
+
+- `POST /api/auth/tokens`: create a token with a name, optional expiry, and `api`／`tokens:manage` scopes. The `api` scope is required for regular `/api/*` routes; `tokens:manage` is sufficient only for token administration. The raw token is returned only in this response.
+- `GET /api/auth/tokens`: list token metadata without raw values or hashes.
+- `DELETE /api/auth/tokens/{token_id}`: revoke a token. Revoked tokens cannot authenticate future requests.
+
+Example creation request:
+
+```json
+{
+  "name": "CI integration",
+  "scopes": ["api"],
+  "expires_at": "2027-01-01T00:00:00Z"
+}
+```
+
+Token metadata is stored in the configured SQLite file (`backend/data/api_tokens.sqlite3` by default). The raw token is never persisted. On a fresh deployment, set `EDGEML_API_TOKEN` before opening the management page so the first managed token can be created.
+
 ## `GET /api/models`
 
 Returns every active model registered in the configured model registry.

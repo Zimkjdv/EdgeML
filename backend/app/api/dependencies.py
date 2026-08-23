@@ -1,13 +1,15 @@
 from functools import lru_cache
 import secrets
 
-from fastapi import HTTPException, Request, status
+from fastapi import Depends, HTTPException, Request, status
 
 from app.core.config import get_settings
 from app.infrastructure.file_model_registry import FileModelRegistry
 from app.infrastructure.file_prediction_history_repository import FilePredictionHistoryRepository
 from app.infrastructure.predictor_factory import PredictorFactory
 from app.infrastructure.redis_training_job_queue import RedisTrainingJobQueue
+from app.repositories.api_token import SqliteApiTokenRepository
+from app.services.api_token_service import ApiTokenService
 from app.domain.training_queue import TrainingJobQueue, TrainingQueueOperations
 from app.services.prediction_service import PredictionService
 from app.services.dataset_service import DatasetService
@@ -16,7 +18,15 @@ from app.services.model_registry_service import ModelRegistryService
 from app.services.queue_operations_service import QueueOperationsService
 
 
-def require_api_token(request: Request) -> None:
+@lru_cache
+def get_api_token_service() -> ApiTokenService:
+    return ApiTokenService(SqliteApiTokenRepository(get_settings().api_tokens_database))
+
+
+def require_api_token(
+    request: Request,
+    service: ApiTokenService = Depends(get_api_token_service),
+) -> None:
     """Optionally protect API routes with a configured bearer/API token.
 
     Authentication is disabled when ``EDGEML_API_TOKEN`` is unset, preserving
@@ -24,19 +34,48 @@ def require_api_token(request: Request) -> None:
     included in the ``/api`` router dependency and remain probeable.
     """
 
+    supplied = _request_token(request)
     expected = get_settings().api_token
-    if not expected:
+    if expected and supplied and secrets.compare_digest(supplied, expected):
         return
-
-    authorization = request.headers.get("authorization", "")
-    supplied = authorization[7:].strip() if authorization.lower().startswith("bearer ") else request.headers.get("x-api-key", "")
-    if supplied and secrets.compare_digest(supplied, expected):
+    if supplied:
+        record = service.authenticate(supplied)
+        if record and ("api" in record.scopes or request.url.path.startswith("/api/auth/tokens")):
+            return
+    # Keep a clean local install usable until its first token is created.
+    if not expected and not service.has_active_tokens():
         return
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="A valid API token is required.",
         headers={"WWW-Authenticate": "Bearer"},
     )
+
+
+def require_token_management(
+    request: Request,
+    service: ApiTokenService = Depends(get_api_token_service),
+) -> None:
+    """Require the bootstrap token or a token carrying ``tokens:manage``."""
+
+    supplied = _request_token(request)
+    expected = get_settings().api_token
+    if expected and supplied and secrets.compare_digest(supplied, expected):
+        return
+    if supplied:
+        record = service.authenticate(supplied)
+        if record and "tokens:manage" in record.scopes:
+            return
+    if not expected and not service.has_active_tokens():
+        raise HTTPException(status_code=503, detail="Set EDGEML_API_TOKEN before creating the first managed token.")
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Token management permission is required.")
+
+
+def _request_token(request: Request) -> str:
+    authorization = request.headers.get("authorization", "")
+    if authorization.lower().startswith("bearer "):
+        return authorization[7:].strip()
+    return request.headers.get("x-api-key", "").strip()
 
 
 def get_model_registry() -> FileModelRegistry:
