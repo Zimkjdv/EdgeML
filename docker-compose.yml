@@ -2,8 +2,11 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec"]
     ports:
       - "6380:6379"
+    volumes:
+      - redis-data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -22,6 +25,8 @@ services:
       EDGEML_QUEUE_BACKEND: redis
       EDGEML_REDIS_URL: redis://redis:6379/0
       EDGEML_MAX_UPLOAD_BYTES: "5242880"
+      EDGEML_MAX_JSON_BODY_BYTES: "10485760"
+      EDGEML_API_TOKEN: ${EDGEML_API_TOKEN:-}
     volumes:
       - prediction-data:/app/data
     depends_on:
@@ -52,6 +57,8 @@ services:
   frontend:
     build:
       context: ./frontend
+      args:
+        VITE_EDGEML_API_TOKEN: ${EDGEML_API_TOKEN:-}
     restart: unless-stopped
     depends_on:
       - backend
@@ -60,3 +67,4 @@ services:
 
 volumes:
   prediction-data:
+  redis-data:

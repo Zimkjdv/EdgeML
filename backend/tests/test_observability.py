@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 
+from app.core.config import get_settings
 from app.main import create_app
 
 
@@ -36,3 +37,17 @@ def test_metrics_endpoint_exposes_http_metrics() -> None:
     assert response.headers["content-type"].startswith("text/plain")
     assert "edgeml_http_requests_total" in response.text
     assert "edgeml_http_request_duration_seconds" in response.text
+
+
+def test_optional_api_token_protects_api_routes_but_not_health(monkeypatch) -> None:
+    monkeypatch.setenv("EDGEML_API_TOKEN", "test-token-123456")
+    get_settings.cache_clear()
+    try:
+        client = TestClient(create_app())
+        assert client.get("/health/live").status_code == 200
+        assert client.get("/api/models").status_code == 401
+        authorized = client.get("/api/models", headers={"Authorization": "Bearer test-token-123456"})
+        assert authorized.status_code == 200
+    finally:
+        monkeypatch.delenv("EDGEML_API_TOKEN", raising=False)
+        get_settings.cache_clear()

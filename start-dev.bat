@@ -5,6 +5,7 @@ rem EdgeML local development launcher (Windows)
 set "PROJECT_ROOT=%~dp0"
 set "BACKEND_DIR=%PROJECT_ROOT%backend"
 set "FRONTEND_DIR=%PROJECT_ROOT%frontend"
+if defined EDGEML_API_TOKEN set "VITE_EDGEML_API_TOKEN=%EDGEML_API_TOKEN%"
 
 if exist "%BACKEND_DIR%\.venv\Scripts\python.exe" (
   set "PYTHON_EXE=%BACKEND_DIR%\.venv\Scripts\python.exe"

@@ -104,6 +104,43 @@ def test_predict_json_returns_prediction_records() -> None:
     assert repository.records[0].source_filename == "sales-service"
 
 
+def test_predict_json_records_success_metric(monkeypatch) -> None:
+    outcomes: list[str] = []
+    monkeypatch.setattr("app.api.routes.predictions.record_prediction", outcomes.append)
+
+    response = client().post(
+        "/api/predict/json",
+        json={"model_id": "house-price-v1", "data": [{"Area": 80, "Room": 2, "Age": 15}]},
+    )
+
+    assert response.status_code == 200
+    assert outcomes == ["success"]
+
+
+def test_predict_json_enforces_configured_limits(monkeypatch) -> None:
+    settings = get_settings().model_copy(
+        update={"max_json_records": 1, "max_json_columns": 2, "max_json_value_chars": 4}
+    )
+    monkeypatch.setattr("app.api.routes.predictions.get_settings", lambda: settings)
+
+    too_many_records = client().post(
+        "/api/predict/json",
+        json={"model_id": "house-price-v1", "data": [{"Area": 80, "Room": 2, "Age": 15}, {"Area": 90}]},
+    )
+    too_many_columns = client().post(
+        "/api/predict/json",
+        json={"model_id": "house-price-v1", "data": [{"Area": 80, "Room": 2, "Age": 15}]},
+    )
+    too_long_value = client().post(
+        "/api/predict/json",
+        json={"model_id": "house-price-v1", "data": [{"Area": 80, "Room": 2, "Age": "12345"}]},
+    )
+
+    assert too_many_records.status_code == 413
+    assert too_many_columns.status_code == 413
+    assert too_long_value.status_code == 413
+
+
 def test_predict_json_supports_ground_truth_and_drops_incomplete_rows() -> None:
     response = client().post(
         "/api/predict/json",

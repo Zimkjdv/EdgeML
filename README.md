@@ -85,6 +85,20 @@ For integrations that need to discover models, use `GET /api/models/ids` to retr
 - Windows launchers cover the hybrid Redis/local workflow, full Docker startup, and rebuild/deploy flows.
 - Remaining v0.7.3 work is runtime integration coverage and richer capacity controls.
 
+## Optimization backlog
+
+The current implementation is suitable for local and controlled self-hosted use. The following items are recorded before expanding toward multi-user production deployment:
+
+- **P0 reliability:** add runtime integration tests for Redis restart, worker recovery, retry, dead-letter replay, and graceful shutdown; make processing recovery atomic when multiple workers start together.
+- **P0 data durability:** persist the Redis queue and dead-letter list, and replace process-local file writes with atomic or database-backed repositories before running multiple Backend replicas.
+- **P0 input safety:** enforce JSON request body, row, column, and value-size limits in addition to the existing CSV byte limit.
+- **P0 access control:** add optional API-token authentication and explicit authorization boundaries before exposing model registry and queue operations outside a trusted network.
+- **P1 operations:** add service healthchecks, resource limits, log rotation, Redis authentication, backup/restore procedures, and immutable Docker image tags.
+- **P1 frontend quality:** split the monolithic `App.vue`, move all labels to structured i18n keys, add frontend unit/E2E tests, and code-split the large production bundle.
+- **P2 product roadmap:** complete Ridge and richer AutoML controls where they belong, then continue the planned standalone AutoML extraction and v0.8 observability dashboard.
+
+The recommended next implementation order is runtime integration coverage, queue recovery correctness, Redis persistence, input limits, and optional authentication. These changes reduce operational risk without changing the `ModelCatalog` or `PredictionService` application boundaries.
+
 ## Runtime selection
 
 Choose one of these runtime modes for normal development:
@@ -95,7 +109,9 @@ Choose one of these runtime modes for normal development:
 | Hybrid local training | `start-dev-redis.bat` | Local Backend + Frontend + Worker, isolated Docker Redis | Frontend `5173`, API `8000`, Redis `6381` |
 | Full Docker | `start-dev-docker.bat` / `deploy-docker.bat` | Docker Backend + Frontend + Redis + Worker | Frontend `5180`, API `8010`, Redis `6380` |
 
-The Docker host mappings are different from the container ports. Containers use Backend `8000`, Frontend Nginx `80`, and Redis `6379` internally. The hybrid launcher uses a separate Redis project and queue, so it can run beside the full Docker runtime.
+The Docker host mappings are different from the container ports. Containers use Backend `8000`, Frontend Nginx `80`, and Redis `6379` internally. Redis uses a named volume with AOF enabled so queue and dead-letter state survives container recreation. The hybrid launcher uses a separate Redis project and queue, so it can run beside the full Docker runtime.
+
+For a trusted internal deployment, set `EDGEML_API_TOKEN` before `deploy-docker.bat` to require a Bearer token or `X-API-Key` on `/api/*` routes. The default is disabled for local development; browser-embedded tokens are not a substitute for a production reverse proxy.
 
 ## First-time setup
 

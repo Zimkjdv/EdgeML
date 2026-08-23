@@ -3,6 +3,19 @@ from __future__ import annotations
 import redis
 
 
+_RECOVER_PROCESSING_SCRIPT = """
+local pending = redis.call('lrange', KEYS[1], 0, -1)
+if #pending == 0 then
+  return 0
+end
+for index = 1, #pending do
+  redis.call('lpush', KEYS[2], pending[index])
+end
+redis.call('del', KEYS[1])
+return #pending
+"""
+
+
 class RedisTrainingJobQueue:
     """At-least-once Redis queue for persisted training job identifiers."""
 
@@ -58,11 +71,17 @@ class RedisTrainingJobQueue:
         self._client.lpush(self._dead_letter_key, job_id)
 
     def recover_processing(self) -> int:
-        """Requeue jobs left in the processing list after a worker restart."""
+        """Atomically requeue jobs left in processing after a worker restart.
 
-        pending = self._client.lrange(self._processing_key, 0, -1)
-        if not pending:
-            return 0
-        self._client.lpush(self._queue_key, *pending)
-        self._client.delete(self._processing_key)
-        return len(pending)
+        Worker replicas can start at the same time after a host restart. A
+        Redis Lua script ensures only one worker moves and clears the pending
+        list, preventing duplicate recovery and duplicate model artifacts.
+        """
+
+        recovered = self._client.eval(
+            _RECOVER_PROCESSING_SCRIPT,
+            2,
+            self._processing_key,
+            self._queue_key,
+        )
+        return int(recovered or 0)

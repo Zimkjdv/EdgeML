@@ -21,6 +21,11 @@ class Settings(BaseSettings):
     training_retry_backoff_seconds: float = Field(default=2.0, ge=0, le=300)
     training_retry_backoff_max_seconds: float = Field(default=60.0, ge=0, le=3600)
     max_upload_bytes: int = 5 * 1024 * 1024
+    max_json_records: int = Field(default=10_000, ge=1, le=100_000)
+    max_json_columns: int = Field(default=256, ge=1, le=10_000)
+    max_json_value_chars: int = Field(default=10_000, ge=1, le=1_000_000)
+    max_json_body_bytes: int = Field(default=10 * 1024 * 1024, ge=1, le=100 * 1024 * 1024)
+    api_token: str | None = None
 
 
 @lru_cache

@@ -165,7 +165,10 @@ onUnmounted(() => {
 watch([trainedModels, activePage], async () => { await nextTick(); addTrainedModelTooltips() }, { deep: true })
 onUpdated(() => { addTrainedModelTooltips(); applyTrainedModelLocale() })
 const api = async <T>(url: string, init?: RequestInit): Promise<T> => {
-  const response = await fetch(url, init)
+  const headers = new Headers(init?.headers)
+  const apiToken = import.meta.env.VITE_EDGEML_API_TOKEN as string | undefined
+  if (apiToken) headers.set('Authorization', `Bearer ${apiToken}`)
+  const response = await fetch(url, { ...init, headers })
   if (!response.ok) {
     const body = await response.json().catch(() => ({}))
     throw new Error(body.detail ?? '系統操作失敗。')

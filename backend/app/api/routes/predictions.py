@@ -1,7 +1,7 @@
 import json
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import Response
 
 from app.api.dependencies import get_prediction_service
@@ -24,15 +24,38 @@ def prediction_history(
 @router.post("/predict/json", response_model=JsonPredictionOutput)
 def predict_json(
     request: JsonPredictionRequest,
+    http_request: Request,
     service: PredictionService = Depends(get_prediction_service),
 ) -> JsonPredictionOutput:
+    settings = get_settings()
+    content_length = http_request.headers.get("content-length")
+    if content_length:
+        try:
+            body_bytes = int(content_length)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Invalid Content-Length header.") from exc
+        if body_bytes > settings.max_json_body_bytes:
+            raise HTTPException(status_code=413, detail=f"JSON body exceeds the {settings.max_json_body_bytes}-byte limit.")
+    records = request.input_data
+    if len(records) > settings.max_json_records:
+        raise HTTPException(status_code=413, detail=f"JSON input exceeds the {settings.max_json_records}-record limit.")
+    if any(len(record) > settings.max_json_columns for record in records):
+        raise HTTPException(status_code=413, detail=f"JSON input exceeds the {settings.max_json_columns}-column limit.")
+    if any(
+        isinstance(value, str) and len(value) > settings.max_json_value_chars
+        for record in records
+        for value in record.values()
+    ):
+        raise HTTPException(status_code=413, detail=f"JSON string values exceed the {settings.max_json_value_chars}-character limit.")
     try:
-        return service.predict_json(
+        result = service.predict_json(
             model_id=request.model_id,
-            records=request.input_data,
+            records=records,
             source_name=request.source_name,
             ground_truth_column=request.ground_truth_column,
         )
+        record_prediction("success")
+        return result
     except ModelNotFoundError as exc:
         record_prediction("not_found")
         raise HTTPException(status_code=404, detail=str(exc)) from exc

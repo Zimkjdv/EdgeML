@@ -8,6 +8,10 @@
 
 Every HTTP response includes an `X-Request-ID` header. Clients may provide a bounded `X-Request-ID` value to correlate logs; otherwise EdgeML generates one. Structured access logs include the request ID, route, status code, and duration without logging uploaded CSV contents.
 
+## Optional API authentication
+
+Set `EDGEML_API_TOKEN` to protect all `/api/*` routes. Clients may send either `Authorization: Bearer <token>` or `X-API-Key: <token>`. Health probes remain available without a token. The default empty setting keeps local development unauthenticated. When the Docker frontend is built with the same token, the token is embedded in its static JavaScript bundle; use a reverse proxy or another server-side authentication layer when the browser must not hold a credential.
+
 ## `GET /api/models`
 
 Returns every active model registered in the configured model registry.
@@ -62,6 +66,8 @@ Use this endpoint when the caller already has data from a database, service, or 
 ```
 
 `ground_truth_column` is optional and enables evaluation when each data item includes that field. The response contains `model_id`, `model_name`, `prediction_column`, a `records` array with the original fields plus predictions, `metrics`, `ground_truth_column`, and `dropped_rows`. Rows missing required feature values (or the selected Ground Truth value) are excluded and counted in `dropped_rows`. The endpoint writes metadata-only prediction history with `source_name` (or `json-api` when omitted). For backward compatibility, the initial `records` request field is still accepted; new clients should use `data`.
+
+JSON requests are limited by `EDGEML_MAX_JSON_BODY_BYTES` (default 10 MiB), `EDGEML_MAX_JSON_RECORDS` (default 10,000), `EDGEML_MAX_JSON_COLUMNS` (default 256), and `EDGEML_MAX_JSON_VALUE_CHARS` (default 10,000). Requests over a configured limit return `413`.
 
 ## Model registry APIs
 

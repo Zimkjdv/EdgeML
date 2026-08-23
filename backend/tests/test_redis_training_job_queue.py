@@ -37,6 +37,14 @@ class FakeRedis:
     def delete(self, key: str) -> None:
         self.lists.pop(key, None)
 
+    def eval(self, script: str, numkeys: int, processing_key: str, queue_key: str) -> int:
+        pending = list(self.lists.get(processing_key, []))
+        if not pending:
+            return 0
+        self.lpush(queue_key, *pending)
+        self.delete(processing_key)
+        return len(pending)
+
 
 def test_redis_queue_dispatches_acknowledges_and_recovers(monkeypatch) -> None:
     fake = FakeRedis()

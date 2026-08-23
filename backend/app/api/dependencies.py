@@ -1,4 +1,7 @@
 from functools import lru_cache
+import secrets
+
+from fastapi import HTTPException, Request, status
 
 from app.core.config import get_settings
 from app.infrastructure.file_model_registry import FileModelRegistry
@@ -11,6 +14,29 @@ from app.services.dataset_service import DatasetService
 from app.services.training_service import TrainingService
 from app.services.model_registry_service import ModelRegistryService
 from app.services.queue_operations_service import QueueOperationsService
+
+
+def require_api_token(request: Request) -> None:
+    """Optionally protect API routes with a configured bearer/API token.
+
+    Authentication is disabled when ``EDGEML_API_TOKEN`` is unset, preserving
+    the local development experience. Health endpoints are intentionally not
+    included in the ``/api`` router dependency and remain probeable.
+    """
+
+    expected = get_settings().api_token
+    if not expected:
+        return
+
+    authorization = request.headers.get("authorization", "")
+    supplied = authorization[7:].strip() if authorization.lower().startswith("bearer ") else request.headers.get("x-api-key", "")
+    if supplied and secrets.compare_digest(supplied, expected):
+        return
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="A valid API token is required.",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
 
 
 def get_model_registry() -> FileModelRegistry:

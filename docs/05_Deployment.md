@@ -15,9 +15,11 @@ docker compose up -d --build
 
 `edgeml-ml-base` contains the common Python ML dependencies used by Backend and Worker. It is a Docker build image, not a running container. Backend and Worker retain separate containers while sharing the common image layers. Use `deploy-docker.bat` after cloning or after changing the base dependencies; `start-dev-docker.bat` starts existing images only.
 
-The Docker containers listen internally on Backend port `8000`, Frontend Nginx port `80`, and Redis port `6379`. The default host mappings are Backend `8010`, Frontend `5180`, and Redis `6380`. Set `EDGEML_MODELS_ROOT` to change the deployment model path and `EDGEML_MAX_UPLOAD_BYTES` to limit CSV upload size.
+The Docker containers listen internally on Backend port `8000`, Frontend Nginx port `80`, and Redis port `6379`. The default host mappings are Backend `8010`, Frontend `5180`, and Redis `6380`. Set `EDGEML_MODELS_ROOT` to change the deployment model path and `EDGEML_MAX_UPLOAD_BYTES` to limit CSV upload size. Redis uses a named volume with AOF enabled so queued and dead-letter job IDs survive container recreation.
 
 Every service in `docker-compose.yml` and the hybrid Redis compose file uses `restart: unless-stopped`. Docker will restart the service after a daemon or host restart, while an explicit `docker compose stop` or `docker compose down` keeps it stopped until started again.
+
+To enable optional API authentication, set `EDGEML_API_TOKEN` before running `deploy-docker.bat`. The same value is passed to the Backend and embedded into the frontend build so browser requests can authenticate; because browser-held tokens are not secrets, use a reverse proxy for stronger production authentication.
 
 Local development uses different host endpoints:
 
