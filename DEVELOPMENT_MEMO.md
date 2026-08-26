@@ -61,11 +61,41 @@ This setup makes backend, worker, and frontend changes available immediately wit
 
 ## Docker verification
 
-Before committing an infrastructure or application change, verify the complete Compose environment:
+The full Docker runtime uses a shared `edgeml-ml-base` build image for the Backend and Worker. The base image contains the common Python/ML dependencies; it is not a running container. On a new computer, or after changing `backend/requirements.txt`, use the project launcher so the base image is built first:
+
+```powershell
+.\deploy-docker.bat
+```
+
+`deploy-docker.bat` is both the first-build and rebuild command. It builds `edgeml-ml-base`, builds the application images, and runs `docker compose up -d --build --remove-orphans`. It does not pull an EdgeML application image from GitHub; it builds the current local workspace. Docker may pull missing public base images such as Python, Node, Nginx, or Redis.
+
+### Docker command comparison
+
+| Scenario | Recommended command |
+| --- | --- |
+| First deployment | `.\deploy-docker.bat` |
+| Deploy after pulling new code | `.\deploy-docker.bat` |
+| Modify normal application code | `docker compose up -d --build` |
+| Modify `.env` | `docker compose up -d --build --force-recreate backend frontend` |
+| Modify ML dependencies | `.\deploy-docker.bat` |
+| Start existing services only | `.\start-dev-docker.bat` |
+
+
+After a normal Backend, Worker, or Frontend source change, this is also sufficient:
 
 ```powershell
 docker compose up -d --build
 ```
+
+Compose recreates a service Container when its Image or configuration changes. If nothing relevant changed, it reuses the existing Container. The old Container is removed and replaced only after the new Image is built successfully; named Volumes are preserved.
+
+Use `--force-recreate` when an environment or configuration change must definitely be injected into a new Container. For example, after changing the root `.env` file:
+
+```powershell
+docker compose up -d --build --force-recreate backend frontend
+```
+
+The Backend receives `EDGEML_API_TOKEN` at Container creation time, and the Frontend receives `VITE_EDGEML_API_TOKEN` during its image build. Restarting or recreating is therefore required after changing the token; editing `.env` does not update an already-running process.
 
 For backend or worker changes only:
 
@@ -79,7 +109,23 @@ For frontend changes only:
 docker compose up -d --build frontend
 ```
 
+For a subsequent start without rebuilding existing Images:
+
+```powershell
+.\start-dev-docker.bat
+```
+
+This launcher requires that `edgeml-ml-base` and the application Images already exist. Use `deploy-docker.bat` after `git pull` or whenever a rebuild is needed.
+
 Running containers do not automatically receive local source changes. Rebuild the affected service after modifying code that runs inside Docker.
+
+To stop the Docker runtime while preserving application and Redis data:
+
+```powershell
+docker compose down
+```
+
+Do not use `docker compose down -v` during normal development. The `-v` option also deletes named Volumes, which can remove trained models, prediction history, and Redis queue/dead-letter state.
 
 ## Verification checklist
 
