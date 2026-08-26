@@ -207,7 +207,7 @@ The shared base improves dependency consistency and build caching; it does not r
 .\start-dev-redis.bat
 ```
 
-### Full Docker: first build
+### Full Docker: first build or rebuild
 
 ```powershell
 .\deploy-docker.bat
