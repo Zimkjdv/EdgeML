@@ -14,7 +14,7 @@ Every HTTP response includes an `X-Request-ID` header. Clients may provide a bou
 
 ## Optional API authentication
 
-Set `EDGEML_API_TOKEN` to protect all `/api/*` routes. Clients may send either `Authorization: Bearer <token>` or `X-API-Key: <token>`. Health probes remain available without a token. The default empty setting keeps local development unauthenticated. When the Docker frontend is built with the same token, the token is embedded in its static JavaScript bundle; use a reverse proxy or another server-side authentication layer when the browser must not hold a credential.
+Integration clients send `Authorization: Bearer <token>` or `X-API-Key: <token>` using `EDGEML_API_TOKEN` or a managed token. Browser users sign in with separate web credentials and use an HttpOnly session cookie; writes additionally require `X-CSRF-Token`. Setting a web password also enables API protection even without a bootstrap API token. Health probes remain public. Anonymous development is available only when no web password, bootstrap token, or active managed token is configured. Frontend bundles no longer contain API tokens. The public `/api/auth/session` status/login/logout endpoints implement the browser session lifecycle; see [Web authentication](10_Web_Authentication.md).
 
 ### Token management APIs
 

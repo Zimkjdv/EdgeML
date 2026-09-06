@@ -95,7 +95,7 @@ Use `--force-recreate` when an environment or configuration change must definite
 docker compose up -d --build --force-recreate backend frontend
 ```
 
-The Backend receives `EDGEML_API_TOKEN` at Container creation time, and the Frontend receives `VITE_EDGEML_API_TOKEN` during its image build. Restarting or recreating is therefore required after changing the token; editing `.env` does not update an already-running process.
+The Backend receives `EDGEML_API_TOKEN`, `EDGEML_WEB_USERNAME`, and `EDGEML_WEB_PASSWORD` at container creation time. The frontend no longer embeds credentials; it uses a browser login session. Recreate the backend after changing credentials; editing `.env` does not update an already-running process. Local development requires restarting the launcher. Rebuild the frontend once when migrating from the old token-embedded version. See `docs/10_Web_Authentication.md`.
 
 For backend or worker changes only:
 

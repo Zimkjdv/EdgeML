@@ -5,6 +5,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { locale, t } from './i18n'
 import OptimizationPage from './OptimizationPage.vue'
 import WorkspaceNavigation from './WorkspaceNavigation.vue'
+import { sessionHeaders, sessionExpired } from './webAuth'
 
 type Feature = { name: string; dtype: string; required: boolean }
 type PredictionModel = { id: string; name: string; version: string; framework: string; problem_type: string; target: string; description: string; features: Feature[] }
@@ -173,9 +174,9 @@ watch([trainedModels, activePage], async () => { await nextTick(); addTrainedMod
 onUpdated(() => { addTrainedModelTooltips(); applyTrainedModelLocale() })
 const api = async <T>(url: string, init?: RequestInit): Promise<T> => {
   const headers = new Headers(init?.headers)
-  const apiToken = import.meta.env.VITE_EDGEML_API_TOKEN as string | undefined
-  if (apiToken) headers.set('Authorization', `Bearer ${apiToken}`)
+  for (const [key, value] of Object.entries(sessionHeaders())) headers.set(key, value)
   const response = await fetch(url, { ...init, headers })
+  if (response.status === 401) sessionExpired()
   if (!response.ok) {
     const body = await response.json().catch(() => ({}))
     throw new Error(body.detail ?? '系統操作失敗。')
@@ -307,11 +308,13 @@ const runPrediction = async () => {
     const response = await new Promise<XMLHttpRequest>((resolve, reject) => {
       const request = new XMLHttpRequest()
       request.open('POST', '/api/predict')
+      for (const [key, value] of Object.entries(sessionHeaders())) request.setRequestHeader(key, value)
       request.responseType = 'blob'
       request.upload.addEventListener('progress', (event) => {
         if (event.lengthComputable) predictionUploadProgress.value = Math.round((event.loaded / event.total) * 100)
       })
       request.addEventListener('load', async () => {
+        if (request.status === 401) sessionExpired()
         if (request.status >= 200 && request.status < 300) {
           predictionUploadProgress.value = 100
           resolve(request)

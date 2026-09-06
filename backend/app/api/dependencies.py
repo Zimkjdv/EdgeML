@@ -20,6 +20,24 @@ from app.services.queue_operations_service import QueueOperationsService
 from app.infrastructure.trained_model_catalog import TrainedModelCatalog
 from app.services.optimization_service import OptimizationService
 from app.services.optimization_defaults import OptimizationDefaults
+from app.repositories.web_session import WebSessionRepository
+from app.services.web_session_service import WebSessionService
+
+
+def get_web_session_service() -> WebSessionService:
+    settings = get_settings()
+    return WebSessionService(settings, WebSessionRepository(settings.api_tokens_database))
+
+
+def has_web_session(request: Request) -> bool:
+    session = get_web_session_service().authenticate(request.cookies.get('edgeml_session', ''))
+    if not session:
+        return False
+    if request.method not in {'GET', 'HEAD', 'OPTIONS'}:
+        supplied = request.headers.get('x-csrf-token', '')
+        if not secrets.compare_digest(supplied.encode(), session['csrf'].encode()):
+            raise HTTPException(status_code=403, detail='Invalid session CSRF token.')
+    return True
 
 
 def get_optimization_service(source: Literal['trained', 'registry'] = 'trained') -> OptimizationService:
@@ -38,15 +56,12 @@ def require_api_token(
     request: Request,
     service: ApiTokenService = Depends(get_api_token_service),
 ) -> None:
-    """Optionally protect API routes with a configured bearer/API token.
-
-    Authentication is disabled when ``EDGEML_API_TOKEN`` is unset, preserving
-    the local development experience. Health endpoints are intentionally not
-    included in the ``/api`` router dependency and remain probeable.
-    """
+    """Accept explicit API credentials or an authenticated browser session."""
 
     supplied = _request_token(request)
     expected = get_settings().api_token
+    if not supplied and has_web_session(request):
+        return
     if expected and supplied and secrets.compare_digest(supplied, expected):
         return
     if supplied:
@@ -54,7 +69,7 @@ def require_api_token(
         if record and ("api" in record.scopes or request.url.path.startswith("/api/auth/tokens")):
             return
     # Keep a clean local install usable until its first token is created.
-    if not expected and not service.has_active_tokens():
+    if not supplied and not expected and not get_settings().web_password and not service.has_active_tokens():
         return
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -71,6 +86,8 @@ def require_token_management(
 
     supplied = _request_token(request)
     expected = get_settings().api_token
+    if not supplied and has_web_session(request):
+        return
     if expected and supplied and secrets.compare_digest(supplied, expected):
         return
     if supplied:

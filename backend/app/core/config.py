@@ -27,6 +27,11 @@ class Settings(BaseSettings):
     max_json_value_chars: int = Field(default=10_000, ge=1, le=1_000_000)
     max_json_body_bytes: int = Field(default=10 * 1024 * 1024, ge=1, le=100 * 1024 * 1024)
     api_token: str | None = None
+    web_username: str = "admin"
+    web_password: str | None = Field(default=None, repr=False)
+    web_session_seconds: int = Field(default=28800, ge=300, le=86400)
+    web_cookie_secure: bool = False
+    web_allowed_origins: list[str] = ["http://localhost:5173", "http://localhost:5180"]
     optimization_population: int = Field(default=256, ge=16, le=512)
     optimization_iterations: int = Field(default=12, ge=1, le=20)
 

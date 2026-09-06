@@ -1,7 +1,5 @@
 FROM node:22-alpine AS build
 WORKDIR /app
-ARG VITE_EDGEML_API_TOKEN=""
-ENV VITE_EDGEML_API_TOKEN=$VITE_EDGEML_API_TOKEN
 COPY package.json .
 RUN npm install
 COPY . .

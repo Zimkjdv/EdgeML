@@ -10,9 +10,12 @@ rem Load the optional root .env file so local and Docker launches share settings
 if exist "%PROJECT_ROOT%.env" (
   for /f "usebackq eol=# tokens=1,* delims==" %%A in ("%PROJECT_ROOT%.env") do (
     if /I "%%A"=="EDGEML_API_TOKEN" set "EDGEML_API_TOKEN=%%B"
+    if /I "%%A"=="EDGEML_WEB_USERNAME" set "EDGEML_WEB_USERNAME=%%B"
+    if /I "%%A"=="EDGEML_WEB_PASSWORD" set "EDGEML_WEB_PASSWORD=%%B"
+    if /I "%%A"=="EDGEML_WEB_COOKIE_SECURE" set "EDGEML_WEB_COOKIE_SECURE=%%B"
+    if /I "%%A"=="EDGEML_WEB_ALLOWED_ORIGINS" set "EDGEML_WEB_ALLOWED_ORIGINS=%%B"
   )
 )
-if defined EDGEML_API_TOKEN set "VITE_EDGEML_API_TOKEN=%EDGEML_API_TOKEN%"
 
 if exist "%BACKEND_DIR%\.venv\Scripts\python.exe" (
   set "PYTHON_EXE=%BACKEND_DIR%\.venv\Scripts\python.exe"

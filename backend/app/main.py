@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.router import api_router
 from app.api.dependencies import require_api_token
 from app.api.routes.health import router as health_router
+from app.api.routes.web_session import router as web_session_router
 from app.core.observability import RequestContextMiddleware, configure_logging
 
 
@@ -19,6 +20,7 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
         expose_headers=["X-Request-ID"],
     )
+    app.include_router(web_session_router)
     app.include_router(api_router, prefix="/api", dependencies=[Depends(require_api_token)])
     app.include_router(health_router)
 

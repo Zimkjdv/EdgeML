@@ -2,6 +2,10 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { DataAnalysis, Aim, Folder, Cpu, Box, Clock, Collection, List, Key, Fold, Expand, Close } from '@element-plus/icons-vue'
 import { locale, t, toggleLocale } from './i18n'
+import { logout, sessionAuthenticated } from './webAuth'
+import { ElMessage } from 'element-plus'
+
+async function signOut() { try { await logout() } catch (e) { ElMessage.error(e instanceof Error ? e.message : String(e)) } }
 
 const props = defineProps<{ modelValue: string }>()
 const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
@@ -84,6 +88,7 @@ function trapFocus(event: KeyboardEvent) {
         <button ref="toggleButton" class="icon-button" :aria-label="toggleLabel" :title="toggleLabel" aria-controls="workspace-sidebar" :aria-expanded="mobile ? opened : !collapsed" @click="toggle"><component :is="compact || mobile ? Expand : Fold" /></button>
         <h1>{{ current?.label }}</h1>
         <button class="language-button" @click="toggleLocale" :aria-label="en ? '切換為繁體中文' : 'Switch to English'">{{ t('language') }}</button>
+        <button v-if="sessionAuthenticated" class="signout-button" @click="signOut">{{ en ? 'Sign out' : '登出' }}</button>
       </header>
       <main id="workspace-content" ref="main" class="workspace-content" tabindex="-1"><slot /></main>
     </div>
@@ -113,6 +118,7 @@ button {font-family:inherit;cursor:pointer}
 .icon-button {display:grid;place-items:center;flex:none;width:38px;height:38px;border:0;border-radius:10px;color:#5b6e87;background:transparent}.icon-button:hover {background:#edf3fc}
 .language-button {margin-left:auto;flex:none;width:94px;height:36px;border:1px solid #d8e4f4;border-radius:18px;background:white;color:#2b5b98;font-size:14px;font-weight:600}
 .language-button:hover {background:#f1f6ff}
+.signout-button {flex:none;border:0;background:transparent;color:#52647b;padding:8px;font-size:13px}
 .workspace-content {padding:28px;max-width:1800px;margin:0 auto;min-width:0;outline:none}
 .workspace-content :deep(.el-card) {box-shadow:0 4px 18px #263f6410}
 button:focus-visible,.skip-link:focus-visible {outline:2px solid #2976dd;outline-offset:3px}

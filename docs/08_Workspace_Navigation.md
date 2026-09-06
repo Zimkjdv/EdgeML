@@ -14,4 +14,6 @@ At viewport widths of 900 px or less, navigation becomes an overlay drawer. Open
 
 ## Verification
 
+When web login is enabled, the toolbar also offers Sign out. See [Web authentication](10_Web_Authentication.md) for the administrator session and API-token separation.
+
 Run `npm run build` in `frontend` to type-check and build the application. For visual acceptance, inspect both languages at desktop and mobile widths: visit all nine pages, collapse and reload, open/close the mobile drawer with keyboard and pointer, and verify wide tables remain within their existing page scroll containers. This shell does not change backend behavior or persist page form data beyond existing page behavior.

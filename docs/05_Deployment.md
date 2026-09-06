@@ -19,7 +19,7 @@ The Docker containers listen internally on Backend port `8000`, Frontend Nginx p
 
 Every service in `docker-compose.yml` and the hybrid Redis compose file uses `restart: unless-stopped`. Docker will restart the service after a daemon or host restart, while an explicit `docker compose stop` or `docker compose down` keeps it stopped until started again.
 
-To enable optional API authentication, copy `.env.example` to `.env` and replace `EDGEML_API_TOKEN`. Docker Compose and the local launchers load this file automatically. The same value is passed to the Backend and embedded into the frontend build so browser requests can authenticate; because browser-held tokens are not secrets, use a reverse proxy for stronger production authentication.
+Configure separate credentials in `.env`: `EDGEML_WEB_USERNAME` / `EDGEML_WEB_PASSWORD` for browser login and `EDGEML_API_TOKEN` for integrations. The frontend no longer embeds API tokens. Browser sessions use HttpOnly cookies and CSRF headers. Existing installs need a web password and a frontend rebuild for this migration. Use HTTPS with `EDGEML_WEB_COOKIE_SECURE=true` for deployed environments, and configure `EDGEML_WEB_ALLOWED_ORIGINS` for the exact public origin. See [Web authentication](10_Web_Authentication.md).
 
 Local development uses different host endpoints:
 
