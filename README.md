@@ -322,6 +322,8 @@ When updating an existing local environment after pulling the training module, r
 
 ## Future roadmap
 
+Trained models now include original-feature permutation importance, shown as a descending bar chart with CSV download. New training saves the report automatically; older models can compute it from their saved artifact and source dataset. JSON/CSV retrieval and explicit recomputation are available at `/api/trained-models/{model_id}/feature-importance`. See [Feature importance ranking](docs/11_Feature_Importance.md) for method definitions, limitations, and CMD API examples.
+
 The workspace now uses a grouped, collapsible left sidebar instead of horizontal tabs, with a compact page-title toolbar and a stationary language switch. Desktop collapse preference is remembered locally; screens up to 900 px use a navigation drawer. See [Workspace navigation](docs/08_Workspace_Navigation.md).
 
 The optimization editor includes compact feature rows, search and All/Adjustable/Fixed filters, highlighted adjustable parameters, restore-default controls, and a sticky simulation action bar. Fixed inputs can be imported from a UTF-8 CSV with feature-name headers: select and preview one data row, then apply it to all fixed features. Adjustable search bounds remain unchanged. The result table shows only selected adjustable features alongside prediction metrics; the API retains full input combinations. Model selection and target settings are grouped separately; detailed guidance and random seed settings can be expanded as needed.

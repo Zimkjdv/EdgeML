@@ -1,4 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import Response
+from typing import Literal
+from app.api.dependencies import get_feature_importance_service
+from app.services.feature_importance_service import FeatureImportanceService, ImportanceUnavailable
+from app.domain.feature_importance import FeatureImportanceReport
 
 from app.api.dependencies import get_training_job_queue, get_training_service
 from app.domain.errors import ModelNotFoundError, PredictionValidationError
@@ -7,6 +12,32 @@ from app.domain.training_schemas import DatasetRenameRequest, ExternalEvaluation
 from app.services.training_service import TrainingService
 
 router = APIRouter()
+
+
+@router.get('/trained-models/{model_id}/feature-importance', response_model=FeatureImportanceReport,
+            responses={200: {'content': {'text/csv': {}}}})
+def feature_importance(model_id: str, format: Literal['json', 'csv'] = 'json',
+                       service: FeatureImportanceService = Depends(get_feature_importance_service)):
+    try:
+        report = service.get(model_id)
+    except ModelNotFoundError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ImportanceUnavailable as exc:
+        raise HTTPException(409, str(exc)) from exc
+    if format == 'csv':
+        return Response(service.csv(report), media_type='text/csv',
+                        headers={'Content-Disposition': 'attachment; filename="feature_importance.csv"'})
+    return report
+
+
+@router.post('/trained-models/{model_id}/feature-importance', response_model=FeatureImportanceReport)
+def compute_feature_importance(model_id: str, service: FeatureImportanceService = Depends(get_feature_importance_service)):
+    try:
+        return service.compute(model_id)
+    except ModelNotFoundError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except (PredictionValidationError, ValueError) as exc:
+        raise HTTPException(422, str(exc)) from exc
 
 
 @router.post("/training", response_model=TrainedModelDetail, status_code=201)

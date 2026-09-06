@@ -1,5 +1,7 @@
 # API
 
+Feature importance: `GET /api/trained-models/{model_id}/feature-importance?format=json` (or `csv`) returns the saved ranking. `POST` to the same endpoint computes or refreshes it using the original source dataset. See [Feature importance API](11_Feature_Importance.md#api) for response metadata and examples.
+
 ## Parameter optimization
 
 `GET /api/optimization/models` and `POST /api/optimization/simulate` support target-directed regression simulation, fixed/adjustable features, and 1–5 recommendations. Use the `source=trained` (default) or `source=registry` query parameter. These endpoints use existing API authentication. See [Parameter optimization](07_Parameter_Optimization.md) for request/response details and search limits.

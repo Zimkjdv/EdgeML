@@ -34,6 +34,8 @@ class Settings(BaseSettings):
     web_allowed_origins: list[str] = ["http://localhost:5173", "http://localhost:5180"]
     optimization_population: int = Field(default=256, ge=16, le=512)
     optimization_iterations: int = Field(default=12, ge=1, le=20)
+    importance_max_samples: int = Field(default=500, ge=2, le=2000)
+    importance_repeats: int = Field(default=3, ge=1, le=10)
 
 
 @lru_cache

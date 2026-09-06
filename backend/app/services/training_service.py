@@ -47,6 +47,8 @@ from app.domain.training_schemas import TrainedModelDetail, TrainedModelSummary,
 from app.domain.training_schemas import ExternalEvaluationResult, TrainingJob
 from app.core.observability import training_finished, training_started
 from app.services.dataset_service import DatasetService
+from app.services.feature_importance_service import calculate_importance, save_importance
+from app.core.config import get_settings
 
 
 class EncodedTargetClassifier(ClassifierMixin, BaseEstimator):
@@ -115,10 +117,21 @@ class TrainingService:
         validation_rmse = validation.get("rmse")
         validation_r2 = validation.get("r2")
         test_metrics = self._external_test(pipeline, request) if request.test_dataset_id else None
+        if progress: progress(90, "計算特徵重要度")
+        importance_frame = self._datasets.frame(request.test_dataset_id) if request.test_dataset_id else frame
+        importance_frame = importance_frame.dropna(subset=[request.target_column])
+        if request.numeric_imputer == 'drop':
+            importance_frame = importance_frame.dropna(subset=request.feature_columns)
+        importance = calculate_importance(pipeline.predict, importance_frame[request.feature_columns],
+                                         importance_frame[request.target_column], request.problem_type == 'classification',
+                                         request.test_dataset_id or request.dataset_id,
+                                         'external_test' if request.test_dataset_id else 'training',
+                                         get_settings().importance_max_samples, get_settings().importance_repeats)
         model_id = str(uuid4())
         completed_at = datetime.now(timezone.utc)
         output_dir = self._trained_root / model_id
         output_dir.mkdir()
+        save_importance(output_dir, importance)
         joblib.dump(pipeline, output_dir / "model.pkl")
         manifest = self._manifest(model_id, request, completed_at, validation, test_metrics, features)
         from app.domain.feature_defaults import summarize_features

@@ -20,6 +20,13 @@ from app.services.queue_operations_service import QueueOperationsService
 from app.infrastructure.trained_model_catalog import TrainedModelCatalog
 from app.services.optimization_service import OptimizationService
 from app.services.optimization_defaults import OptimizationDefaults
+from app.services.feature_importance_service import FeatureImportanceService
+
+
+def get_feature_importance_service() -> FeatureImportanceService:
+    settings = get_settings()
+    return FeatureImportanceService(TrainedModelCatalog(settings.trained_models_root), PredictorFactory(),
+                                    get_dataset_service(), settings.trained_models_root)
 from app.repositories.web_session import WebSessionRepository
 from app.services.web_session_service import WebSessionService
 
