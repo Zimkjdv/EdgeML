@@ -8,7 +8,9 @@ from app.api.routes.registry import router as registry_router
 from app.api.routes.queue import router as queue_router
 from app.api.routes.auth import router as auth_router
 
+from app.api.routes.optimization import router as optimization_router
 api_router = APIRouter()
+api_router.include_router(optimization_router, tags=['optimization'])
 api_router.include_router(models_router, tags=["models"])
 api_router.include_router(predictions_router, tags=["predictions"])
 api_router.include_router(datasets_router, tags=["datasets"])

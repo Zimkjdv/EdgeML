@@ -121,6 +121,9 @@ class TrainingService:
         output_dir.mkdir()
         joblib.dump(pipeline, output_dir / "model.pkl")
         manifest = self._manifest(model_id, request, completed_at, validation, test_metrics, features)
+        from app.domain.feature_defaults import summarize_features
+        manifest['training_dataset_id'] = request.dataset_id
+        manifest['feature_defaults'] = summarize_features(features)
         record = {
             "id": model_id,
             "name": request.model_name,

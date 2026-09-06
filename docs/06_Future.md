@@ -14,4 +14,10 @@
 
 ## Product boundary
 
+### Parameter optimization
+
+Implemented initial scope: bilingual simulation page, one trained or active registered regression model, numeric target and tolerance, fixed features, bounded numeric/step search, allowed category choices, seeded search, and up to five distinct recommendations with prediction/error comparison. See [Parameter optimization](07_Parameter_Optimization.md).
+
+Training-data ranges and median/mode fixed defaults are implemented, with metadata snapshots for new models and source-dataset lookup for older models. Planned extensions: multiple weighted objectives, target intervals and classification targets, cross-feature process constraints, anomaly penalties, configurable diversity, calibrated uncertainty, persisted simulations, CSV export, and queued/cancellable execution with concurrency limits.
+
 Training is intentionally integrated during the early milestones so the end-to-end workflow can be developed and validated quickly. This is a transitional architecture, not the final service boundary. The future AutoML platform will own datasets, experiments, training jobs, evaluation, and model publication; EdgeML will own the deployed model catalog, prediction validation, and prediction serving.

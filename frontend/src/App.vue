@@ -3,6 +3,8 @@ import { computed, nextTick, onMounted, onUnmounted, onUpdated, ref, watch } fro
 import { Download, QuestionFilled, UploadFilled } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { locale, t, toggleLocale } from './i18n'
+import OptimizationPage from './OptimizationPage.vue'
+import WorkspaceNavigation from './WorkspaceNavigation.vue'
 
 type Feature = { name: string; dtype: string; required: boolean }
 type PredictionModel = { id: string; name: string; version: string; framework: string; problem_type: string; target: string; description: string; features: Feature[] }
@@ -445,11 +447,10 @@ onMounted(async () => {
 <template>
   <main class="page-shell" :class="locale === 'en' ? 'locale-en' : 'locale-zh'">
     <section class="hero"><p class="eyebrow">{{ t('brandTag') }}</p><h1>{{ t('brandTitle') }}</h1><p>{{ t('brandDescription') }}</p></section>
-    <el-menu :default-active="activePage" mode="horizontal" :ellipsis="false" class="nav" @select="(key: string) => activePage = key">
-      <el-menu-item index="prediction">{{ t('prediction') }}</el-menu-item><el-menu-item index="history">{{ t('history') }}</el-menu-item><el-menu-item index="datasets">{{ t('datasets') }}</el-menu-item><el-menu-item index="training">{{ t('training') }}</el-menu-item><el-menu-item index="trained">{{ t('trainedModels') }}</el-menu-item><el-menu-item index="registry">{{ t('registry') }}</el-menu-item><el-menu-item index="queue">{{ t('queue') }}</el-menu-item><el-menu-item index="tokens">{{ t('apiTokens') }}</el-menu-item><el-button class="language-switch" plain @click.stop="toggleLocale">{{ t('language') }}</el-button>
-    </el-menu>
+    <WorkspaceNavigation v-model="activePage" />
 
-    <section v-if="activePage === 'prediction'">
+    <OptimizationPage v-if="activePage === 'optimization'" :api="api" />
+    <section v-else-if="activePage === 'prediction'">
       <el-card class="workspace prediction-workspace"><template #header>{{ t('predictionWorkspace') }}</template><el-form label-position="top">
         <el-form-item :label="t('publishedModel')"><el-select v-model="predictionModelId" class="full-width" :placeholder="t('selectModel')"><el-option v-for="model in models" :key="model.id" :value="model.id" :label="`${model.name} · ${model.version}`" /></el-select><p v-if="selectedPredictionModel" class="helper">{{ selectedPredictionModel.description }}｜{{ locale === 'zh-TW' ? '需要欄位' : 'Required features' }}：{{ selectedPredictionModel.features.map(f => f.name).join('、') }}</p></el-form-item>
         <el-form-item :label="t('inputCsv')"><div class="prediction-upload-block"><div class="prediction-drop-zone"><el-upload :auto-upload="false" accept=".csv,text/csv" :limit="1" :on-change="selectPredictionFile"><el-button :icon="UploadFilled">{{ t('chooseCsv') }}</el-button></el-upload></div><div v-if="predictionFileStats.totalRows" class="prediction-file-stats"><el-tag type="info" effect="light">{{ t('uploadedRows') }}：{{ predictionFileStats.totalRows }}</el-tag><el-tag :type="predictionFileStats.missingRows ? 'warning' : 'success'" effect="light">{{ t('missingRowsDropped') }}：{{ predictionFileStats.missingRows }}</el-tag><el-tag type="success" effect="light">{{ t('rowsToPredict') }}：{{ predictionFileStats.predictedRows }}</el-tag></div><div v-if="predictionUploadProgress || predictionLoading" class="prediction-upload-progress"><div class="prediction-progress-heading"><span>{{ t('uploadProgress') }}</span><strong>{{ predictionUploadProgress }}%</strong></div><el-progress :percentage="predictionUploadProgress" :status="predictionLoading ? undefined : 'success'" :show-text="false" /><p class="helper">{{ predictionLoading && predictionUploadProgress >= 100 ? t('predictionProcessing') : '' }}</p></div><div v-if="predictionFileColumns.length" class="ground-truth-panel"><div class="ground-truth-heading"><span>{{ t('groundTruth') }}</span><el-tag size="small" effect="plain">{{ t('optional') }}</el-tag></div><el-select v-model="groundTruthColumn" class="full-width" clearable :placeholder="t('groundTruthPlaceholder')"><el-option v-for="column in groundTruthCandidates" :key="column" :label="column" :value="column" /></el-select><p class="helper">{{ t('groundTruthHint') }}</p></div></div></el-form-item>

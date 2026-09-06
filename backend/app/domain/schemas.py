@@ -27,6 +27,8 @@ class ModelManifest(BaseModel):
     description: str
     artifact: str = "model.pkl"
     preprocess_artifact: str | None = None
+    training_dataset_id: str | None = None
+    feature_defaults: dict[str, dict[str, Any]] = Field(default_factory=dict)
     model_path: Path = Field(exclude=True)
 
 

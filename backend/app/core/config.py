@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     max_json_value_chars: int = Field(default=10_000, ge=1, le=1_000_000)
     max_json_body_bytes: int = Field(default=10 * 1024 * 1024, ge=1, le=100 * 1024 * 1024)
     api_token: str | None = None
+    optimization_population: int = Field(default=256, ge=16, le=512)
+    optimization_iterations: int = Field(default=12, ge=1, le=20)
 
 
 @lru_cache

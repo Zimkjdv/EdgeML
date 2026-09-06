@@ -1,5 +1,9 @@
 # API
 
+## Parameter optimization
+
+`GET /api/optimization/models` and `POST /api/optimization/simulate` support target-directed regression simulation, fixed/adjustable features, and 1–5 recommendations. Use the `source=trained` (default) or `source=registry` query parameter. These endpoints use existing API authentication. See [Parameter optimization](07_Parameter_Optimization.md) for request/response details and search limits.
+
 ## Observability endpoints
 
 - `GET /health` and `GET /health/live`: process liveness checks. Both return `{"status":"ok"}` while the API process is running.

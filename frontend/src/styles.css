@@ -461,10 +461,10 @@ body {
   from { opacity: 0; transform: scaleX(.35); }
   to { opacity: 1; transform: scaleX(1); }
 }
-/* Keep the full desktop navigation on one line without exposing a horizontal scrollbar. */
+/* Wrap whole tabs when needed; keep the language switch anchored at the right. */
 @media (min-width: 701px) {
-  .nav { overflow-x: hidden; padding-right: 112px; }
-  .nav .el-menu-item { flex: 1 1 0; min-width: 0; padding-right: 6px; padding-left: 6px; font-size: 15px; letter-spacing: 0; }
+  .nav { overflow-x: auto; padding-right: 112px; flex-wrap: wrap; height: auto; }
+  .nav .el-menu-item { flex: 0 0 auto; min-width: max-content; padding-right: 10px; padding-left: 10px; font-size: 15px; letter-spacing: 0; }
   .locale-zh .nav .el-menu-item { padding-right: 6px; padding-left: 6px; font-size: 16px; letter-spacing: .01em; }
   /* English labels have different intrinsic widths; keep each item intact
      instead of allowing a long label to paint over its neighbour. */
@@ -1039,6 +1039,13 @@ body {
   transform: translateY(-1px);
 }
 .registry-workspace .el-empty { min-height: 180px; }
+
+/* Navigation uses a separate fixed language control and a scrollable tab strip. */
+.navigation-bar { position: sticky; top: 14px; z-index: 10; display: flex; align-items: center; gap: 12px; padding: 6px 14px; margin-bottom: 26px; border: 1px solid #dbe5f1; border-radius: 12px; background: #fff; box-shadow: 0 10px 24px rgba(30,64,175,.08); }
+.navigation-bar .nav { position: static; flex: 1; min-width: 0; height: 52px; margin: 0; padding: 0; border: 0; border-radius: 0; box-shadow: none; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; }
+.navigation-bar .nav .el-menu-item { flex: 0 0 auto; min-width: max-content; height: 46px; margin: 0 2px; padding: 0 10px; font-size: 15px; }
+.navigation-bar .language-switch.el-button { position: static; flex: 0 0 auto; margin: 0; }
+@media (max-width: 700px) { .navigation-bar { top: 8px; gap: 6px; padding: 6px 8px; } .navigation-bar .nav .el-menu-item { font-size: 14px; padding: 0 9px; } }
 
 /* API token management workspace */
 .token-workspace {

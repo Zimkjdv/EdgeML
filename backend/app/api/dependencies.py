@@ -1,4 +1,5 @@
 from functools import lru_cache
+from typing import Literal
 import secrets
 
 from fastapi import Depends, HTTPException, Request, status
@@ -16,6 +17,16 @@ from app.services.dataset_service import DatasetService
 from app.services.training_service import TrainingService
 from app.services.model_registry_service import ModelRegistryService
 from app.services.queue_operations_service import QueueOperationsService
+from app.infrastructure.trained_model_catalog import TrainedModelCatalog
+from app.services.optimization_service import OptimizationService
+from app.services.optimization_defaults import OptimizationDefaults
+
+
+def get_optimization_service(source: Literal['trained', 'registry'] = 'trained') -> OptimizationService:
+    settings = get_settings()
+    catalog = TrainedModelCatalog(settings.trained_models_root) if source == 'trained' else get_model_registry()
+    return OptimizationService(catalog, PredictorFactory(), settings.optimization_population, settings.optimization_iterations,
+        OptimizationDefaults(settings.trained_models_root, get_dataset_service()))
 
 
 @lru_cache
