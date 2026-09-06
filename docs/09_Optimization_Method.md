@@ -13,12 +13,12 @@ absolute_error = abs(predicted_y - target_y)
 ## How the simulation works
 
 1. The user enters a numeric target `Y`, tolerance, and requested number of recommendations (up to five).
-2. The user marks which features may be recommended. Unchecked features remain fixed using training-derived defaults such as the median, mode, or an explicit value.
+2. The user marks which features may be recommended. Unchecked features remain fixed using training-derived defaults such as the median, mode, an explicit value, or a user-selected CSV data row matched by feature-name headers. CSV import updates only fixed inputs after validating the complete row; adjustable search bounds remain unchanged.
 3. Numeric bounds come from training-data minimums and maximums. Integer features support a discrete step. Categorical features use observed category choices.
 4. The service creates a mixed population of numeric and categorical candidates. It combines global random exploration with mutations around better candidates from the previous iteration.
 5. Every candidate is sent through the existing predictor and preprocessing pipeline in feature order.
 6. Candidates are ranked by absolute target error. The result selector prefers distinct combinations so that recommendations are not duplicates of one another.
-7. The API returns the recommendations, predicted values, errors, tolerance status, evaluation count, and best error observed per iteration.
+7. The API returns the recommendations, predicted values, errors, tolerance status, evaluation count, and best error observed per iteration. The UI comparison table shows only selected adjustable feature combinations plus prediction metrics. The API retains complete inputs, including fixed values. See [CSV import workflow](07_Parameter_Optimization.md#importing-fixed-inputs-from-csv).
 
 The default bounded search uses 256 candidates per iteration and 12 iterations (at most 3,072 model evaluations). A fixed seed (`42` by default) makes repeated runs reproducible for the same model, constraints, and runtime.
 

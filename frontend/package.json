@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "test:csv": "node --experimental-strip-types --test tests/optimizationCsv.test.mjs",
     "dev": "vite --host 0.0.0.0",
     "build": "vue-tsc -b && vite build"
   },

@@ -2,6 +2,8 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { locale } from './i18n'
+import { CsvImportError, parseFixedCsv, fixedCsvValues } from './optimizationCsv'
+import type { CsvData } from './optimizationCsv'
 type Model = { id: string; name: string; version: string; target: string; features: {name: string; dtype: string}[] }
 type Rule = {name: string; numeric: boolean; integer: boolean; optimize: boolean; value: string | number | null; minimum: number | null; maximum: number | null; step: number | null; choices: string[]}
 type Result = {model_name: string; target: number; tolerance: number; evaluated: number; seed: number; recommendations: {parameters: Record<string, string | number>; prediction: number; absolute_error: number; within_tolerance: boolean}[]}
@@ -17,9 +19,40 @@ const defaultsOrigin = ref(''), defaultsLoading = ref(false)
 const search = ref(''), filter = ref('all')
 const rowClass = ({row}: {row: Rule}) => row.optimize ? 'adjustable-row' : ''
 const initialRules = ref<Rule[]>([])
+const csv = ref<CsvData | null>(null), csvName = ref(''), csvRow = ref(1), csvReading = ref(false), csvError = ref('')
+const csvApplied = ref('')
+let csvRevision = 0
+function clearCsv() { csvRevision++; csv.value = null; csvName.value = ''; csvRow.value = 1; csvError.value = ''; csvApplied.value = ''; csvReading.value = false }
+function importError(e: unknown) { return e instanceof CsvImportError ? label(e.zh, e.message) : label('無法讀取 CSV，請使用 UTF-8 編碼。', 'Unable to read CSV. Use UTF-8 encoding.') }
+async function readCsv(event: Event) {
+  const input = event.target as HTMLInputElement, file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  clearCsv()
+  const version = csvRevision
+  csvReading.value = true
+  try {
+    if (file.size > 5 * 1024 * 1024) throw new CsvImportError('CSV 不可超過 5 MB。', 'CSV must not exceed 5 MB.')
+    const parsed = parseFixedCsv(new TextDecoder('utf-8', { fatal: true }).decode(await file.arrayBuffer()))
+    if (version !== csvRevision) return
+    csv.value = parsed; csvName.value = file.name
+  } catch (e) { if (version === csvRevision) csvError.value = importError(e) }
+  finally { if (version === csvRevision) csvReading.value = false }
+}
+function applyCsv() {
+  if (!csv.value) return
+  csvError.value = ''
+  try {
+    const values = fixedCsvValues(csv.value, csvRow.value - 1, rules.value)
+    rules.value = rules.value.map(rule => values.has(rule.name) ? { ...rule, value: values.get(rule.name)! } : rule)
+    csvApplied.value = `${csvName.value} · ${label('資料列', 'Data row')} ${csvRow.value} · ${values.size} ${label('個固定參數', 'fixed features')}`
+    ElMessage.success(label('已套用 CSV 固定值，待推薦參數的範圍維持原設定。', 'CSV fixed values applied. Adjustable feature bounds are unchanged.'))
+  } catch (e) { csvError.value = importError(e) }
+}
 const cloneRules = (items: Rule[]) => items.map(r => ({...r, choices: [...r.choices]}))
 const visibleRules = computed(() => rules.value.filter(r => r.name.toLocaleLowerCase().includes(search.value.trim().toLocaleLowerCase()) && (filter.value === 'all' || (filter.value === 'adjustable' ? r.optimize : !r.optimize))))
 function restoreDefaults() {
+  clearCsv()
   const selections = new Set(rules.value.filter(r => r.optimize).map(r => r.name))
   rules.value = cloneRules(initialRules.value).map(r => ({...r, optimize: selections.has(r.name)}))
 }
@@ -34,6 +67,7 @@ async function refresh() {
 }
 watch(source, refresh)
 watch(modelId, async () => {
+  clearCsv()
   const current = ++defaultsRevision
   defaultsOrigin.value = ''; defaultsLoading.value = false
   initialRules.value = []; search.value = ''; filter.value = 'all'
@@ -91,6 +125,28 @@ const fmt = (v: number) => new Intl.NumberFormat(zh.value ? 'zh-TW' : 'en', {max
         </details>
         <el-alert v-if="defaultsOrigin === 'unavailable'" type="warning" :closable="false" :title="label('找不到訓練資料或統計快照，請手動補上參數設定。', 'Training data and statistics are unavailable. Enter feature settings manually.')"/>
         <el-tag v-else-if="defaultsOrigin" class="optimization-origin">{{ defaultsOrigin === 'training_snapshot' ? label('來源：訓練時統計快照', 'Source: training snapshot') : label('來源：模型關聯的訓練資料集', 'Source: linked training dataset') }}</el-tag>
+        <div class="csv-import-panel">
+          <h4>{{ label('從 CSV 匯入固定參數', 'Import fixed features from CSV') }}</h4>
+          <p>{{ label('先勾選待推薦參數，再上傳含特徵名稱 header 的 UTF-8 CSV。CSV 必須包含所有未勾選的固定特徵；待推薦欄位與其他欄位會略過。', 'Select adjustable features first, then upload a UTF-8 CSV with feature-name headers. Include every fixed feature. Adjustable and unrelated columns are ignored.') }}</p>
+          <div class="csv-import-controls">
+            <label class="csv-file-label">{{ label('選擇 CSV（上限 5 MB）', 'Choose CSV (up to 5 MB)') }}<input type="file" accept=".csv,text/csv" :disabled="loading || defaultsLoading || csvReading" @change="readCsv" /></label>
+            <span v-if="csvReading" role="status">{{ label('讀取中…', 'Reading…') }}</span>
+            <template v-if="csv">
+              <span>{{ csvName }} · {{ csv.rows.length }} {{ label('筆資料', 'data rows') }}</span>
+              <label class="csv-row-label">{{ label('套用資料列（不含 header）', 'Data row (excluding header)') }}<el-input-number v-model="csvRow" :min="1" :max="csv.rows.length" :step-strictly="true" /></label>
+              <el-button type="primary" plain :disabled="csvReading || rules.length === adjustable" @click="applyCsv">{{ label('套用至固定參數', 'Apply to fixed features') }}</el-button>
+              <el-button @click="clearCsv">{{ label('清除檔案', 'Clear file') }}</el-button>
+            </template>
+          </div>
+          <el-alert v-if="csvError" :title="csvError" type="error" :closable="false" />
+          <details v-if="csv" class="optimization-help"><summary>{{ label('預覽這一列的固定值', 'Preview fixed values for this row') }}</summary>
+            <el-table :data="rules.filter(rule => !rule.optimize).map(rule => ({ name: rule.name, value: csv!.rows[csvRow - 1]?.[csv!.headers.indexOf(rule.name)] ?? label('缺少欄位', 'Missing column') }))" :max-height="240" size="small">
+              <el-table-column prop="name" :label="label('固定特徵', 'Fixed feature')" min-width="160" />
+              <el-table-column prop="value" :label="label('CSV 值（尚未套用）', 'CSV value (preview)')" min-width="180" show-overflow-tooltip />
+            </el-table>
+          </details>
+          <p v-if="csvApplied" class="csv-applied" role="status">{{ label('上次套用', 'Last applied') }}: {{ csvApplied }} · {{ label('套用後仍可手動修改固定值。', 'Fixed values remain editable after import.') }}</p>
+        </div>
         <div class="feature-toolbar">
           <el-input v-model="search" clearable :placeholder="label('搜尋特徵名稱', 'Search features')" :aria-label="label('搜尋特徵名称', 'Search features')"/>
           <el-radio-group v-model="filter" :aria-label="label('篩選特徵', 'Filter features')"><el-radio-button value="all">{{ label('全部', 'All') }} {{ rules.length }}</el-radio-button><el-radio-button value="adjustable">{{ label('待推薦', 'Adjustable') }} {{ adjustable }}</el-radio-button><el-radio-button value="fixed">{{ label('固定', 'Fixed') }} {{ rules.length-adjustable }}</el-radio-button></el-radio-group>
@@ -117,7 +173,8 @@ const fmt = (v: number) => new Intl.NumberFormat(zh.value ? 'zh-TW' : 'en', {max
     <el-alert :closable="false" type="info" :title="label('以下為模型預測，並非實測或保證達標；套用前請驗證製程可行性。未達目標時仍顯示最接近的候選。', 'These are model predictions, not measurements or guaranteed outcomes. Validate operating feasibility before use. Closest candidates are shown even if the target is not reached.')"/>
     <p>{{ label('目標', 'Target') }}: {{ fmt(result.target) }} ± {{ fmt(result.tolerance) }} · {{ label('已評估候選', 'Candidates evaluated') }}: {{ result.evaluated }}</p>
     <p v-if="result.recommendations.length < count">{{ label('可用的不同組合少於要求組數。', 'Fewer distinct combinations are available than requested.') }}</p>
-    <el-table :data="[{name: label('預測 Y', 'Predicted Y'), values: result.recommendations.map(r => fmt(r.prediction))}, {name: label('絕對誤差', 'Absolute error'), values: result.recommendations.map(r => fmt(r.absolute_error))}, {name: label('目標判定', 'Target status'), values: result.recommendations.map(r => r.within_tolerance ? label('容許範圍內', 'Within tolerance') : label('未達目標', 'Outside tolerance'))}, ...rules.map(rule => ({name: rule.name + (rule.optimize ? '' : label('（固定）', ' (fixed)')), values: result!.recommendations.map(r => typeof r.parameters[rule.name] === 'number' ? fmt(r.parameters[rule.name] as number) : String(r.parameters[rule.name]))}))]" stripe border>
+    <p class="optimization-summary">{{ label('僅顯示勾選的待推薦參數；固定參數已用於計算，可在上方「固定」篩選中查看。', 'Only selected adjustable features are shown. Fixed features are included in the calculation and can be reviewed in the Fixed filter above.') }}</p>
+    <el-table :data="[{name: label('預測 Y', 'Predicted Y'), values: result.recommendations.map(r => fmt(r.prediction))}, {name: label('絕對誤差', 'Absolute error'), values: result.recommendations.map(r => fmt(r.absolute_error))}, {name: label('目標判定', 'Target status'), values: result.recommendations.map(r => r.within_tolerance ? label('容許範圍內', 'Within tolerance') : label('未達目標', 'Outside tolerance'))}, ...rules.filter(rule => rule.optimize).map(rule => ({name: rule.name, values: result!.recommendations.map(r => typeof r.parameters[rule.name] === 'number' ? fmt(r.parameters[rule.name] as number) : String(r.parameters[rule.name]))}))]" stripe border>
       <el-table-column prop="name" :label="label('項目', 'Item')" min-width="200" fixed/>
       <el-table-column v-for="(_, i) in result.recommendations" :key="i" :label="label('組合 ', 'Combination ') + (i+1)" min-width="170"><template #default="{row}">{{ row.values[i] }}</template></el-table-column>
     </el-table>
@@ -126,6 +183,14 @@ const fmt = (v: number) => new Intl.NumberFormat(zh.value ? 'zh-TW' : 'en', {max
 
 <style scoped>
 .optimization-note {color:#48617f;line-height:1.7;margin:0 0 20px}
+.csv-import-panel {margin:16px 0;padding:16px 18px;border:1px solid #dce7f5;border-radius:12px;background:#f8fbff}
+.csv-import-panel h4 {margin:0 0 8px;color:#254f7e;font-size:15px}
+.csv-import-panel p {color:#58708c;font-size:13px;line-height:1.6;margin:8px 0}
+.csv-import-controls {display:flex;align-items:center;flex-wrap:wrap;gap:12px;font-size:13px;color:#49647f}
+.csv-file-label,.csv-row-label {display:flex;flex-direction:column;gap:6px;max-width:100%}
+.csv-file-label input {font:inherit;max-width:100%;width:270px}
+.csv-row-label :deep(.el-input-number) {width:150px}
+.csv-import-panel :deep(.el-alert) {margin-top:12px}
 .optimization-origin {margin-bottom:14px}
 .optimization-controls {display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:16px}
 .optimization-controls .el-select,.optimization-controls .el-input-number {width:100%}

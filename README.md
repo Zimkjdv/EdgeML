@@ -324,7 +324,7 @@ When updating an existing local environment after pulling the training module, r
 
 The workspace now uses a grouped, collapsible left sidebar instead of horizontal tabs, with a compact page-title toolbar and a stationary language switch. Desktop collapse preference is remembered locally; screens up to 900 px use a navigation drawer. See [Workspace navigation](docs/08_Workspace_Navigation.md).
 
-The optimization editor includes compact feature rows, search and All/Adjustable/Fixed filters, highlighted adjustable parameters, restore-default controls, and a sticky simulation action bar. Model selection and target settings are grouped separately; detailed guidance and random seed settings can be expanded as needed.
+The optimization editor includes compact feature rows, search and All/Adjustable/Fixed filters, highlighted adjustable parameters, restore-default controls, and a sticky simulation action bar. Fixed inputs can be imported from a UTF-8 CSV with feature-name headers: select and preview one data row, then apply it to all fixed features. Adjustable search bounds remain unchanged. The result table shows only selected adjustable features alongside prediction metrics; the API retains full input combinations. Model selection and target settings are grouped separately; detailed guidance and random seed settings can be expanded as needed.
 
 Optimization now prefills numeric ranges and fixed median/mode values from the model's training dataset. New models save a statistics snapshot in metadata; old models resolve `record.json` dataset provenance. Defaults remain editable and missing source data is explicitly flagged. Language switching remains separate from page navigation.
 

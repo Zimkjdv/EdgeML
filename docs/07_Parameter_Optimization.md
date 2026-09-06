@@ -9,7 +9,8 @@ This feature searches for input combinations X whose model-predicted Y is close 
 3. Check the features that may change. Every unchecked feature must have a fixed value.
 4. For adjustable numeric features, enter minimum and maximum values and an optional step. A step is anchored at the minimum: `minimum + k * step`, never above the maximum. Integer features require integer bounds and steps (default step 1).
 5. For adjustable categorical features, enter the allowed category labels and press Enter after each label. Use the same labels as the training data.
-6. Run the simulation. Compare predicted Y, absolute target error, tolerance status, and the full input combination for each recommendation. Fixed inputs are marked explicitly.
+6. Optionally import fixed inputs from a CSV as described below, preview a data row, and apply it before simulation.
+7. Run the simulation. Compare predicted Y, absolute target error, tolerance status, and only the selected adjustable features for each recommendation. Fixed inputs still participate in prediction and remain visible in the editor's Fixed filter; they are omitted from the result table.
 
 Bounds and fixed values are prefilled from training statistics: numeric minima/maxima and medians, or categorical modes and up to 100 allowed labels. Integer defaults use the observed value nearest the median. All values remain editable. Constant numeric features are fixed initially. Columns without usable observations still require manual values. These independent column defaults may not describe a combination actually observed in training. Use actual operating values where available; training ranges are not safety limits. Predictions do not establish causal effects or guarantee production outcomes.
 
@@ -18,6 +19,26 @@ New training runs preserve `training_dataset_id` and `feature_defaults` in both 
 `GET /api/optimization/models/{model_id}/defaults?source=trained` (or `registry`) returns `origin`, `dataset_id`, and per-feature defaults. The UI ignores stale responses when switching models. Open Optimization from the Predict & simulate group in the shared sidebar.
 
 ## Search behavior
+
+### Importing fixed inputs from CSV
+
+Select the adjustable features first, then use **Import fixed features from CSV**. The file must be UTF-8 (a UTF-8 BOM is accepted), include feature names in its header, and contain at least one data row. Header matching is case-sensitive after trimming surrounding whitespace. Include every currently fixed feature. Adjustable feature columns and unrelated columns (for example the target Y) are ignored; they do not change search bounds or the requested target.
+
+For example, if `Speed` is adjustable and `Weight` and `Grade` are fixed:
+
+```csv
+Weight,Grade
+225,A
+230,B
+```
+
+Choose data row 1 or 2 (the header is not counted), optionally expand the fixed-value preview, then select **Apply to fixed features**. All fixed inputs come from that single row, not per-column averages. Files may also contain the full model feature set. Multi-row files do not start multiple simulations automatically.
+
+Import validates all fixed values before applying any changes. Missing fixed headers, empty fixed values, invalid/nonfinite numeric values, fractional or unsafe integer values, duplicate/empty headers, malformed quotes, and inconsistent row widths are rejected. Numeric values support decimal/scientific notation; categorical strings retain leading zeros. Surrounding value whitespace is trimmed. Quoted commas, escaped quotes, quoted newlines, CRLF, and blank lines are supported.
+
+Limits are 5 MB, 10,000 data rows, 512 columns, and 1,000 characters per cell. Parsing occurs locally in the browser; the file is not uploaded to Dataset Management or stored on the server. The applied fixed values are included in the next normal simulation request. Changing the selected CSV row only updates the preview until Apply is clicked. Clearing the file keeps already-applied fixed values. Restoring training defaults clears the import state and resets values; changing models clears the file as well. Fixed values remain manually editable after import.
+
+The API still returns complete input combinations for reproducibility and integration compatibility; only the UI result table omits fixed features. Run `npm run test:csv` in `frontend` (Node 22.6+ with type stripping) for parser and import-validation tests.
 
 ### Feature editor controls
 
