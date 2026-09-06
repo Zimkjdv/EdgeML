@@ -336,5 +336,5 @@ Parameter Optimization is available as a new bilingual page: select a trained re
 
 ## Documentation
 
-See [docs/01_Project.md](docs/01_Project.md) for the roadmap, [docs/02_API.md](docs/02_API.md) for API contracts, [docs/04_Architecture.md](docs/04_Architecture.md) for the design, and [docs/05_Deployment.md](docs/05_Deployment.md) for runtime instructions.
+See [docs/01_Project.md](docs/01_Project.md) for the roadmap, [docs/02_API.md](docs/02_API.md) for API contracts, [docs/04_Architecture.md](docs/04_Architecture.md) for the design, [docs/09_Optimization_Method.md](docs/09_Optimization_Method.md) for the reverse-search method, and [docs/05_Deployment.md](docs/05_Deployment.md) for runtime instructions.
 See [DEVELOPMENT_MEMO.md](DEVELOPMENT_MEMO.md) for local development, Docker verification, and Git workflow.
