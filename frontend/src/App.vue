@@ -2,7 +2,7 @@
 import { computed, nextTick, onMounted, onUnmounted, onUpdated, ref, watch } from 'vue'
 import { Download, QuestionFilled, UploadFilled } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { locale, t, toggleLocale } from './i18n'
+import { locale, t } from './i18n'
 import OptimizationPage from './OptimizationPage.vue'
 import WorkspaceNavigation from './WorkspaceNavigation.vue'
 
@@ -445,9 +445,8 @@ onMounted(async () => {
 </script>
 
 <template>
-  <main class="page-shell" :class="locale === 'en' ? 'locale-en' : 'locale-zh'">
-    <section class="hero"><p class="eyebrow">{{ t('brandTag') }}</p><h1>{{ t('brandTitle') }}</h1><p>{{ t('brandDescription') }}</p></section>
-    <WorkspaceNavigation v-model="activePage" />
+  <div :class="locale === 'en' ? 'locale-en' : 'locale-zh'">
+    <WorkspaceNavigation v-model="activePage">
 
     <OptimizationPage v-if="activePage === 'optimization'" :api="api" />
     <section v-else-if="activePage === 'prediction'">
@@ -568,5 +567,6 @@ onMounted(async () => {
         <el-empty v-if="!apiTokens.length" :description="t('noApiTokens')" />
       </el-card>
     </section>
-  </main>
+    </WorkspaceNavigation>
+  </div>
 </template>

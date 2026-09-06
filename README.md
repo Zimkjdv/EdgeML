@@ -322,9 +322,11 @@ When updating an existing local environment after pulling the training module, r
 
 ## Future roadmap
 
+The workspace now uses a grouped, collapsible left sidebar instead of horizontal tabs, with a compact page-title toolbar and a stationary language switch. Desktop collapse preference is remembered locally; screens up to 900 px use a navigation drawer. See [Workspace navigation](docs/08_Workspace_Navigation.md).
+
 The optimization editor includes compact feature rows, search and All/Adjustable/Fixed filters, highlighted adjustable parameters, restore-default controls, and a sticky simulation action bar. Model selection and target settings are grouped separately; detailed guidance and random seed settings can be expanded as needed.
 
-Optimization now prefills numeric ranges and fixed median/mode values from the model's training dataset. New models save a statistics snapshot in metadata; old models resolve `record.json` dataset provenance. Defaults remain editable and missing source data is explicitly flagged. Navigation keeps language switching separate from the scrollable tabs.
+Optimization now prefills numeric ranges and fixed median/mode values from the model's training dataset. New models save a statistics snapshot in metadata; old models resolve `record.json` dataset provenance. Defaults remain editable and missing source data is explicitly flagged. Language switching remains separate from page navigation.
 
 Parameter Optimization is available as a new bilingual page: select a trained regression model (including drafts) or an active registry model, set target Y, fix unselected X features, and search for 1–5 input combinations within numeric bounds/steps or allowed categories. Results show predicted Y, target error, and tolerance status. See [Parameter optimization simulation](docs/07_Parameter_Optimization.md) for setup, API examples, limitations, and follow-up plans.
 

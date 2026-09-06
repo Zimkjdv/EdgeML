@@ -15,7 +15,7 @@ Bounds and fixed values are prefilled from training statistics: numeric minima/m
 
 New training runs preserve `training_dataset_id` and `feature_defaults` in both `metadata.json` and the record manifest, so publication retains them and defaults survive dataset removal. Older models use `record.json -> settings.dataset_id` to find the original dataset, excluding rows missing the target and following the training drop-missing setting. Old registered models are linked back to their local training record by model ID. If neither a snapshot nor source data exists, the UI explicitly asks for manual input. Existing artifacts are not rewritten automatically.
 
-`GET /api/optimization/models/{model_id}/defaults?source=trained` (or `registry`) returns `origin`, `dataset_id`, and per-feature defaults. The UI ignores stale responses when switching models. Navigation now scrolls whole tabs on one row, with the language button in its own stationary area.
+`GET /api/optimization/models/{model_id}/defaults?source=trained` (or `registry`) returns `origin`, `dataset_id`, and per-feature defaults. The UI ignores stale responses when switching models. Open Optimization from the Predict & simulate group in the shared sidebar.
 
 ## Search behavior
 
@@ -25,7 +25,7 @@ The editor separates model selection, target settings, and feature selection. Se
 
 Restore training defaults resets all feature values, bounds, steps, and category choices while preserving the selected adjustable features; target settings are unchanged. It is unavailable when no defaults could be loaded. Detailed guidance and the random seed are in expandable sections. The sticky action bar shows total adjustable/fixed counts and requested recommendations; enter a target and select at least one adjustable feature to enable simulation.
 
-The shared bilingual navigation uses consistent typography and compact selected-page styling. Overflowing tabs can be browsed with left/right buttons or touch scrolling; the native scrollbar is hidden. The language switch stays on the right, and switching languages keeps the active page visible. Keyboard focus remains visible.
+The shared bilingual navigation uses a collapsible grouped sidebar with consistent typography and selected-page styling. The language switch stays at the right of the compact toolbar. See [Workspace navigation](08_Workspace_Navigation.md) for responsive and keyboard behavior.
 
 The service uses seeded mixed-variable population search, with global random exploration and mutations around better candidates. Default limits are 256 candidates per iteration and 12 iterations (at most 3,072 distinct model evaluations). Configure `EDGEML_OPTIMIZATION_POPULATION` (16–512) and `EDGEML_OPTIMIZATION_ITERATIONS` (1–20) in the backend environment. Launchers currently read only the API token from the root `.env`; export other settings explicitly for local execution or add them to the Compose backend environment.
 
