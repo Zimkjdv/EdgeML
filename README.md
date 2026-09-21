@@ -340,6 +340,8 @@ Parameter Optimization is available as a new bilingual page: select a trained re
 
 Parameter Optimization now prioritizes in-tolerance recommendations, validates inputs immediately, supports optional operating-baseline comparisons, and handles decimal steps consistently. See [optimization review and remaining work](docs/13_Optimization_Review.md).
 
+The optimization page displays search elapsed time, the target interval, evaluated combination counts, and green/orange recommendation status. Candidate count, step and seed have explanatory tooltips. After completion, a convergence chart and exact per-iteration errors help assess improvement. Defaults show actual feature coverage and warn when category choices were truncated to 100. Real progress percentages and cancellation remain future backend work.
+
 Regression evaluation now uses positionally paired predictions and unified OOF validation metrics. Undefined metrics display as `—`; legacy validation records require retraining. See [Regression metric definitions](docs/12_Regression_Metrics.md) for formulas, zero-target MAPE handling, NRMSE normalization, and fold statistics.
 
 See [docs/01_Project.md](docs/01_Project.md) for the roadmap, [docs/02_API.md](docs/02_API.md) for API contracts, [docs/04_Architecture.md](docs/04_Architecture.md) for the design, [docs/09_Optimization_Method.md](docs/09_Optimization_Method.md) for the reverse-search method, and [docs/05_Deployment.md](docs/05_Deployment.md) for runtime instructions.

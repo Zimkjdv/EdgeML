@@ -1,22 +1,26 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import { InfoFilled, Loading } from '@element-plus/icons-vue'
 import { locale } from './i18n'
 import { CsvImportError, parseFixedCsv, fixedCsvValues } from './optimizationCsv'
 import { ruleErrors } from './optimizationValidation'
+import { parameterPayload, defaultsCoverage, convergenceChart } from './optimizationPresentation'
 import type { CsvData } from './optimizationCsv'
 type Model = { id: string; name: string; version: string; target: string; features: {name: string; dtype: string}[] }
-type Rule = {name: string; numeric: boolean; integer: boolean; optimize: boolean; value: string | number | null; minimum: number | null; maximum: number | null; step: number | null; choices: string[]}
-type Result = {baseline?: {parameters: Record<string, string | number>; prediction: number; absolute_error: number} | null; model_name: string; target: number; tolerance: number; evaluated: number; seed: number; recommendations: {parameters: Record<string, string | number>; prediction: number; absolute_error: number; within_tolerance: boolean}[]}
+type Rule = {name: string; numeric: boolean; integer: boolean; optimize: boolean; value: string | number | null; minimum: number | null; maximum: number | null; step: number | null; choices: string[]; choices_truncated?: boolean}
+type Result = {baseline?: {parameters: Record<string, string | number>; prediction: number; absolute_error: number} | null; model_name: string; target: number; tolerance: number; evaluated: number; seed: number; best_error_by_iteration: number[]; recommendations: {parameters: Record<string, string | number>; prediction: number; absolute_error: number; within_tolerance: boolean}[]}
 const props = defineProps<{api: <T>(url: string, init?: RequestInit) => Promise<T>}>()
 const zh = computed(() => locale.value !== 'en')
 const label = (cn: string, en: string) => zh.value ? cn : en
 const source = ref('trained'), models = ref<Model[]>([]), modelId = ref(''), rules = ref<Rule[]>([])
 const target = ref<number | null>(null), tolerance = ref(0.01), count = ref(3), seed = ref(42)
-const loading = ref(false), fetching = ref(false), result = ref<Result | null>(null)
+const loading = ref(false), fetching = ref(false), result = ref<Result | null>(null), elapsedSeconds = ref(0)
+let elapsedTimer: ReturnType<typeof setInterval> | undefined
 const selected = computed(() => models.value.find(m => m.id === modelId.value))
 const adjustable = computed(() => rules.value.filter(r => r.optimize).length)
 const defaultsOrigin = ref(''), defaultsLoading = ref(false)
+const defaultsCount = ref(0)
 const search = ref(''), filter = ref('all')
 const rowClass = ({row}: {row: Rule}) => row.optimize ? 'adjustable-row' : ''
 const initialRules = ref<Rule[]>([])
@@ -39,6 +43,9 @@ function changeText(name: string, value: string | number) {
 }
 let csvRevision = 0
 function clearCsv() { csvRevision++; csv.value = null; csvName.value = ''; csvRow.value = 1; csvError.value = ''; csvApplied.value = ''; csvReading.value = false }
+function stopElapsed() { if (elapsedTimer) { clearInterval(elapsedTimer); elapsedTimer = undefined } }
+function startElapsed() { stopElapsed(); elapsedSeconds.value = 0; const started = performance.now(); elapsedTimer = setInterval(() => { elapsedSeconds.value = Math.floor((performance.now() - started) / 1000) }, 1000) }
+onUnmounted(() => { stopElapsed(); defaultsRevision++; revision++; clearCsv() })
 function importError(e: unknown) { return e instanceof CsvImportError ? label(e.zh, e.message) : label('無法讀取 CSV，請使用 UTF-8 編碼。', 'Unable to read CSV. Use UTF-8 encoding.') }
 async function readCsv(event: Event) {
   const input = event.target as HTMLInputElement, file = input.files?.[0]
@@ -86,6 +93,7 @@ watch(modelId, async () => {
   clearCsv()
   const current = ++defaultsRevision
   defaultsOrigin.value = ''; defaultsLoading.value = false
+  defaultsCount.value = 0
   initialRules.value = []; search.value = ''; filter.value = 'all'
   target.value = null
   rules.value = (selected.value?.features ?? []).map(f => ({name: f.name, numeric: /^(float|int)/.test(f.dtype), integer: f.dtype.startsWith('int'), optimize: false, value: null, minimum: null, maximum: null, step: null, choices: []}))
@@ -95,9 +103,11 @@ watch(modelId, async () => {
     const data = await props.api<{origin:string; features:Record<string, {value:string|number; minimum:number|null; maximum:number|null; choices:string[]; choices_truncated?:boolean}>}>(`/api/optimization/models/${encodeURIComponent(modelId.value)}/defaults?source=${source.value}`)
     if (current !== defaultsRevision) return
     defaultsOrigin.value = data.origin
+    defaultsCount.value = defaultsCoverage(rules.value.map(r => r.name), data.features)
+    if (!defaultsCount.value) defaultsOrigin.value = 'unavailable'
     rules.value = rules.value.map(rule => {
       const defaults = data.features[rule.name]
-      return defaults ? {...rule, value:defaults.value, minimum:defaults.minimum, maximum:defaults.maximum, choices:defaults.choices, step:rule.integer ? 1 : null} : rule
+      return defaults ? {...rule, value:defaults.value, minimum:defaults.minimum, maximum:defaults.maximum, choices:defaults.choices, choices_truncated: defaults.choices_truncated, step:rule.integer ? 1 : null} : rule
     })
     initialRules.value = cloneRules(rules.value)
   } catch (e) { if (current === defaultsRevision) { defaultsOrigin.value = 'unavailable'; ElMessage.error(String(e)) } }
@@ -106,6 +116,7 @@ watch(modelId, async () => {
 watch([rules, target, tolerance, count, seed, modelId, compareBaseline], () => { result.value = null }, {deep: true})
 onMounted(refresh)
 async function simulate() {
+  if (loading.value) return
   if (!selected.value || target.value === null || !adjustable.value) {
     ElMessage.warning(label('請選擇模型、輸入目標值並勾選至少一個推薦參數。', 'Choose a model, enter a target, and select at least one adjustable feature.')); return
   }
@@ -113,13 +124,17 @@ async function simulate() {
     if (validation.value.length) locateError(validation.value[0].name)
     ElMessage.warning(label('請先修正標示的欄位。', 'Correct the highlighted fields first.')); return
   }
-  loading.value = true; result.value = null
+  loading.value = true; result.value = null; startElapsed()
   try {
-    result.value = await props.api<Result>(`/api/optimization/simulate?source=${source.value}`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({model_id: modelId.value, target: target.value, tolerance: tolerance.value, count: count.value, seed: seed.value, compare_baseline: compareBaseline.value, parameters: rules.value.map(({numeric, integer, ...rule}) => rule)})})
+    result.value = await props.api<Result>(`/api/optimization/simulate?source=${source.value}`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({model_id: modelId.value, target: target.value, tolerance: tolerance.value, count: count.value, seed: seed.value, compare_baseline: compareBaseline.value, parameters: rules.value.map(parameterPayload)})})
   } catch (e) { ElMessage.error(String(e)) }
-  finally { loading.value = false }
+  finally { loading.value = false; stopElapsed() }
 }
 const fmt = (v: number) => new Intl.NumberFormat(zh.value ? 'zh-TW' : 'en', {maximumFractionDigits: 6}).format(v)
+const targetLow = computed(() => result.value ? result.value.target - result.value.tolerance : 0)
+const targetHigh = computed(() => result.value ? result.value.target + result.value.tolerance : 0)
+const achievedCount = computed(() => result.value?.recommendations.filter(r => r.within_tolerance).length ?? 0)
+const convergence = computed(() => convergenceChart(result.value?.best_error_by_iteration ?? []))
 </script>
 
 <template>
@@ -139,7 +154,9 @@ const fmt = (v: number) => new Intl.NumberFormat(zh.value ? 'zh-TW' : 'en', {max
       <el-empty v-if="!models.length && !fetching" :description="label('目前沒有可用的回歸模型，請先完成訓練或切換模型來源。', 'No regression models available. Train a model or change the source.')"/>
       <template v-if="selected">
         <div class="optimization-heading"><h3>{{ label('3 · 選擇推薦參數', '3 · Choose adjustable features') }}</h3><el-tag>{{ adjustable }} {{ label('個推薦參數', 'adjustable features') }}</el-tag></div>
-        <p class="optimization-summary">{{ label('已帶入訓練資料預設值，可自行調整。只勾選要推薦的參數，其餘保持固定。', 'Training defaults are prefilled and editable. Select features to recommend; the rest stay fixed.') }}</p>
+        <p class="optimization-summary" v-if="defaultsLoading" role="status">{{ label('正在載入訓練預設值…', 'Loading training defaults…') }}</p>
+        <p class="optimization-summary" v-else-if="defaultsCount > 0">{{ label(`已帶入 ${defaultsCount}／${rules.length} 個特徵的訓練預設值，可自行調整。`, `Training defaults loaded for ${defaultsCount}/${rules.length} features; values remain editable.`) }}<span v-if="defaultsCount < rules.length" class="outside-text">{{ label('其餘特徵沒有預設值，請手動設定。', 'Enter missing feature settings manually.') }}</span></p>
+        <p class="optimization-summary" v-else-if="defaultsOrigin === 'unavailable'">{{ label('找不到訓練資料預設值，請手動設定所有參數。', 'Training defaults were not found. Enter all parameter settings manually.') }}</p>
         <details class="optimization-help"><summary>{{ label('預設值與使用說明', 'About defaults and operating limits') }}</summary>
         <p class="optimization-note">{{ label('範圍自動帶入訓練資料的最小／最大值；固定值預設為中位數（數值）或眾數（類別），可改成目前製程值。這些是統計基準，不代表目前設備狀態或安全操作範圍。類別選項最多自動帶入 100 個，可自行調整。', 'Bounds use training minima/maxima. Fixed inputs default to the median (numeric) or mode (categorical); replace them with current operating values when needed. These are statistical baselines, not current equipment state or safe operating limits. Up to 100 category choices are prefilled and can be edited.') }}</p>
         </details>
@@ -179,38 +196,61 @@ const fmt = (v: number) => new Intl.NumberFormat(zh.value ? 'zh-TW' : 'en', {max
         <el-table :data="visibleRules" row-key="name" :max-height="520" :empty-text="label('沒有符合條件的特徵', 'No matching features')" :row-class-name="rowClass" class="optimization-table" stripe>
           <el-table-column :label="label('推薦', 'Adjust')" width="85"><template #default="{row}"><el-checkbox v-model="row.optimize" :aria-label="row.name" :disabled="loading || defaultsLoading"/></template></el-table-column>
           <el-table-column prop="name" :label="label('特徵名稱', 'Feature')" min-width="180" show-overflow-tooltip/>
-          <el-table-column :label="label('類型', 'Type')" width="100"><template #default="{row}">{{ row.numeric ? label(row.integer ? '整數' : '數值', row.integer ? 'Integer' : 'Numeric') : label('類別', 'Category') }}</template></el-table-column>
+          <el-table-column :label="label('類型', 'Type')" width="130"><template #default="{row}"><span>{{ row.numeric ? label(row.integer ? '整數' : '數值', row.integer ? 'Integer' : 'Numeric') : label('類別', 'Category') }}</span><el-tooltip v-if="row.choices_truncated" :content="label('訓練類別超過 100 個，預填已截斷；請替換成需要搜尋的類別，每次最多 100 個。', 'Training categories exceed 100; defaults are truncated. Replace choices as needed, keeping at most 100.')"><el-icon class="hint-icon"><InfoFilled /></el-icon></el-tooltip></template></el-table-column>
           <el-table-column v-if="compareBaseline" :label="label('目前／基準值', 'Current / baseline')" min-width="180"><template #default="{row}"><el-input-number v-if="row.numeric" v-model="row.value" :controls="false"/><el-input v-else v-model="row.value" maxlength="1000"/></template></el-table-column>
           <el-table-column :label="label('固定值／搜尋範圍', 'Fixed value / search bounds')" min-width="470"><template #default="{row}">
-            <div v-if="row.optimize && row.numeric" class="optimization-bounds"><label>{{ label('最小值', 'Minimum') }}<el-input-number v-model="row.minimum" :controls="false"/></label><span>—</span><label>{{ label('最大值', 'Maximum') }}<el-input-number v-model="row.maximum" :controls="false"/></label><label>{{ label('步距（選填）', 'Step (optional)') }}<el-input-number v-model="row.step" :controls="false"/></label></div>
+            <div v-if="row.optimize && row.numeric" class="optimization-bounds"><label>{{ label('最小值', 'Minimum') }}<el-input-number v-model="row.minimum" :controls="false"/></label><span>—</span><label>{{ label('最大值', 'Maximum') }}<el-input-number v-model="row.maximum" :controls="false"/></label><label><el-tooltip :content="label('從最小值起，每次增加此間隔。例如最小 10、步距 2，可選 10、12、14。小數特徵留白時連續取樣；整數特徵留白時步距為 1。', 'Grid spacing anchored at the minimum: min 10, step 2 gives 10, 12, 14. Blank means continuous sampling for decimals, or step 1 for integers.')"><span>{{ label('步距（選填）', 'Step (optional)') }} <el-icon class="hint-icon"><InfoFilled /></el-icon></span></el-tooltip><el-input-number v-model="row.step" :controls="false"/></label></div>
             <el-select v-else-if="row.optimize" v-model="row.choices" multiple filterable allow-create default-first-option :placeholder="label('輸入選項並按 Enter', 'Type a choice and press Enter')"/>
             <el-input-number v-else-if="row.numeric" v-model="row.value" :controls="false" :placeholder="label('固定值', 'Fixed value')"/>
             <el-input v-else v-model="row.value" :placeholder="label('固定類別', 'Fixed category')" maxlength="1000"/>
             <p v-for="code in ruleErrors(row, compareBaseline)" :key="code" class="field-error">{{ errorText(code) }}</p>
           </template></el-table-column>
         </el-table>
-        <details class="optimization-help advanced-settings"><summary>{{ label('進階設定', 'Advanced settings') }}</summary><el-form-item :label="label('隨機種子', 'Random seed')"><el-input-number v-model="seed" :min="0" :max="4294967295" :step-strictly="true"/></el-form-item></details>
-        <div class="optimization-actions"><div><strong>{{ adjustable }} {{ label('個推薦參數', 'adjustable features') }}</strong><span> · {{ rules.length-adjustable }} {{ label('個固定參數', 'fixed features') }}</span><p>{{ label('推薦組數', 'Recommendations') }}: {{ count }} · {{ target == null ? label('請輸入目標 Y', 'Enter target Y') : `Y = ${fmt(target)}` }}</p></div><el-button type="primary" :loading="loading" :disabled="!adjustable || generalError || validation.length > 0" @click="simulate">{{ label('開始模擬', 'Run simulation') }}</el-button></div>
+        <details class="optimization-help advanced-settings"><summary>{{ label('進階設定', 'Advanced settings') }}</summary><el-form-item><template #label><el-tooltip :content="label('相同模型與設定使用相同種子可重現搜尋結果。', 'The same seed makes a search reproducible for the same model and settings.')"><span>{{ label('隨機種子', 'Random seed') }} <el-icon class="hint-icon"><InfoFilled /></el-icon></span></el-tooltip></template><el-input-number v-model="seed" :min="0" :max="4294967295" :step-strictly="true"/></el-form-item></details>
+        <div class="optimization-actions"><div><strong>{{ adjustable }} {{ label('個推薦參數', 'adjustable features') }}</strong><span> · {{ rules.length-adjustable }} {{ label('個固定參數', 'fixed features') }}</span><p>{{ label('推薦組數', 'Recommendations') }}: {{ count }} · {{ target == null ? label('請輸入目標 Y', 'Enter target Y') : `Y = ${fmt(target)}` }}</p></div><div class="search-status" v-if="loading" role="status"><el-icon class="is-loading"><Loading /></el-icon> {{ label('搜尋中 · 已耗時', 'Searching · Elapsed') }} {{ elapsedSeconds }} {{ label('秒', 's') }}</div><el-button type="primary" :loading="loading" :disabled="!adjustable || generalError || validation.length > 0" @click="simulate">{{ label('開始模擬', 'Run simulation') }}</el-button></div>
       </template>
     </el-form>
   </el-card>
   <el-card v-if="result" class="workspace optimization-workspace">
     <template #header>{{ label('參數推薦結果', 'Recommended combinations') }} · {{ result.model_name }}</template>
     <el-alert :closable="false" type="info" :title="label('以下為模型預測，並非實測或保證達標；套用前請驗證製程可行性。未達目標時仍顯示最接近的候選。', 'These are model predictions, not measurements or guaranteed outcomes. Validate operating feasibility before use. Closest candidates are shown even if the target is not reached.')"/>
-    <p>{{ label('目標', 'Target') }}: {{ fmt(result.target) }} ± {{ fmt(result.tolerance) }} · {{ label('已評估候選', 'Candidates evaluated') }}: {{ result.evaluated }}</p>
+    <p><el-tooltip :content="label('搜尋實際檢查過的不同參數組合數，不是回傳結果數。', 'Distinct parameter combinations actually evaluated, not the number returned.')"><span>{{ label('已評估', 'Evaluated') }} <el-icon class="hint-icon"><InfoFilled /></el-icon></span></el-tooltip> {{ new Intl.NumberFormat(zh ? 'zh-TW' : 'en').format(result.evaluated) }} {{ label('組參數組合', 'parameter combinations') }} · {{ label('目標區間', 'Target interval') }}: {{ fmt(targetLow) }}～{{ fmt(targetHigh) }} · {{ label('回傳', 'Returned') }} {{ result.recommendations.length }} {{ label('組，其中', 'results, ') }}<span :class="achievedCount ? 'within-text' : 'outside-text'">{{ achievedCount }} {{ label('組達標', 'within tolerance') }}</span></p>
     <p v-if="result.baseline">{{ label('基準預測 Y', 'Baseline predicted Y') }}: {{ fmt(result.baseline.prediction) }} · {{ label('基準絕對誤差', 'Baseline absolute error') }}: {{ fmt(result.baseline.absolute_error) }}</p>
     <p v-if="result.recommendations.length < count">{{ label('可用的不同組合少於要求組數。', 'Fewer distinct combinations are available than requested.') }}</p>
     <p class="optimization-summary">{{ label('僅顯示勾選的待推薦參數；固定參數已用於計算，可在上方「固定」篩選中查看。', 'Only selected adjustable features are shown. Fixed features are included in the calculation and can be reviewed in the Fixed filter above.') }}</p>
-    <el-table :data="[{name: label('預測 Y', 'Predicted Y'), values: result.recommendations.map(r => fmt(r.prediction))}, {name: label('絕對誤差', 'Absolute error'), values: result.recommendations.map(r => fmt(r.absolute_error))}, {name: label('目標判定', 'Target status'), values: result.recommendations.map(r => r.within_tolerance ? label('容許範圍內', 'Within tolerance') : label('未達目標', 'Outside tolerance'))}, ...rules.filter(rule => rule.optimize).map(rule => ({name: rule.name, values: result!.recommendations.map(r => typeof r.parameters[rule.name] === 'number' ? fmt(r.parameters[rule.name] as number) : String(r.parameters[rule.name]))}))]" stripe border>
+    <el-table :data="[{name: label('預測 Y', 'Predicted Y'), values: result.recommendations.map(r => fmt(r.prediction))}, {name: label('絕對誤差', 'Absolute error'), values: result.recommendations.map(r => fmt(r.absolute_error))}, {name: label('目標判定', 'Target status'), values: result.recommendations.map(r => r.within_tolerance ? label('達標', 'Within tolerance') : label('未達標', 'Outside tolerance')), isStatus: true}, ...rules.filter(rule => rule.optimize).map(rule => ({name: rule.name, values: result!.recommendations.map(r => typeof r.parameters[rule.name] === 'number' ? fmt(r.parameters[rule.name] as number) : String(r.parameters[rule.name]))}))]" stripe border>
       <el-table-column prop="name" :label="label('項目', 'Item')" min-width="200" fixed/>
       <el-table-column v-if="result.baseline" :label="label('目前／基準值', 'Current / baseline')" min-width="160"><template #default="{row}">{{ result.baseline.parameters[row.name] ?? '—' }}</template></el-table-column>
-      <el-table-column v-for="(_, i) in result.recommendations" :key="i" :label="label('組合 ', 'Combination ') + (i+1)" min-width="170"><template #default="{row}">{{ row.values[i] }}<small v-if="result.baseline &amp;&amp; row.name in result.baseline.parameters" class="delta">{{ label('變化', 'Change') }}: {{ changeText(row.name, result.recommendations[i].parameters[row.name]) }}</small></template></el-table-column>
+      <el-table-column v-for="(_, i) in result.recommendations" :key="i" :label="label('組合 ', 'Combination ') + (i+1)" min-width="170"><template #default="{row}"><span :class="row.isStatus ? (result.recommendations[i].within_tolerance ? 'within-text' : 'outside-text') : ''">{{ row.values[i] }}</span><small v-if="result.baseline &amp;&amp; row.name in result.baseline.parameters" class="delta">{{ label('變化', 'Change') }}: {{ changeText(row.name, result.recommendations[i].parameters[row.name]) }}</small></template></el-table-column>
     </el-table>
+    <div v-if="convergence.points.length" class="convergence-panel">
+      <h4>{{ label('收斂趨勢（截至每輪的最佳絕對誤差）', 'Convergence (best absolute error so far)') }}</h4>
+      <p>{{ label('搜尋完成後顯示；下降代表改善，持平不代表已找到全域最佳解。', 'Shown after completion. A decrease means improvement; a plateau does not prove global optimality.') }}</p>
+      <svg viewBox="0 0 560 210" role="img" :aria-label="label('每輪最佳誤差折線圖，下方可查看精確數值', 'Best error by iteration; exact values available below')">
+        <text x="80" y="18">{{ label('最佳絕對誤差', 'Best absolute error') }}</text>
+        <line x1="80" y1="40" x2="80" y2="170" stroke="#ccd9e8"/><line x1="80" y1="170" x2="530" y2="170" stroke="#ccd9e8"/>
+        <text x="72" y="45" text-anchor="end">{{ convergence.maximum > 0 && convergence.maximum < 0.000001 ? convergence.maximum.toExponential(2) : fmt(convergence.maximum) }}</text><text x="72" y="174" text-anchor="end">0</text>
+        <text x="80" y="190">1</text><text v-if="result.best_error_by_iteration.length > 1" x="530" y="190" text-anchor="end">{{ result.best_error_by_iteration.length }}</text><text x="300" y="205" text-anchor="middle">{{ label('迭代輪次', 'Iteration') }}</text>
+        <polyline :points="convergence.line" fill="none" stroke="#409eff" stroke-width="3" vector-effect="non-scaling-stroke"/>
+        <circle v-for="point in convergence.points" :key="point.iteration" :cx="point.x" :cy="point.y" r="4" fill="#246fb8"><title>{{ label('第', 'Iteration ') }} {{ point.iteration }}: {{ point.value }}</title></circle>
+      </svg>
+      <details class="optimization-help"><summary>{{ label('查看每輪精確數值', 'View exact values by iteration') }}</summary><table class="convergence-values"><thead><tr><th>{{ label('輪次', 'Iteration') }}</th><th>{{ label('最佳絕對誤差', 'Best absolute error') }}</th></tr></thead><tbody><tr v-for="point in convergence.points" :key="point.iteration"><td>{{ point.iteration }}</td><td>{{ point.value }}</td></tr></tbody></table></details>
+    </div>
   </el-card>
 </template>
 
 <style scoped>
 .field-error { color: #c0392b; font-size: 12px; margin: 6px 0; }
+.hint-icon { margin-left: 3px; vertical-align: -2px; color: #6f8eaf; cursor: help; }
+.search-status { color: #2f6fae; font-size: 14px; min-width: 120px; }
+.within-text { color: #238653; font-weight: 600; }
+.outside-text { color: #c87519; font-weight: 600; }
+.convergence-panel { margin-top: 18px; padding: 12px 16px; border: 1px solid #dce7f5; border-radius: 10px; background: #fbfdff; }
+.convergence-panel h4 { margin: 0 0 8px; color: #315d89; font-size: 14px; }
+.convergence-panel svg { display: block; width: 100%; max-width: 700px; height: auto; font-size: 12px; fill: #49647f; }
+.convergence-panel p { font-size: 13px; color: #526984; }
+.convergence-values { border-collapse: collapse; width: 100%; max-width: 560px; }
+.convergence-values td,.convergence-values th { padding: 6px 12px; border-bottom: 1px solid #dce7f5; text-align: left; }
 .delta { display: block; color: #526984; margin-top: 4px; }
 .optimization-note {color:#48617f;line-height:1.7;margin:0 0 20px}
 .csv-import-panel {margin:16px 0;padding:16px 18px;border:1px solid #dce7f5;border-radius:12px;background:#f8fbff}

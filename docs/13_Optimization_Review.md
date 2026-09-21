@@ -17,15 +17,21 @@ The response adds nullable `baseline`, with `parameters`, `prediction`, `absolut
 
 The UI initially uses training defaults where available. These are statistical reference values, not observed current plant conditions. Users should enter actual values before treating the comparison as a current-state comparison. Existing CSV import continues to update fixed features only; adjustable baseline values are edited in the baseline column. Numeric deltas are recommendation minus baseline; categories show before/after values. Changing inputs invalidates the displayed result.
 
+## Medium-priority UI changes implemented
+
+- Search shows “搜尋中 · 已耗時 … 秒”. The timer measures elapsed browser wait time, cleans up on success/error/unmount, and does not represent server progress.
+- Results use the returned target and tolerance to show the target interval, “已評估 3,072 組參數組合”, and returned/achieved counts. Achieved status is green; misses are orange, with text labels.
+- Candidate-count, minimum-anchored step and random-seed tooltips explain their meanings. An omitted step is continuous for floating-point features and 1 for integer features.
+- The completed response's `best_error_by_iteration` is shown as a best-so-far error line chart with axes, point values and an expandable exact-value table. Single-point and zero-error series are supported. Flat lines do not establish a global optimum.
+- Defaults distinguish loading, unavailable, partial and complete coverage. A per-field tooltip flags truncated category choices; users may replace choices, with at most 100 per search. Presentation flags are excluded from strict API request payloads.
+
+Verification includes frontend coverage/payload/chart tests and the TypeScript/Vite build.
+
 ## Remaining review items
 
 | Priority | Follow-up |
 | --- | --- |
-| Medium | Elapsed time, real job progress and cancellation (requires backend job support) |
-| Medium | Target-interval summary, achieved recommendation counts, and status colors |
-| Medium | Tooltips for candidate counts, step and random seed |
-| Medium | Convergence chart from best_error_by_iteration |
-| Medium | More accurate missing-default and truncated-category notices |
+| Medium | Real progress percentage and cancellation require backend job progress/lifecycle support; elapsed time is implemented |
 | Later | CSV/JSON result export with full reproduction settings |
 | Later | Retry a duplicate-only iteration and enumerate small discrete search spaces |
 | Later | Cross-feature operating constraints and joint-data plausibility checks |
