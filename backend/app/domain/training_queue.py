@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Protocol
+from collections.abc import Callable
 
 
 class TrainingJobQueue(Protocol):
@@ -25,7 +26,8 @@ class TrainingQueueOperations(Protocol):
     def list_dead_letter(self) -> list[str]:
         ...
 
-    def requeue_dead_letter(self, job_id: str) -> bool:
+    def requeue_dead_letter(self, job_id: str, prepare: Callable[[], None]) -> bool:
+        """Under dispatch/ownership locks, persist readiness before atomic dispatch."""
         ...
 
     def remove_queued(self, job_id: str) -> bool:

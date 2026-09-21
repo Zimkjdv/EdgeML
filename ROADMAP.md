@@ -21,17 +21,19 @@ R03／R04 的支援範圍是 Windows 本機，或單一 Docker host 上所有 re
 
 | ID | 優先度／狀態 | 問題及影響 | 建議修正與驗收 |
 | --- | --- | --- | --- |
-| R05 | 高／待處理 | 未設定 bootstrap token／Web password 時，managed tokens 全數撤銷或到期會重新允許匿名 API | 明確的匿名開發模式設定，與 Token 數量解耦；測試最後一個 token 到期／撤銷仍維持保護。 |
-| R06 | 高／待處理 | 預測整數特徵 `1.9` 被 astype 靜默改為 `1`；有缺值时分支不同 | 先驗證有限值、整數性、型態範圍再轉換；測試分數、小數、NaN／Inf 與溢位。 |
-| R07 | 中／待處理 | Dead-letter replay 先 enqueue 再把 failed 改 queued，Worker 可能讀到舊狀態 | 協調派工與狀態更新、補償失敗；測試即時消費與 Redis／檔案失敗。 |
-| R08 | 中／待處理 | 訓練 drop 特徵缺值，但訓練時外部測試與後續 evaluate 只 drop target | 統一可用資料列規則；清理後重新檢查 CV／類別數量與空資料；測試三入口相同結果。 |
+| R05 | 高／已實作 | 未設定 bootstrap token／Web password 時，managed tokens 全數撤銷或到期會重新允許匿名 API | `EDGEML_ANONYMOUS_API=false` 預設要求驗證；明確 true 且未設 bootstrap／Web 密碼才允許匿名，與 Token 數量解耦。Session status 與 API 使用相同政策；已測全數到期／撤銷、重建 app、明確開發模式及無設定的預設拒絕。 |
+| R06 | 高／已實作 | 預測整數特徵 `1.9` 被 astype 靜默改為 `1`；有缺值時分支不同 | 共用數值驗證檢查有限值、整數性及 signed／unsigned dtype 範圍；Decimal／nullable integer 保留有缺值欄位的大整數精度。CSV／JSON 實測 `422`、小數、分數文字、NaN／Inf、溢位、int64／uint64 邊界與缺值。 |
+| R07 | 中／已實作（單機範圍） | Dead-letter replay 先 enqueue 再把 failed 改 queued，Worker 可能讀到舊狀態 | dispatch／job lock 內先原子保存 queued／replay_pending，再以 Lua 移轉 Redis ID；派工後不覆寫 job。檔案失敗保留原件；Redis 結果不明時保留準備狀態，未派工的 dead-letter 可再次 replay。真 Redis 驗證立即消費、並行只派一次、活躍 worker、檔案失敗、Redis 成功前／後断線與準備後程序崩潰。 |
+| R08 | 中／已實作 | 訓練 drop 特徵缺值，但訓練時外部測試與後續 evaluate 只 drop target | `clean_supervised_frame` 統一訓練、兩個外部測試入口與 importance；drop 模式清理所有選取特徵，其他模式僅清理 target。清理後驗證 folds／class counts，空資料回報 validation error。中文／類別／未選欄位缺值及三入口指標一致性已測；舊指標需自行重訓／重新評估。 |
 | R09 | 中／待處理 | Prediction 前端以換行切 CSV，不支援引號內换行；缺值估算檢查全部欄位，與後端不同 | 共用可靠 CSV parser；明確對齊必要特徵／Ground Truth、NA 規則；測試換行、中文、額外欄位缺值與模型切換。 |
 | R10 | 中／待處理 | async CSV route 直接做同步 Pandas／模型推論，阻塞 API event loop | 使用 threadpool 或獨立執行機制；驗證耗時預測時健康檢查與其他 API 仍可回應。 |
-| R11 | 中／待處理 | 工作／模型／資料集 JSON 直接覆寫，輪詢或中斷可能讀到部分內容 | 原子寫入與必要交易保護；讀写並行、寫入失敗、重啟回復測試。R04 僅修 Registry。 |
+| R11 | 中／部分完成，仍待處理 | 模型／資料集 JSON 直接覆寫；工作狀態交易仍需完整並行保護 | R04 已修 Registry；R07 已將 job JSON 改為 unique temp／fsync／atomic replace，避免部分檔案。尚需其他 JSON stores 原子寫入與各狀態轉移的完整交易保護，補讀寫並行與重啟回復測試。 |
 | R12 | 中／待處理 | 資料集空 CSV 的 EmptyDataError 未轉成使用者錯誤 | 一致 422 與清楚訊息；補空檔、只有 header、無效編碼、重複欄名及非有限統計值測試。 |
 | R13 | 中／待處理 | Docker Nginx 未與後端上傳大小及長請求 timeout 對齊 | 設定 CSV／JSON body 上限與 timeout 策略；驗證 1～5 MB CSV、JSON 邊界與耗時搜尋；不能只測直接 API port。 |
 
 ## 第三批：效能、維護與監控
+
+下一批從 R09 開始。R05 升級會關閉原本未設密碼／Token 的隱式匿名模式；本機需要匿名時請依 README 明確設定。R07 準備完成但 Redis 未派工時，job JSON 可顯示 `queued`／`replay_pending=true`，ID 仍在 dead-letter；恢復後重試同一 replay API。若 ID 已移出 dead-letter，請查看 job／queue 狀態，重試會回 `404`，不重複派工。共用本機 Volume 的限制與 at-least-once 語意不變；R19 冪等 artifact 仍待處理。
 
 | ID | 優先度／狀態 | 問題及影響 | 建議修正與驗收 |
 | --- | --- | --- | --- |
@@ -58,3 +60,4 @@ R03／R04 的支援範圍是 Windows 本機，或單一 Docker host 上所有 re
 - 最後補強既有 artifact 遺失時的發布拒絕與 HTTP 409 後，發布／API／真 Redis／Linux 原生鎖的定向回歸 36 項通過；Compose config 與 git diff whitespace 檢查通過。臨時 Redis 容器與測試模型 Volume 已清理。
 - 真 Redis 整合測試只在提供 `EDGEML_TEST_REDIS_URL` 時執行；使用獨立測試 Redis，測試僅清除自己帶 UUID 前綴的 keys。一般測試未提供時會 skip，不應誤認為已驗證。
 - 測試不可使用正式模型／工作／Token／Registry 檔案；既有業務環境尚未因本批修改而自動部署。
+- 第二批 R05–R08：Python 3.12 完整後端 **154 tests passed**（包含隔離真 Redis），定向第一輪 74 項通過。新增數值邊界、缺值一致性、Token 到期／撤銷及 replay 故障注入測試；只使用複製的三個範例模型與容器暫存資料，原始碼唯讀掛載。仍有既有 NumPy/joblib deprecation 與 SciPy solver warnings，依賴整理列於 R18。未執行業務 Docker rebuild／部署，也未重算既有模型分數。

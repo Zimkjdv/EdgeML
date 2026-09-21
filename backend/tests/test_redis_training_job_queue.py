@@ -79,7 +79,7 @@ def test_queue_operations_report_and_move_jobs(monkeypatch, tmp_path) -> None:
     queue.dead_letter("failed")
     assert queue.queue_depths() == {"queued": 1, "processing": 0, "dead_letter": 1}
     assert queue.list_dead_letter() == ["failed"]
-    assert queue.requeue_dead_letter("failed")
+    assert queue.requeue_dead_letter("failed", lambda: None)
     assert queue.list_dead_letter() == []
     assert queue.remove_queued("queued")
     assert queue.queue_depths() == {"queued": 1, "processing": 0, "dead_letter": 0}

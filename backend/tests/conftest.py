@@ -7,6 +7,9 @@ from app.core.config import get_settings
 def isolated_token_storage(tmp_path, monkeypatch):
     """Tests must not authenticate against or update a developer's real tokens."""
     monkeypatch.delenv('EDGEML_API_TOKEN', raising=False)
+    # General functional tests explicitly opt into development access.
+    # Authentication tests override/remove this to exercise the secure default.
+    monkeypatch.setenv('EDGEML_ANONYMOUS_API', 'true')
     for name in ('EDGEML_WEB_PASSWORD', 'EDGEML_WEB_USERNAME', 'EDGEML_WEB_COOKIE_SECURE', 'EDGEML_WEB_ALLOWED_ORIGINS', 'EDGEML_WEB_SESSION_SECONDS'):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv('EDGEML_API_TOKENS_DATABASE', str(tmp_path / 'tokens.sqlite3'))

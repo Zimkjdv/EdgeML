@@ -47,6 +47,8 @@ from app.services.regression_metrics import regression_metrics
 from app.services.feature_importance_service import calculate_importance, save_importance
 from app.core.config import get_settings
 from app.infrastructure.file_lock import FileLock, child_path
+from app.services.training_data import clean_supervised_frame
+from app.infrastructure.atomic_json import write_json_atomic
 
 
 class EncodedTargetClassifier(ClassifierMixin, BaseEstimator):
@@ -85,10 +87,8 @@ class TrainingService:
     def train(self, request: TrainingRequest, progress=None) -> TrainedModelDetail:
         if progress: progress(10, "驗證資料與訓練設定")
         frame = self._datasets.frame(request.dataset_id)
+        frame = clean_supervised_frame(frame, request.feature_columns, request.target_column, request.numeric_imputer)
         self._validate_request(frame, request)
-        frame = frame.dropna(subset=[request.target_column]).copy()
-        if request.numeric_imputer == "drop":
-            frame = frame.dropna(subset=request.feature_columns)
         features = frame[request.feature_columns]
         target = frame[request.target_column] if request.problem_type == "classification" else pd.to_numeric(frame[request.target_column], errors="raise")
         pipeline = self._pipeline(features, request)
@@ -117,9 +117,7 @@ class TrainingService:
         test_metrics = self._external_test(pipeline, request) if request.test_dataset_id else None
         if progress: progress(90, "計算特徵重要度")
         importance_frame = self._datasets.frame(request.test_dataset_id) if request.test_dataset_id else frame
-        importance_frame = importance_frame.dropna(subset=[request.target_column])
-        if request.numeric_imputer == 'drop':
-            importance_frame = importance_frame.dropna(subset=request.feature_columns)
+        importance_frame = clean_supervised_frame(importance_frame, request.feature_columns, request.target_column, request.numeric_imputer)
         importance = calculate_importance(pipeline.predict, importance_frame[request.feature_columns],
                                          importance_frame[request.target_column], request.problem_type == 'classification',
                                          request.test_dataset_id or request.dataset_id,
@@ -185,6 +183,7 @@ class TrainingService:
         started_at = training_started()
         self._logger.info("Training job started", extra={"event": "training.job.started", "job_id": job_id, "worker_id": worker_id})
         job.attempt += 1
+        job.replay_pending = False
         job.started_at = datetime.now(timezone.utc)
         job.worker_id = worker_id
         job.status, job.progress, job.message = "running", 2, "準備訓練環境"
@@ -242,17 +241,20 @@ class TrainingService:
         return job
 
     def requeue_failed_job(self, job_id: str) -> TrainingJob:
-        """Prepare a terminally failed job for manual replay."""
+        """Called under queue locks; a durable preparation can safely be resumed."""
 
         job, request = self._read_job(job_id)
+        if job.status == 'queued' and job.replay_pending:
+            return job
         if job.status != "failed":
             raise PredictionValidationError("Only failed training jobs can be requeued.")
         job.status = "queued"
         job.progress = 0
-        job.message = "Training job requeued from dead-letter queue"
+        job.message = "Manual replay prepared; waiting for queue dispatch and worker claim"
         job.error = None
         job.started_at = None
         job.completed_at = None
+        job.replay_pending = True
         self._write_job(job, request)
         return job
 
@@ -265,7 +267,7 @@ class TrainingService:
         required = record.feature_columns + [record.target_column]
         missing = [column for column in required if column not in frame]
         if missing: raise PredictionValidationError(f"外部測試集缺少欄位：{', '.join(missing)}")
-        frame = frame.dropna(subset=[record.target_column])
+        frame = clean_supervised_frame(frame, record.feature_columns, record.target_column, record.settings.get('numeric_imputer', 'median'))
         pipeline = joblib.load(self._trained_root / model_id / "model.pkl")
         actual = frame[record.target_column]
         predicted = pipeline.predict(frame[record.feature_columns])
@@ -278,10 +280,10 @@ class TrainingService:
 
     def _write_job(self, job: TrainingJob, request: TrainingRequest) -> None:
         payload = {"job": job.model_dump(mode="json"), "request": request.model_dump(mode="json")}
-        (self._jobs_root / f"{job.id}.json").write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        write_json_atomic(child_path(self._jobs_root, f'{job.id}.json'), payload)
 
     def _read_job(self, job_id: str) -> tuple[TrainingJob, TrainingRequest]:
-        path = self._jobs_root / f"{job_id}.json"
+        path = child_path(self._jobs_root, f'{job_id}.json')
         if not path.exists(): raise ModelNotFoundError(f"Training job '{job_id}' was not found.")
         payload = json.loads(path.read_text(encoding="utf-8"))
         return TrainingJob.model_validate(payload["job"]), TrainingRequest.model_validate(payload["request"])
@@ -409,7 +411,7 @@ class TrainingService:
         missing = [name for name in required if name not in frame]
         if missing:
             raise PredictionValidationError(f"測試資料集缺少欄位：{', '.join(missing)}")
-        frame = frame.dropna(subset=[request.target_column])
+        frame = clean_supervised_frame(frame, request.feature_columns, request.target_column, request.numeric_imputer)
         actual = frame[request.target_column] if request.problem_type == "classification" else pd.to_numeric(frame[request.target_column], errors="raise")
         predicted = pipeline.predict(frame[request.feature_columns])
         return self._classification_metrics_from_predictions(actual, predicted) if request.problem_type == "classification" else self._metrics(actual, predicted)

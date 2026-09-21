@@ -70,7 +70,7 @@ For integrations that need to discover models, use `GET /api/models/ids` to retr
 - Add a SQLite-backed API Token management page for creating, listing, and revoking tokens.
 - Store token hashes only; the complete token is returned once when it is created.
 - Support `api` and `tokens:manage` scopes, with `EDGEML_API_TOKEN` retained as the bootstrap management token.
-- Keep health probes anonymous and protect `/api/*` routes after the first managed token exists.
+- Keep health probes anonymous and protect business `/api/*` routes by default, including when all managed tokens expire or are revoked. Anonymous development requires explicit `EDGEML_ANONYMOUS_API=true`.
 - A reverse proxy remains recommended for production authentication because browser-held tokens are not secrets.
 
 ### Completed v0.7.1 Observability
@@ -98,9 +98,11 @@ For integrations that need to discover models, use `GET /api/models/ids` to retr
 
 The ordered project-wide review and acceptance checklist is maintained in [ROADMAP.md](ROADMAP.md). The first reliability batch implements ID-based safe publication, persistent Docker model storage with legacy migration, live-worker-safe recovery on a shared volume, and cross-process Registry transactions. See [deployment upgrade instructions](docs/05_Deployment.md#model-storage-and-reliability-upgrade) before rebuilding an existing installation.
 
+The second batch (R05–R08) adds explicit anonymous-development configuration, exact integer/range validation for CSV and JSON prediction, recoverable dead-letter replay with state persisted before dispatch, and consistent missing-row handling for training and both external-test entry points. Job JSON files now use atomic replacement; broader JSON transaction work remains under R11.
+
 The current implementation is suitable for local and controlled self-hosted use. The following items are recorded before expanding toward multi-user production deployment:
 
-- **P0 reliability:** shared-volume ownership locks now protect live jobs during recovery; remaining Redis restart, dead-letter replay, idempotent output and graceful-shutdown coverage are tracked in ROADMAP.
+- **P0 reliability:** shared-volume ownership locks protect live jobs during recovery; dead-letter replay now has real-Redis concurrency, crash, and error-injection coverage. Redis restart, idempotent output and broader graceful-shutdown coverage remain in ROADMAP.
 - **P0 data durability:** Redis AOF and published Docker packages are persistent, and Registry writes have cross-process transactions. Other JSON repositories and full backup/restore verification remain in ROADMAP.
 - **P0 input safety:** enforce JSON request body, row, column, and value-size limits in addition to the existing CSV byte limit.
 - **P0 access control:** refine token scopes and add an external identity/reverse-proxy integration before exposing model registry and queue operations outside a trusted network.
@@ -123,6 +125,16 @@ Choose one of these runtime modes for normal development:
 The Docker host mappings are different from the container ports. Containers use Backend `8000`, Frontend Nginx `80`, and Redis `6379` internally. Redis uses a named volume with AOF enabled so queue and dead-letter state survives container recreation. The hybrid launcher uses a separate Redis project and queue, so it can run beside the full Docker runtime.
 
 For authentication, copy `.env.example` to `.env`. Set `EDGEML_WEB_USERNAME` (default `admin`) and a separate strong `EDGEML_WEB_PASSWORD` for browser login; retain `EDGEML_API_TOKEN` for Python/curl integrations and bootstrap token management. Docker Compose and the local launchers load these settings. The browser uses an HttpOnly session cookie with CSRF protection, including CSV uploads; API tokens are no longer embedded in frontend builds. Existing token-enabled installs must configure the web password before using the new login screen. Restart local services or redeploy Docker after upgrading. See [Web login and API authentication](docs/10_Web_Authentication.md) for setup, HTTPS, session expiry, and migration.
+
+**R05 upgrade:** API protection is now the default even when no credentials exist. For an intentionally anonymous local development environment, explicitly set the following in the root `.env`, then restart `start-dev.bat` or `start-dev-redis.bat`:
+
+```dotenv
+EDGEML_ANONYMOUS_API=true
+EDGEML_API_TOKEN=
+EDGEML_WEB_PASSWORD=
+```
+
+Use `EDGEML_ANONYMOUS_API=false` (default) with web/API credentials for normal deployments. A configured bootstrap token or web password takes priority over the anonymous flag. Managed-token creation, expiry, and revocation never switch the configured anonymous policy; explicit invalid credentials are still rejected. Docker Compose also passes this setting to Backend and requires recreation after an environment change.
 
 ## First-time setup
 
@@ -278,6 +290,10 @@ The response includes `model_name`, `prediction_column`, a `records` array conta
 4. Review the background-job progress, then inspect the Draft model metrics.
 5. Publish the model to make it available in **Prediction**.
 
+Training, its optional external test, and later **Trained Models → Evaluate** share the same missing-row rules: remove missing targets; with `numeric_imputer=drop`, also remove rows missing any selected numeric or categorical feature. Other imputation modes retain feature gaps for the fitted pipeline. Unselected columns never cause row removal. Cross-validation row/class counts are checked after cleaning; an empty evaluation set returns `422`. Existing saved metrics are unchanged until the model is retrained or evaluated again.
+
+Prediction has a separate row policy: it drops missing required input features and selected Ground Truth. Numeric values are validated first; integer inputs such as `1.9`, nonfinite values and values outside the manifest dtype range return `422` instead of being truncated or wrapped. Integral values such as `2.0` are accepted. CSV and JSON preserve integer precision during parsing, including columns with missing rows.
+
 ## Manual local development (advanced)
 
 The launchers above are recommended for normal Windows development. Use these manual commands when you need to run each process yourself or customize the environment.
@@ -299,7 +315,7 @@ python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
 python scripts/build_example_models.py
-uvicorn app.main:app --reload
+python -m uvicorn app.main:app --reload --env-file ..\.env
 ```
 
 Run the training worker in a second backend terminal when using the manual workflow:

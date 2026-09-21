@@ -95,6 +95,7 @@ class TrainingJob(BaseModel):
     completed_at: datetime | None = None
     attempt: int = 0
     worker_id: str | None = None
+    replay_pending: bool = False
 
 
 class QueueStatus(BaseModel):

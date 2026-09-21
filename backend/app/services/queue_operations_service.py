@@ -37,12 +37,18 @@ class QueueOperationsService:
         return summaries
 
     def requeue_dead_letter(self, job_id: str) -> TrainingJob:
-        job = self._training.get_job(job_id)
-        if job.status != "failed":
-            raise PredictionValidationError("Only failed training jobs can be requeued.")
-        if not self._queue.requeue_dead_letter(job_id):
+        prepared: TrainingJob | None = None
+
+        def prepare() -> None:
+            nonlocal prepared
+            prepared = self._training.requeue_failed_job(job_id)
+
+        # The queue owns the dispatch guard; no worker may claim the ID before
+        # the atomic job-file update completes. Never write after dispatch.
+        if not self._queue.requeue_dead_letter(job_id, prepare):
             raise ModelNotFoundError(f"Dead-letter job '{job_id}' was not found.")
-        return self._training.requeue_failed_job(job_id)
+        assert prepared is not None
+        return prepared
 
     def cancel_queued(self, job_id: str) -> TrainingJob:
         job = self._training.get_job(job_id)

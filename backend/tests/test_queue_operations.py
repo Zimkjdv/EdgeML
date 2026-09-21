@@ -30,9 +30,10 @@ class FakeOperationsQueue:
     def list_dead_letter(self) -> list[str]:
         return list(self.dead)
 
-    def requeue_dead_letter(self, job_id: str) -> bool:
+    def requeue_dead_letter(self, job_id: str, prepare) -> bool:
         if job_id not in self.dead:
             return False
+        prepare()
         self.dead.remove(job_id)
         self.enqueue(job_id)
         return True

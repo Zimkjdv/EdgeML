@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
-from app.api.dependencies import get_web_session_service, get_api_token_service, has_web_session
+from app.api.dependencies import get_web_session_service, has_web_session
 from app.services.web_session_service import WebSessionService
 
 router = APIRouter(prefix='/api/auth/session', tags=['Web login'])
@@ -23,7 +23,7 @@ def check_browser_request(request: Request, service: WebSessionService):
 def session_status(response: Response, request: Request, service: WebSessionService = Depends(get_web_session_service)):
     response.headers['Cache-Control'] = 'no-store'
     session = service.authenticate(request.cookies.get('edgeml_session', ''))
-    required = bool(service.settings.web_password or service.settings.api_token or get_api_token_service().has_active_tokens())
+    required = not service.settings.anonymous_api_enabled
     return {'required': required, 'configured': bool(service.settings.web_password), 'authenticated': bool(session),
             'csrf_token': session['csrf'] if session else None,
             'username': service.settings.web_username if session else None}

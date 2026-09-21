@@ -3,14 +3,29 @@ from __future__ import annotations
 import redis
 import hashlib
 import time
+from collections.abc import Callable
 from pathlib import Path
 from app.infrastructure.file_lock import FileLock
+from app.domain.errors import PredictionValidationError
 
 
 _RECOVER_PROCESSING_SCRIPT = """
 local removed = redis.call('lrem', KEYS[1], 0, ARGV[1])
 if removed > 0 then redis.call('lpush', KEYS[2], ARGV[1]) end
 return removed > 0 and 1 or 0
+"""
+
+_REQUEUE_DEAD_SCRIPT = """
+for _, key in ipairs(KEYS) do
+    local kind = redis.call('type', key).ok
+    if kind ~= 'none' and kind ~= 'list' then
+        return redis.error_reply('Queue key must be a list')
+    end
+end
+if not redis.call('lpos', KEYS[1], ARGV[1]) then return 0 end
+redis.call('lpush', KEYS[2], ARGV[1])
+redis.call('lrem', KEYS[1], 0, ARGV[1])
+return 1
 """
 
 
@@ -54,17 +69,26 @@ class RedisTrainingJobQueue:
     def remove_queued(self, job_id: str) -> bool:
         return bool(self._client.lrem(self._queue_key, 1, job_id))
 
-    def requeue_dead_letter(self, job_id: str) -> bool:
-        removed = bool(self._client.lrem(self._dead_letter_key, 1, job_id))
-        if not removed:
-            return False
-        try:
-            self.enqueue(job_id)
-        except Exception:
-            # Preserve the dead-letter record if the primary queue is unavailable.
-            self._client.lpush(self._dead_letter_key, job_id)
-            raise
-        return True
+    def requeue_dead_letter(self, job_id: str, prepare: Callable[[], None]) -> bool:
+        with self._guard:
+            if job_id not in self.list_dead_letter():
+                return False
+            if job_id in self.list_queued() or job_id in self.list_processing():
+                raise PredictionValidationError('Training job is still queued or being processed.')
+            lock = self._job_lock(job_id)
+            try:
+                lock.__enter__()
+            except TimeoutError as exc:
+                raise PredictionValidationError('Training job is still owned by a worker.') from exc
+            try:
+                prepare()
+                # Keep preparation durable on an ambiguous Redis error. If EVAL
+                # did not commit the ID remains dead-lettered and replay can be
+                # retried. If it committed, a worker reads the ready state.
+                return bool(self._client.eval(_REQUEUE_DEAD_SCRIPT, 2,
+                    self._dead_letter_key, self._queue_key, job_id) or 0)
+            finally:
+                lock.__exit__(None, None, None)
 
     def consume(self, timeout: int = 5) -> str | None:
         # One shared-volume guard closes the move-to-processing/ownership gap.

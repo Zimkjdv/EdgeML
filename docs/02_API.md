@@ -16,7 +16,7 @@ Every HTTP response includes an `X-Request-ID` header. Clients may provide a bou
 
 ## Optional API authentication
 
-Integration clients send `Authorization: Bearer <token>` or `X-API-Key: <token>` using `EDGEML_API_TOKEN` or a managed token. Browser users sign in with separate web credentials and use an HttpOnly session cookie; writes additionally require `X-CSRF-Token`. Setting a web password also enables API protection even without a bootstrap API token. Health probes remain public. Anonymous development is available only when no web password, bootstrap token, or active managed token is configured. Frontend bundles no longer contain API tokens. The public `/api/auth/session` status/login/logout endpoints implement the browser session lifecycle; see [Web authentication](10_Web_Authentication.md).
+Integration clients send `Authorization: Bearer <token>` or `X-API-Key: <token>` using `EDGEML_API_TOKEN` or a managed token. Browser users sign in with separate web credentials and use an HttpOnly session cookie; writes additionally require `X-CSRF-Token`. Business APIs require authentication by default, including after all tokens expire or are revoked. Health probes remain public. Anonymous development requires explicit `EDGEML_ANONYMOUS_API=true` with no web password or bootstrap token; managed-token counts never toggle this policy. Frontend bundles no longer contain API tokens. The public `/api/auth/session` status/login/logout endpoints implement the browser session lifecycle; see [Web authentication](10_Web_Authentication.md).
 
 ### Token management APIs
 
@@ -73,7 +73,7 @@ curl.exe -X POST "http://localhost:8000/api/auth/tokens" ^
   -d "{\"name\":\"CLI Test Token\",\"scopes\":[\"api\",\"tokens:manage\"]}"
 ```
 
-Use that returned value in place of `your-managed-token` for subsequent `/api/*` requests. If `.env` changes, restart local services or rerun `deploy-docker.bat` so the Docker frontend is rebuilt with the new browser token.
+Use that returned value in place of `your-managed-token` for subsequent `/api/*` requests. If `.env` changes, restart local services or recreate Docker Backend with the new environment. The frontend does not embed tokens.
 
 ## `GET /api/models`
 
@@ -112,6 +112,8 @@ When Ground Truth is available, evaluation metrics are returned in the response 
 Every successful request also writes prediction metadata to the configured history repository. Uploaded CSV contents and prediction outputs are not retained.
 
 Errors use JSON with `detail` and appropriate HTTP status codes: 400 for invalid input, 404 for an unknown model, and 422 for schema/type validation failures.
+
+CSV and JSON share numeric validation: integer dtypes require finite, mathematically integral values within their signed/unsigned bit range. `2.0` and `2e1` are accepted; `1.9`, infinity, invalid numeric text and overflow return `422` naming the column. Floating dtypes also reject infinity and conversion overflow. Actual missing values still follow the existing row-drop policy; invalid nonmissing values are not silently dropped even if another column in the same row is missing. Integer parsing preserves exact int64/uint64 values when mixed with missing rows; callers must also preserve precision before submitting JSON (for example, send large integers as decimal strings from JavaScript).
 
 ## `POST /api/predict/json`
 
@@ -162,5 +164,9 @@ Returns successful prediction records in reverse chronological order. Each recor
 - `POST /api/trained-models/{model_id}/evaluate`: evaluate an existing trained model with a separately uploaded Dataset.
 
 Training supports Random Forest, Gradient Boosting, XGBoost, and AdaBoost regression, plus classifier variants for those algorithms and Logistic Regression classification. Training persists the full preprocessing and model pipeline as one trusted `model.pkl` artifact.
+
+Training, training-time external tests, later model evaluation and feature-importance recomputation share a row policy: always drop missing targets; when saved `numeric_imputer` is `drop`, also drop missing values in any selected feature (numeric or categorical). Otherwise the fitted pipeline handles feature gaps. Unused columns do not affect eligibility. Training validates fold sizes and classification class counts after cleaning. No usable rows produces `422`; background jobs persist a validation failure. A failed evaluation does not replace previously saved scores. Automatic feature importance additionally needs at least two usable rows.
+
+Manual dead-letter replay persists a queued job (including `replay_pending=true`) under the shared dispatch/ownership locks before atomically moving its ID in Redis. The flag clears when a Worker starts the attempt. If file persistence fails, the original job and dead-letter entry remain intact. If Redis fails or the API process exits after preparation, the job may remain queued in its JSON file but listed in dead-letter; retry the same replay endpoint after recovery. If dispatch already committed, inspect the job/queue instead: replay returns `404` once the ID is no longer dead-lettered, and does not enqueue a duplicate. Still-processing jobs return `409`; infrastructure failures return `503`. Attempt history is retained. This is recoverable at-least-once dispatch, not a transaction spanning Redis and the filesystem.
 
 Random Forest, Gradient Boosting, XGBoost, and Logistic Regression hyperparameters are optional. Random Forest accepts `n_estimators`, `min_samples_leaf`, `max_depth`, `min_samples_split`, and `max_leaf_nodes`; omitted parameters use estimator defaults. EdgeML only fixes random seeds and CPU worker counts where applicable for reproducibility during local development.

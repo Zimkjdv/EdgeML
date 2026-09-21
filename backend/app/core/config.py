@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     max_json_value_chars: int = Field(default=10_000, ge=1, le=1_000_000)
     max_json_body_bytes: int = Field(default=10 * 1024 * 1024, ge=1, le=100 * 1024 * 1024)
     api_token: str | None = None
+    anonymous_api: bool = False
     web_username: str = "admin"
     web_password: str | None = Field(default=None, repr=False)
     web_session_seconds: int = Field(default=28800, ge=300, le=86400)
@@ -37,6 +38,11 @@ class Settings(BaseSettings):
     optimization_iterations: int = Field(default=12, ge=1, le=20)
     importance_max_samples: int = Field(default=500, ge=2, le=2000)
     importance_repeats: int = Field(default=3, ge=1, le=10)
+
+    @property
+    def anonymous_api_enabled(self) -> bool:
+        """Explicit development access; configured credentials always take priority."""
+        return self.anonymous_api and not self.api_token and not self.web_password
 
 
 @lru_cache

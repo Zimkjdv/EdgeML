@@ -12,7 +12,7 @@ EDGEML_WEB_PASSWORD=choose-a-long-unique-web-password
 EDGEML_WEB_COOKIE_SECURE=false
 ```
 
-Keep the existing `EDGEML_API_TOKEN` for integrations, separate from the web password. Local launchers read these settings through `start-dev.bat`; stop the existing local services and relaunch `start-dev-redis.bat` or `start-dev.bat`. Do not run duplicate backends on the same port. Direct uvicorn invocation requires setting the environment yourself, as before. The batch loader expects unquoted `NAME=value` lines; long randomly generated alphanumeric passwords avoid CMD metacharacter and quote handling differences.
+Keep the existing `EDGEML_API_TOKEN` for integrations, separate from the web password. Local launchers read these settings through `start-dev.bat`; stop the existing local services and relaunch `start-dev-redis.bat` or `start-dev.bat`. Do not run duplicate backends on the same port. Direct uvicorn invocation requires exporting the environment or using `python -m uvicorn app.main:app --reload --env-file ..\.env` from `backend`. The batch loader expects unquoted `NAME=value` lines; long randomly generated alphanumeric passwords avoid CMD metacharacter and quote handling differences.
 
 For Docker, rebuild/redeploy the project using `deploy-docker.bat` to replace the old frontend bundle and pass the new backend environment. Later credential-only changes require recreating the backend, not rebuilding the frontend. This migration removes `VITE_EDGEML_API_TOKEN` from source, Docker build arguments, and launchers. Rotate previously browser-embedded integration tokens after migrating if those bundles were distributed.
 
@@ -31,7 +31,15 @@ Open the frontend and sign in using the web account. Its session permits all cur
 
 Serve the UI and `/api` through the same origin. Vite's proxy and the bundled nginx configuration already do this. For deployed HTTPS, set `EDGEML_WEB_COOKIE_SECURE=true` and set `EDGEML_WEB_ALLOWED_ORIGINS` to a JSON array of exact public origins, such as `["https://edgeml.example.com"]`. Configure the proxy to route `/api` to the backend. Origins are used to validate browser login, not to bypass authentication. Do not enable Secure cookies on plain HTTP development hosts.
 
-This is a single-administrator login, not a multi-user identity platform. SSO, individual accounts, role-based browser permissions, MFA, and a session-management UI remain future work. If no web password, bootstrap token, or active managed token exists, legacy anonymous local-development behavior remains available; do not deploy that configuration publicly.
+This is a single-administrator login, not a multi-user identity platform. SSO, individual accounts, role-based browser permissions, MFA, and a session-management UI remain future work.
+
+## Explicit anonymous development (R05)
+
+`EDGEML_ANONYMOUS_API` defaults to `false`: business APIs return `401` without credentials, even on a new installation or after the last token expires/is revoked. The public session-status endpoint reports `required=true`; a browser without a configured password shows setup guidance. Health probes and session login/status remain public.
+
+Only for intentional local development, set `EDGEML_ANONYMOUS_API=true` and clear both `EDGEML_API_TOKEN` and `EDGEML_WEB_PASSWORD` in `.env`. Restart the local launcher, or recreate Docker Backend after passing the updated configuration. Existing credentials take priority over the flag. Managed-token counts do not affect this policy: in explicit anonymous mode, creating a managed token does not protect otherwise anonymous requests. Invalid supplied tokens still fail; token administration still requires valid administrator credentials.
+
+When migrating an old anonymous installation, either configure the web password (recommended) or explicitly opt into the development mode. Keep `EDGEML_ANONYMOUS_API=false` for deployed use.
 
 ## Endpoints and verification
 

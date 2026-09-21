@@ -191,6 +191,17 @@ Do not use `docker compose down -v` during normal development. The `-v` option a
 
 ## Commit and push
 
+### R05–R08 upgrade (2026-09-21)
+
+- API authentication is now on by default. Keep `EDGEML_ANONYMOUS_API=false` and use the existing web/API credentials. For deliberate anonymous local development only, set `EDGEML_ANONYMOUS_API=true`, clear `EDGEML_API_TOKEN` and `EDGEML_WEB_PASSWORD` in the root `.env`, and restart `start-dev.bat` or `start-dev-redis.bat`. Token expiry/revocation no longer changes the policy. The local launcher and Docker Compose both pass the new setting; `.env` changes require a restart/recreate, not just hot reload.
+- Restart local Backend and Worker together after this upgrade. For Docker, use `deploy-docker.bat` when ready to apply the new code; the code/test commit does not itself redeploy running services. Direct local uvicorn can load the root settings with `--env-file ..\.env` from `backend`.
+- CSV/JSON integer features reject fractions, nonfinite input and overflow with `422`. Actual missing values still use the documented drop policy. Fix invalid source values or correct the manifest dtype rather than relying on truncation.
+- Training, initial external testing and later evaluation now apply the same saved missing-row policy. Fold/class counts are validated after cleaning. Saved historical scores remain unchanged until retraining/re-evaluation.
+- On a failed manual replay, check Queue Operations and the job status. If the ID remains in dead-letter with `status=queued` / `replay_pending=true`, retry replay after storage/Redis recovers. If it is already queued/running/completed and no longer in dead-letter, dispatch succeeded; another replay returns `404`. The prepared marker clears on Worker claim. Do not manually edit/delete Redis IDs or job/lock files to compensate for a lost HTTP response.
+- Regression tests: run `python -m pytest -q` in `backend`; real-Redis tests additionally require `EDGEML_TEST_REDIS_URL` pointing at a separate test Redis. These tests create UUID-prefixed keys and clean their own keys only. Current verification uses Python 3.12 in disposable containers, copied example packages and temporary data, not business models or production queues.
+
+### Publish verified changes
+
 Commit only after local tests and the relevant Docker verification pass:
 
 ```powershell

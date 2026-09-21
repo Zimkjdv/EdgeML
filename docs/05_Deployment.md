@@ -21,6 +21,8 @@ Every service in `docker-compose.yml` and the hybrid Redis compose file uses `re
 
 Configure separate credentials in `.env`: `EDGEML_WEB_USERNAME` / `EDGEML_WEB_PASSWORD` for browser login and `EDGEML_API_TOKEN` for integrations. The frontend no longer embeds API tokens. Browser sessions use HttpOnly cookies and CSRF headers. Existing installs need a web password and a frontend rebuild for this migration. Use HTTPS with `EDGEML_WEB_COOKIE_SECURE=true` for deployed environments, and configure `EDGEML_WEB_ALLOWED_ORIGINS` for the exact public origin. See [Web authentication](10_Web_Authentication.md).
 
+R05 defaults to `EDGEML_ANONYMOUS_API=false`: missing credentials or expired/revoked managed tokens no longer make business APIs public. For intentional anonymous local testing, explicitly set it to `true` and clear the bootstrap token and web password. Both the local launcher and Compose Backend accept the flag. Restart local Backend/Worker after upgrading the replay implementation; Docker upgrades should rebuild Backend and Worker together through `deploy-docker.bat`.
+
 Local development uses different host endpoints:
 
 | Runtime | Frontend | API docs | Redis |

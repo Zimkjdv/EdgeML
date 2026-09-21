@@ -10,6 +10,7 @@ rem Load the optional root .env file so local and Docker launches share settings
 if exist "%PROJECT_ROOT%.env" (
   for /f "usebackq eol=# tokens=1,* delims==" %%A in ("%PROJECT_ROOT%.env") do (
     if /I "%%A"=="EDGEML_API_TOKEN" set "EDGEML_API_TOKEN=%%B"
+    if /I "%%A"=="EDGEML_ANONYMOUS_API" set "EDGEML_ANONYMOUS_API=%%B"
     if /I "%%A"=="EDGEML_WEB_USERNAME" set "EDGEML_WEB_USERNAME=%%B"
     if /I "%%A"=="EDGEML_WEB_PASSWORD" set "EDGEML_WEB_PASSWORD=%%B"
     if /I "%%A"=="EDGEML_WEB_COOKIE_SECURE" set "EDGEML_WEB_COOKIE_SECURE=%%B"
@@ -51,4 +52,3 @@ echo Backend API docs: http://localhost:8000/docs
 echo Frontend:         http://localhost:5173
 echo Two service windows have been opened. Close them to stop EdgeML.
 endlocal
-

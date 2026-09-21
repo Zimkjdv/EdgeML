@@ -75,8 +75,8 @@ def require_api_token(
         record = service.authenticate(supplied)
         if record and ("api" in record.scopes or request.url.path.startswith("/api/auth/tokens")):
             return
-    # Keep a clean local install usable until its first token is created.
-    if not supplied and not expected and not get_settings().web_password and not service.has_active_tokens():
+    # Token expiry/revocation must never change the configured access policy.
+    if not supplied and get_settings().anonymous_api_enabled:
         return
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,

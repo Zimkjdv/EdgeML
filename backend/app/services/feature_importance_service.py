@@ -16,6 +16,7 @@ from app.domain.model_catalog import ModelCatalog
 from app.domain.optimization import PredictorProvider
 from app.services.dataset_service import DatasetService
 from app.core.config import get_settings
+from app.services.training_data import clean_supervised_frame
 
 
 class ImportanceUnavailable(Exception):
@@ -110,9 +111,7 @@ class FeatureImportanceService:
         missing = set([*names, target]) - set(frame.columns)
         if missing:
             raise PredictionValidationError('Missing importance columns: ' + ', '.join(sorted(missing)))
-        frame = frame.dropna(subset=[target])
-        if settings.get('numeric_imputer') == 'drop':
-            frame = frame.dropna(subset=names)
+        frame = clean_supervised_frame(frame, names, target, settings.get('numeric_imputer', 'median'))
         predictor = self.factory.create(self.catalog.get(model_id))
         report = calculate_importance(predictor.predict, frame[names], frame[target],
                                       record.get('problem_type') == 'classification', dataset_id,

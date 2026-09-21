@@ -4,6 +4,7 @@ from uuid import uuid4
 
 import pandas as pd
 from app.services.regression_metrics import regression_metrics
+from app.services.numeric_features import coerce_numeric_feature
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
 
 from app.domain.errors import PredictionValidationError
@@ -39,7 +40,10 @@ class PredictionService:
     def predict_csv(self, model_id: str, content: bytes, source_filename: str = "input.csv", ground_truth_column: str | None = None) -> PredictionOutput:
         manifest = self._catalog.get(model_id)
         try:
-            frame = pd.read_csv(BytesIO(content))
+            # Preserve exact integers even when another row is missing a value.
+            integer_columns = {f.name: object for f in manifest.features
+                               if f.dtype.lower().startswith(('int', 'uint'))}
+            frame = pd.read_csv(BytesIO(content), dtype=integer_columns)
         except (UnicodeDecodeError, pd.errors.ParserError, ValueError) as exc:
             raise PredictionValidationError("The uploaded file is not a valid UTF-8 CSV.") from exc
 
@@ -58,7 +62,7 @@ class PredictionService:
 
     def predict_json(self, model_id: str, records: list[dict], source_name: str | None = None, ground_truth_column: str | None = None) -> JsonPredictionOutput:
         manifest = self._catalog.get(model_id)
-        frame = pd.DataFrame(records)
+        frame = pd.DataFrame(records, dtype=object)
         frame, predictions, metrics, evaluation_column, dropped_rows = self._predict_frame(frame, manifest, ground_truth_column)
         frame[manifest.prediction_column] = predictions
         if manifest.problem_type == "regression":
@@ -144,11 +148,5 @@ class PredictionService:
         for feature in features:
             if feature.name not in frame:
                 continue
-            if feature.dtype.startswith(("float", "int")):
-                converted = pd.to_numeric(frame[feature.name], errors="coerce")
-                invalid = converted.isna() & frame[feature.name].notna()
-                if invalid.any():
-                    raise PredictionValidationError(
-                        f"Column '{feature.name}' must contain {feature.dtype} values."
-                    )
-                frame[feature.name] = converted if converted.isna().any() else converted.astype(feature.dtype)
+            if feature.dtype.lower().startswith(('float', 'int', 'uint')):
+                frame[feature.name] = coerce_numeric_feature(frame[feature.name], feature.dtype)
