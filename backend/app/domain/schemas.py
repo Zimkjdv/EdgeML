@@ -58,7 +58,7 @@ class ModelRegistrySummary(ModelSummary):
 class PredictionOutput(BaseModel):
     filename: str
     csv_content: bytes
-    metrics: dict[str, float] = Field(default_factory=dict)
+    metrics: dict[str, float | None] = Field(default_factory=dict)
     ground_truth_column: str | None = None
     dropped_rows: int = 0
 
@@ -88,7 +88,7 @@ class JsonPredictionOutput(BaseModel):
     model_name: str
     prediction_column: str
     records: list[dict[str, Any]]
-    metrics: dict[str, float] = Field(default_factory=dict)
+    metrics: dict[str, float | None] = Field(default_factory=dict)
     ground_truth_column: str | None = None
     dropped_rows: int = 0
 

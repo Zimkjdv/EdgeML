@@ -24,13 +24,8 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
     accuracy_score,
     f1_score,
-    mean_absolute_error,
-    mean_absolute_percentage_error,
-    max_error,
     precision_score,
-    r2_score,
     recall_score,
-    root_mean_squared_error,
     roc_auc_score,
 )
 from sklearn.model_selection import KFold, StratifiedKFold, cross_val_predict, cross_validate
@@ -47,6 +42,7 @@ from app.domain.training_schemas import TrainedModelDetail, TrainedModelSummary,
 from app.domain.training_schemas import ExternalEvaluationResult, TrainingJob
 from app.core.observability import training_finished, training_started
 from app.services.dataset_service import DatasetService
+from app.services.regression_metrics import regression_metrics
 from app.services.feature_importance_service import calculate_importance, save_importance
 from app.core.config import get_settings
 
@@ -153,6 +149,7 @@ class TrainingService:
             "validation_metrics": validation,
             "test_metrics": test_metrics,
             "settings": request.model_dump(),
+            "evaluation_version": "oof-v2",
             "manifest": manifest,
         }
         (output_dir / "record.json").write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -351,18 +348,15 @@ class TrainingService:
         return KFold(n_splits=request.cv_folds, shuffle=True, random_state=42)
 
     @staticmethod
-    def _regression_metrics(target, predictions, scores) -> dict[str, float]:
-        correlation = pd.Series(target).corr(pd.Series(predictions), method="pearson")
-        return {
-            "rmse": round(float(-scores["test_rmse"].mean()), 6),
-            "mae": round(float(-scores["test_mae"].mean()), 6),
+    def _regression_metrics(target, predictions, scores) -> dict[str, float | None]:
+        metrics = regression_metrics(target, predictions)
+        metrics.update({
             "rmse_std": round(float(scores["test_rmse"].std()), 6),
-            "r2": round(float(scores["test_r2"].mean()), 6),
-            "pearson_r": 0.0 if pd.isna(correlation) else round(float(correlation), 6),
-            "mape": round(float(mean_absolute_percentage_error(target, predictions) * 100), 6),
-            "max_error": round(float(max_error(target, predictions)), 6),
-            "target_mean": round(float(target.mean()), 6),
-        }
+            "cv_rmse_mean": round(float(-scores["test_rmse"].mean()), 6),
+            "cv_mae_mean": round(float(-scores["test_mae"].mean()), 6),
+            "cv_r2_mean": round(float(scores["test_r2"].mean()), 6),
+        })
+        return {key: value if value is None or np.isfinite(value) else None for key, value in metrics.items()}
 
     @staticmethod
     def _classification_metrics(target, predictions, scores, probabilities=None) -> dict[str, float]:
@@ -385,7 +379,7 @@ class TrainingService:
             "recall": round(float(recall_score(target, predictions, average="weighted", zero_division=0)), 6),
         }
 
-    def _external_test(self, pipeline: BaseEstimator, request: TrainingRequest) -> dict[str, float]:
+    def _external_test(self, pipeline: BaseEstimator, request: TrainingRequest) -> dict[str, float | None]:
         frame = self._datasets.frame(request.test_dataset_id)
         required = request.feature_columns + [request.target_column]
         missing = [name for name in required if name not in frame]
@@ -397,20 +391,8 @@ class TrainingService:
         return self._classification_metrics_from_predictions(actual, predicted) if request.problem_type == "classification" else self._metrics(actual, predicted)
 
     @staticmethod
-    def _metrics(actual, predicted) -> dict[str, float]:
-        value_range = float(np.max(actual) - np.min(actual))
-        rmse = float(root_mean_squared_error(actual, predicted))
-        correlation = pd.Series(actual).corr(pd.Series(predicted), method="pearson")
-        return {
-            "mae": round(float(mean_absolute_error(actual, predicted)), 6),
-            "mape": round(float(mean_absolute_percentage_error(actual, predicted) * 100), 6),
-            "rmse": round(rmse, 6),
-            "nrmse": round(rmse / value_range, 6) if value_range else 0.0,
-            "max_error": round(float(max_error(actual, predicted)), 6),
-            "target_mean": round(float(np.mean(actual)), 6),
-            "pearson_r": 0.0 if pd.isna(correlation) else round(float(correlation), 6),
-            "r2": round(float(r2_score(actual, predicted)), 6),
-        }
+    def _metrics(actual, predicted) -> dict[str, float | None]:
+        return regression_metrics(actual, predicted)
 
     @staticmethod
     def _validate_request(frame: pd.DataFrame, request: TrainingRequest) -> None:

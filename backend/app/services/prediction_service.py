@@ -3,7 +3,8 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 import pandas as pd
-from sklearn.metrics import accuracy_score, f1_score, mean_absolute_error, mean_absolute_percentage_error, max_error, precision_score, r2_score, recall_score, root_mean_squared_error
+from app.services.regression_metrics import regression_metrics
+from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
 
 from app.domain.errors import PredictionValidationError
 from app.domain.model_catalog import ModelCatalog
@@ -105,7 +106,7 @@ class PredictionService:
         feature_frame = frame[[feature.name for feature in manifest.features]]
         predictor = self._predictor_factory.create(manifest)
         predictions = predictor.predict(feature_frame)
-        metrics: dict[str, float] = {}
+        metrics: dict[str, float | None] = {}
         if evaluation_column:
             metrics = self._evaluate_predictions(manifest.problem_type, frame[evaluation_column], predictions)
         return frame, predictions, metrics, evaluation_column, dropped_rows
@@ -123,7 +124,7 @@ class PredictionService:
         )
 
     @staticmethod
-    def _evaluate_predictions(problem_type: str, actual, predictions) -> dict[str, float]:
+    def _evaluate_predictions(problem_type: str, actual, predictions) -> dict[str, float | None]:
         if problem_type == "classification":
             return {
                 "accuracy": round(float(accuracy_score(actual, predictions)), 6),
@@ -131,16 +132,7 @@ class PredictionService:
                 "recall": round(float(recall_score(actual, predictions, average="weighted", zero_division=0)), 6),
                 "f1": round(float(f1_score(actual, predictions, average="weighted", zero_division=0)), 6),
             }
-        actual_numeric = pd.to_numeric(actual, errors="raise")
-        correlation = pd.Series(actual_numeric).corr(pd.Series(predictions), method="pearson")
-        return {
-            "mae": round(float(mean_absolute_error(actual_numeric, predictions)), 6),
-            "mape": round(float(mean_absolute_percentage_error(actual_numeric, predictions) * 100), 6),
-            "rmse": round(float(root_mean_squared_error(actual_numeric, predictions)), 6),
-            "max_error": round(float(max_error(actual_numeric, predictions)), 6),
-            "r2": round(float(r2_score(actual_numeric, predictions)), 6),
-            "pearson_r": 0.0 if pd.isna(correlation) else round(float(correlation), 6),
-        }
+        return regression_metrics(pd.to_numeric(actual, errors="raise"), predictions)
 
     @staticmethod
     def _validate_frame(frame: pd.DataFrame, features) -> None:

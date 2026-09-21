@@ -76,8 +76,9 @@ class TrainedModelSummary(BaseModel):
 
 class TrainedModelDetail(TrainedModelSummary):
     feature_columns: list[str]
-    validation_metrics: dict[str, float]
-    test_metrics: dict[str, float] | None = None
+    validation_metrics: dict[str, float | None]
+    test_metrics: dict[str, float | None] | None = None
+    evaluation_version: str | None = None
     settings: dict[str, object]
     manifest: dict[str, object]
 
@@ -121,7 +122,7 @@ class ExternalEvaluationRequest(BaseModel):
 
 
 class ExternalEvaluationResult(BaseModel):
-    metrics: dict[str, float]
+    metrics: dict[str, float | None]
 
 
 class TrainedModelDeleteRequest(BaseModel):

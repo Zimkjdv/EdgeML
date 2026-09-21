@@ -338,5 +338,7 @@ Parameter Optimization is available as a new bilingual page: select a trained re
 
 ## Documentation
 
+Regression evaluation now uses positionally paired predictions and unified OOF validation metrics. Undefined metrics display as `—`; legacy validation records require retraining. See [Regression metric definitions](docs/12_Regression_Metrics.md) for formulas, zero-target MAPE handling, NRMSE normalization, and fold statistics.
+
 See [docs/01_Project.md](docs/01_Project.md) for the roadmap, [docs/02_API.md](docs/02_API.md) for API contracts, [docs/04_Architecture.md](docs/04_Architecture.md) for the design, [docs/09_Optimization_Method.md](docs/09_Optimization_Method.md) for the reverse-search method, and [docs/05_Deployment.md](docs/05_Deployment.md) for runtime instructions.
 See [DEVELOPMENT_MEMO.md](DEVELOPMENT_MEMO.md) for local development, Docker verification, and Git workflow.
