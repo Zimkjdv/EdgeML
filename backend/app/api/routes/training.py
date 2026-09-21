@@ -102,6 +102,8 @@ def publish_trained_model(
         return service.publish(model_id)
     except ModelNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except PredictionValidationError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.post("/trained-models/{model_id}/evaluate", response_model=ExternalEvaluationResult)

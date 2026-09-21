@@ -1,5 +1,13 @@
 # EdgeML Development Memo
 
+## 2026-09-21 reliability upgrade
+
+The complete analysis and ordered follow-up work are in [ROADMAP.md](ROADMAP.md). This batch changes publication paths, Docker model persistence, Worker ownership/recovery and Registry transactions.
+
+Existing Docker installations must first use `deploy-docker.bat`: pause API writes, finish training and stop manually launched legacy Workers. The launcher stops old Compose Workers and migrates packages from the original Backend container into the existing data Volume **before** recreation. Keep that old container until migration succeeds. Conflicts stop deployment without replacing old model files; `start-dev-docker.bat` directs legacy installations to rebuild first. See [migration and recovery instructions](docs/05_Deployment.md#model-storage-and-reliability-upgrade).
+
+Do not delete `prediction-data` or mix old/new Worker versions. New Workers and Backend must share their jobs directory and published-model directory. File locking is supported on local Windows storage and a single Docker host's shared local Volume. Changes are not deployed merely by editing these files.
+
 ## Recommended workflow
 
 EdgeML uses a local-first development workflow and Docker-based integration verification.

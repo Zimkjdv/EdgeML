@@ -18,7 +18,8 @@ services:
       context: ./backend
     restart: unless-stopped
     environment:
-      EDGEML_MODELS_ROOT: /app/ml_models
+      EDGEML_MODELS_ROOT: /app/data/published_models
+      EDGEML_BUNDLED_MODELS_ROOT: /app/ml_models
       EDGEML_TRAINED_MODELS_ROOT: /app/data/trained_models
       EDGEML_TRAINING_JOBS_ROOT: /app/data/training_jobs
       EDGEML_PREDICTION_HISTORY_FILE: /app/data/prediction_history.jsonl
@@ -45,7 +46,8 @@ services:
     command: ["python", "-m", "app.workers.training_worker"]
     restart: unless-stopped
     environment:
-      EDGEML_MODELS_ROOT: /app/ml_models
+      EDGEML_MODELS_ROOT: /app/data/published_models
+      EDGEML_BUNDLED_MODELS_ROOT: /app/ml_models
       EDGEML_TRAINED_MODELS_ROOT: /app/data/trained_models
       EDGEML_TRAINING_JOBS_ROOT: /app/data/training_jobs
       EDGEML_PREDICTION_HISTORY_FILE: /app/data/prediction_history.jsonl

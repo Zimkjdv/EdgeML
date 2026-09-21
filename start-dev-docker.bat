@@ -23,6 +23,8 @@ if errorlevel 1 (
 )
 
 echo Starting EdgeML Docker services with %WORKER_REPLICAS% worker replica(s)...
+call "%PROJECT_ROOT%prepare-docker-upgrade.bat"
+if errorlevel 1 exit /b 1
 docker compose up -d --scale worker=%WORKER_REPLICAS%
 if errorlevel 1 (
   echo [ERROR] Docker services could not be started.

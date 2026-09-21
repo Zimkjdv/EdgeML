@@ -22,6 +22,9 @@ if errorlevel 1 (
     exit /b 1
 )
 
+call "%PROJECT_ROOT%prepare-docker-upgrade.bat" rebuild
+if errorlevel 1 exit /b 1
+
 echo Building and deploying EdgeML with %WORKER_REPLICAS% worker replica(s)...
 docker compose up -d --build --remove-orphans --scale worker=%WORKER_REPLICAS%
 if errorlevel 1 (

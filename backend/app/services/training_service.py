@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import shutil
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
@@ -45,6 +46,7 @@ from app.services.dataset_service import DatasetService
 from app.services.regression_metrics import regression_metrics
 from app.services.feature_importance_service import calculate_importance, save_importance
 from app.core.config import get_settings
+from app.infrastructure.file_lock import FileLock, child_path
 
 
 class EncodedTargetClassifier(ClassifierMixin, BaseEstimator):
@@ -292,25 +294,43 @@ class TrainingService:
         return sorted(records, key=lambda item: item.completed_at, reverse=True)
 
     def get(self, model_id: str) -> TrainedModelDetail:
-        return TrainedModelDetail.model_validate(self._read_record(self._trained_root / model_id))
+        return TrainedModelDetail.model_validate(self._read_record(child_path(self._trained_root, model_id)))
 
     def publish(self, model_id: str) -> TrainedModelDetail:
-        record = self.get(model_id)
-        source = self._trained_root / model_id
-        destination = self._publish_root / f"{record.name}-{model_id[:8]}"
-        if destination.exists():
-            shutil.rmtree(destination)
-        shutil.copytree(source, destination, ignore=shutil.ignore_patterns("record.json"))
-        published_manifest = ModelManifest.model_validate({**record.manifest, "model_path": destination})
-        if self._model_registry:
-            self._model_registry.register(published_manifest, destination.name)
-        payload = self._read_record(source)
-        payload["status"] = "published"
-        (source / "record.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-        return TrainedModelDetail.model_validate(payload)
+        # Display names never participate in filesystem paths. Serialize publication
+        # with rename/delete; publish an immutable artifact before changing the index.
+        with FileLock(self._publish_root / '.publication.lock'):
+            record = self.get(model_id)
+            source = child_path(self._trained_root, model_id)
+            destination = child_path(self._publish_root, model_id)
+            if destination.exists():
+                metadata = json.loads((destination / 'metadata.json').read_text(encoding='utf-8'))
+                if metadata.get('id') != model_id:
+                    raise PredictionValidationError('Published package ID conflicts with the requested model.')
+                if not (destination / record.manifest.get('artifact', 'model.pkl')).is_file():
+                    raise PredictionValidationError('Existing published artifact is missing; restore the package before republishing.')
+            else:
+                temporary = Path(tempfile.mkdtemp(prefix='.publish-', dir=self._publish_root))
+                try:
+                    shutil.copytree(source, temporary, dirs_exist_ok=True, ignore=shutil.ignore_patterns('record.json'))
+                    temporary.rename(destination)
+                finally:
+                    if temporary.exists():
+                        shutil.rmtree(temporary)
+            published_manifest = ModelManifest.model_validate({**record.manifest, 'model_path': destination})
+            if self._model_registry:
+                self._model_registry.register(published_manifest, destination.name)
+            payload = self._read_record(source)
+            payload['status'] = 'published'
+            (source / 'record.json').write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding='utf-8')
+            return TrainedModelDetail.model_validate(payload)
 
     def rename(self, model_id: str, name: str) -> TrainedModelDetail:
-        source = self._trained_root / model_id
+        with FileLock(self._publish_root / '.publication.lock'):
+            return self._rename(model_id, name)
+
+    def _rename(self, model_id: str, name: str) -> TrainedModelDetail:
+        source = child_path(self._trained_root, model_id)
         payload = self._read_record(source)
         payload["name"] = name.strip()
         payload["manifest"]["name"] = name.strip()
@@ -327,8 +347,12 @@ class TrainingService:
         return TrainedModelDetail.model_validate(payload)
 
     def delete_many(self, model_ids: list[str]) -> None:
+        with FileLock(self._publish_root / '.publication.lock'):
+            return self._delete_many(model_ids)
+
+    def _delete_many(self, model_ids: list[str]) -> None:
         for model_id in model_ids:
-            source = self._trained_root / model_id
+            source = child_path(self._trained_root, model_id)
             self.get(model_id)
             for metadata_path in self._publish_root.glob("*/metadata.json"):
                 metadata = json.loads(metadata_path.read_text(encoding="utf-8"))

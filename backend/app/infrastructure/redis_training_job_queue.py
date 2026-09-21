@@ -1,29 +1,36 @@
 from __future__ import annotations
 
 import redis
+import hashlib
+import time
+from pathlib import Path
+from app.infrastructure.file_lock import FileLock
 
 
 _RECOVER_PROCESSING_SCRIPT = """
-local pending = redis.call('lrange', KEYS[1], 0, -1)
-if #pending == 0 then
-  return 0
-end
-for index = 1, #pending do
-  redis.call('lpush', KEYS[2], pending[index])
-end
-redis.call('del', KEYS[1])
-return #pending
+local removed = redis.call('lrem', KEYS[1], 0, ARGV[1])
+if removed > 0 then redis.call('lpush', KEYS[2], ARGV[1]) end
+return removed > 0 and 1 or 0
 """
 
 
 class RedisTrainingJobQueue:
     """At-least-once Redis queue for persisted training job identifiers."""
 
-    def __init__(self, url: str, queue_name: str = "edgeml:training") -> None:
+    def __init__(self, url: str, queue_name: str = "edgeml:training", locks_root: Path | None = None) -> None:
         self._client = redis.Redis.from_url(url, decode_responses=True)
         self._queue_key = queue_name
         self._processing_key = f"{queue_name}:processing"
         self._dead_letter_key = f"{queue_name}:dead-letter"
+        if locks_root is None:
+            from app.core.config import get_settings
+            locks_root = get_settings().training_jobs_root / '.locks'
+        self._locks_root = locks_root / hashlib.sha256(queue_name.encode()).hexdigest()
+        self._guard = FileLock(self._locks_root / 'dispatch.lock')
+        self._owned: dict[str, FileLock] = {}
+
+    def _job_lock(self, job_id: str) -> FileLock:
+        return FileLock(self._locks_root / (hashlib.sha256(job_id.encode()).hexdigest() + '.lock'), timeout=0)
 
     def enqueue(self, job_id: str) -> None:
         self._client.lpush(self._queue_key, job_id)
@@ -60,10 +67,36 @@ class RedisTrainingJobQueue:
         return True
 
     def consume(self, timeout: int = 5) -> str | None:
-        return self._client.brpoplpush(self._queue_key, self._processing_key, timeout=timeout)
+        # One shared-volume guard closes the move-to-processing/ownership gap.
+        # The job lock stays open for the entire training attempt and is released
+        # by the OS even on an ungraceful process/container exit.
+        deadline = time.monotonic() + timeout
+        while True:
+            with self._guard:
+                job_id = self._client.rpoplpush(self._queue_key, self._processing_key)
+                if job_id:
+                    lock = self._job_lock(job_id)
+                    try:
+                        lock.__enter__()
+                    except TimeoutError:
+                        # A retry/duplicate may be queued before its owner acks.
+                        self._client.lrem(self._processing_key, 1, job_id)
+                        self._client.lpush(self._queue_key, job_id)
+                    else:
+                        self._owned[job_id] = lock
+                        return job_id
+            if time.monotonic() >= deadline:
+                return None
+            time.sleep(min(0.1, max(0, deadline - time.monotonic())))
 
     def acknowledge(self, job_id: str) -> None:
-        self._client.lrem(self._processing_key, 1, job_id)
+        with self._guard:
+            lock = self._owned.pop(job_id, None)
+            if lock:
+                try:
+                    self._client.lrem(self._processing_key, 1, job_id)
+                finally:
+                    lock.__exit__(None, None, None)
 
     def dead_letter(self, job_id: str) -> None:
         """Keep a terminally failed job ID for later inspection or replay."""
@@ -71,17 +104,24 @@ class RedisTrainingJobQueue:
         self._client.lpush(self._dead_letter_key, job_id)
 
     def recover_processing(self) -> int:
-        """Atomically requeue jobs left in processing after a worker restart.
+        """Recover only unlocked jobs. All replicas must share locks_root.
 
-        Worker replicas can start at the same time after a host restart. A
-        Redis Lua script ensures only one worker moves and clears the pending
-        list, preventing duplicate recovery and duplicate model artifacts.
+        Supported on a single host/local Docker volume, not separate host disks
+        or unverified network filesystems. Stop all legacy workers before upgrade.
         """
+        recovered = 0
+        with self._guard:
+            for job_id in set(self.list_processing()):
+                try:
+                    with self._job_lock(job_id):
+                        recovered += int(self._client.eval(_RECOVER_PROCESSING_SCRIPT, 2,
+                            self._processing_key, self._queue_key, job_id) or 0)
+                except TimeoutError:
+                    continue
+        return recovered
 
-        recovered = self._client.eval(
-            _RECOVER_PROCESSING_SCRIPT,
-            2,
-            self._processing_key,
-            self._queue_key,
-        )
-        return int(recovered or 0)
+    def release(self, job_id: str) -> None:
+        """Relinquish ownership while leaving processing durable for recovery."""
+        lock = self._owned.pop(job_id, None)
+        if lock:
+            lock.__exit__(None, None, None)

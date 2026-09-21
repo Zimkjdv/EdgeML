@@ -13,6 +13,7 @@ from app.api.dependencies import get_training_service
 from app.core.config import get_settings
 from app.core.observability import configure_logging
 from app.infrastructure.redis_training_job_queue import RedisTrainingJobQueue
+from app.infrastructure.model_storage import initialize_model_storage
 
 
 logger = logging.getLogger("edgeml.training.worker")
@@ -42,21 +43,18 @@ def _install_signal_handlers(stop_event: Event) -> None:
 def run_worker() -> None:
     configure_logging()
     settings = get_settings()
+    initialize_model_storage(settings)
     queue = RedisTrainingJobQueue(settings.redis_url, settings.training_queue_name)
     service = get_training_service()
     stop_event = Event()
     _install_signal_handlers(stop_event)
     worker_id = f"{socket.gethostname()}-{os.getpid()}"
-    recovered = queue.recover_processing()
     logger.info("Training worker started", extra={"event": "training.worker.started", "worker_id": worker_id})
-    if recovered:
-        logger.warning(
-            "Recovered processing jobs",
-            extra={"event": "training.worker.recovered", "job_id": f"count:{recovered}", "worker_id": worker_id},
-        )
 
     while not stop_event.is_set():
         try:
+            # Also recover crashes while other replicas remain running.
+            queue.recover_processing()
             job_id = queue.consume(timeout=5)
         except redis.RedisError:
             logger.exception("Training queue connection failed", extra={"event": "training.worker.queue_error", "worker_id": worker_id})
@@ -66,7 +64,9 @@ def run_worker() -> None:
             continue
         acknowledge = True
         try:
-            service.run_job(job_id, worker_id=worker_id)
+            # A crash after persisting completion but before ack must not retrain.
+            if service.get_job(job_id).status not in {'completed', 'cancelled'}:
+                service.run_job(job_id, worker_id=worker_id)
         except Exception as exc:
             logger.exception("Training worker failed to execute job", extra={"event": "training.worker.job_error", "job_id": job_id, "worker_id": worker_id})
             try:
@@ -101,8 +101,11 @@ def run_worker() -> None:
                 acknowledge = False
                 logger.exception("Unable to schedule training job retry or dead-letter job", extra={"event": "training.worker.retry_error", "job_id": job_id, "worker_id": worker_id})
         finally:
-            if acknowledge:
-                queue.acknowledge(job_id)
+            try:
+                if acknowledge:
+                    queue.acknowledge(job_id)
+            finally:
+                queue.release(job_id)
 
     logger.info("Training worker stopped", extra={"event": "training.worker.stopped", "worker_id": worker_id})
 

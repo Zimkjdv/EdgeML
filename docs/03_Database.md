@@ -8,7 +8,9 @@ The first Training Module uses local filesystem persistence to avoid prematurely
 
 - `backend/data/datasets/`: trusted uploaded CSVs and dataset-profile metadata.
 - `backend/trained_models/`: draft training artifacts and training records.
-- `backend/ml_models/`: published artifact packages referenced by the Prediction Server's model registry.
+- `backend/ml_models/` locally, `/app/data/published_models` in Docker: published artifact packages referenced by the Prediction Server's model registry. Docker packages share the persistent data Volume with Registry metadata; the image's `/app/ml_models` only seeds missing packages. New publications use model-ID folder names.
+
+Registry JSON mutations are serialized across processes with an OS file lock and atomic replacement. Worker ownership lock files reside under the common training-jobs directory; their presence alone does not indicate a live owner (the kernel-held lock does). Never delete active lock files. Other JSON state files still need the transaction work listed in [ROADMAP](../ROADMAP.md).
 - `backend/data/model_registry.json`: the v0.5 file-backed registry index for trusted published model packages and their active/disabled status.
 - Configured `training_jobs_root` (Docker: `/app/data/training_jobs`): shared JSON job records consumed by the API and queue workers.
 

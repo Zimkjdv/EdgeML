@@ -1,5 +1,13 @@
 # Architecture
 
+## Reliability boundaries (2026-09-21)
+
+- Publication uses a validated ID path, staged copy and atomic directory rename; display names are metadata only. Existing published artifacts are not recursively deleted before republishing.
+- Docker uses the shared `/app/data/published_models` store. Image seeds are copied only when absent; legacy migration runs before container recreation. See [Deployment](05_Deployment.md#model-storage-and-reliability-upgrade).
+- `FileModelRegistry` retains its JSON format, with a reentrant cross-process OS lock around each complete mutation transaction, unique temporary files, fsync and atomic replacement. Invalid indexes are preserved and reported, not silently reset.
+- Redis job ownership is protected by OS locks on the common jobs Volume. Dispatch and recovery share a lock; recovery probes per-job locks and only requeues abandoned entries. OS termination releases ownership without a wall-clock heartbeat timeout. Single-host/shared-local-volume is required; this is not a distributed multi-host lease protocol.
+- Remaining consistency and security work is tracked in [ROADMAP](../ROADMAP.md), including other JSON stores and dead-letter replay.
+
 ```text
 Vue UI -> FastAPI router -> PredictionService -> ModelCatalog -> BasePredictor plugin
                                             -> CSV validation

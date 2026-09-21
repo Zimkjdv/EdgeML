@@ -6,7 +6,7 @@ On Windows, use the deployment launcher so the shared ML base is built before th
 .\deploy-docker.bat
 ```
 
-If you use Docker Compose directly, build the base image first:
+On a fresh installation, if you use Docker Compose directly, build the base image first. For an existing installation, follow the model-storage upgrade below before any recreation:
 
 ```powershell
 docker build -f backend/Dockerfile.base -t edgeml-ml-base:latest ./backend
@@ -52,4 +52,23 @@ For a complete Docker runtime without rebuilding, run `start-dev-docker.bat`. Wh
 
 The hybrid local launcher and full Docker runtime can run together because they use separate host ports and Redis queues: local `8000`/`5173`/`6381`, Docker `8010`/`5180`/`6380`. Their data directories and worker processes remain independent.
 
-For production, terminate TLS at the organization-approved reverse proxy and mount only trusted model artifacts read-only.
+For production, terminate TLS at the organization-approved reverse proxy. Integrated publication requires a writable trusted model store; an inference-only deployment may use read-only artifacts after provisioning.
+
+## Model storage and reliability upgrade
+
+Docker now uses `EDGEML_MODELS_ROOT=/app/data/published_models` in the existing `prediction-data` volume, shared by Backend and Worker. `/app/ml_models` in the image is only the bundled seed source (`EDGEML_BUNDLED_MODELS_ROOT`). Startup copies missing packages atomically under a file lock, never overwrites existing packages, and leaves the existing Registry lifecycle state intact. Local development keeps `backend/ml_models`.
+
+For the first upgrade from the old writable-layer layout:
+
+1. Pause browser/API writes and allow active training to finish. Stop any manually launched legacy workers; do not run old and new workers together.
+2. Keep the existing Backend container and `prediction-data` volume. Do **not** run `docker compose down`, remove the old Backend, or use `down -v` before migration.
+3. Run `deploy-docker.bat` (optionally `deploy-docker.bat 3`). Its preparation helper starts the existing Backend if stopped, stops old Compose Workers, and executes the stdlib migration script inside the old container. It copies old model packages into `/app/data/published_models` before Compose recreates containers. Original packages remain untouched; differing destination files abort deployment instead of overwriting.
+4. Verify the model list and a prediction for an existing published model. On subsequent recreate operations, packages remain on the shared data volume.
+
+`start-dev-docker.bat` refuses this legacy upgrade and directs you to the rebuild launcher; starting outdated images is not sufficient to activate the reliability fixes. If running Compose manually, run `prepare-docker-upgrade.bat rebuild` before the first `up --build`. Migration failure leaves original packages/container intact and legacy Workers stopped; resolve the conflict and rerun deployment. If the old container was already deleted, restore its model backup or republish the preserved trained models; migration cannot recover an erased writable layer. Keep the same Compose project name/volume when moving folders, or explicitly migrate the old volume.
+
+New publications use model IDs as package folder names; renaming changes metadata only. Existing name-based packages remain compatible. Republishing a legacy model registers its ID-based package; older package copies are retained until an explicit operator cleanup, not automatically deleted during migration.
+
+Workers use cross-process OS file locks in the shared training-jobs directory to hold job ownership. Claim and recovery share a short dispatch lock, and recovery skips live owners. Locks are released automatically on process termination; idle Workers periodically recover abandoned processing entries. Completed/cancelled records are acknowledged without retraining. Registry updates use a separate cross-process lock around the full read/modify/write transaction and unique atomic-replacement temporary files.
+
+All Worker replicas must share the **same local filesystem/volume** for jobs and lock files. This implementation supports one Docker host or Windows local development; do not use isolated per-host directories or assume NFS/SMB lock semantics. At-least-once delivery remains: a crash between artifact creation and persisted job completion still requires future idempotent-output work (ROADMAP R19).

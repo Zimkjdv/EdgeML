@@ -13,7 +13,7 @@ class FakeRedis:
         self.lists.setdefault(key, [])
         self.lists[key][0:0] = list(values)
 
-    def brpoplpush(self, source: str, destination: str, timeout: int) -> str | None:
+    def rpoplpush(self, source: str, destination: str) -> str | None:
         if not self.lists.get(source):
             return None
         value = self.lists[source].pop()
@@ -37,19 +37,17 @@ class FakeRedis:
     def delete(self, key: str) -> None:
         self.lists.pop(key, None)
 
-    def eval(self, script: str, numkeys: int, processing_key: str, queue_key: str) -> int:
-        pending = list(self.lists.get(processing_key, []))
-        if not pending:
-            return 0
-        self.lpush(queue_key, *pending)
-        self.delete(processing_key)
-        return len(pending)
+    def eval(self, script: str, numkeys: int, processing_key: str, queue_key: str, job_id: str) -> int:
+        removed = self.lrem(processing_key, 0, job_id)
+        if removed:
+            self.lpush(queue_key, job_id)
+        return int(bool(removed))
 
 
-def test_redis_queue_dispatches_acknowledges_and_recovers(monkeypatch) -> None:
+def test_redis_queue_dispatches_acknowledges_and_recovers(monkeypatch, tmp_path) -> None:
     fake = FakeRedis()
     monkeypatch.setattr("redis.Redis.from_url", lambda *args, **kwargs: fake)
-    queue = RedisTrainingJobQueue("redis://test", "queue")
+    queue = RedisTrainingJobQueue("redis://test", "queue", tmp_path)
 
     queue.enqueue("job-1")
     assert queue.consume(timeout=1) == "job-1"
@@ -58,6 +56,8 @@ def test_redis_queue_dispatches_acknowledges_and_recovers(monkeypatch) -> None:
 
     queue.enqueue("job-2")
     assert queue.consume(timeout=1) == "job-2"
+    assert queue.recover_processing() == 0
+    queue.release('job-2')  # Simulate OS ownership release after process exit.
     assert queue.recover_processing() == 1
     assert queue.consume(timeout=1) == "job-2"
 
@@ -67,12 +67,13 @@ def test_redis_queue_dispatches_acknowledges_and_recovers(monkeypatch) -> None:
     queue.acknowledge("job-3")
     assert fake.lists["queue:dead-letter"] == ["job-3"]
     assert fake.lists["queue:processing"] == ["job-2"]
+    queue.release('job-2')
 
 
-def test_queue_operations_report_and_move_jobs(monkeypatch) -> None:
+def test_queue_operations_report_and_move_jobs(monkeypatch, tmp_path) -> None:
     fake = FakeRedis()
     monkeypatch.setattr("redis.Redis.from_url", lambda *args, **kwargs: fake)
-    queue = RedisTrainingJobQueue("redis://test", "queue")
+    queue = RedisTrainingJobQueue("redis://test", "queue", tmp_path)
 
     queue.enqueue("queued")
     queue.dead_letter("failed")

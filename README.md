@@ -96,17 +96,19 @@ For integrations that need to discover models, use `GET /api/models/ids` to retr
 
 ## Optimization backlog
 
+The ordered project-wide review and acceptance checklist is maintained in [ROADMAP.md](ROADMAP.md). The first reliability batch implements ID-based safe publication, persistent Docker model storage with legacy migration, live-worker-safe recovery on a shared volume, and cross-process Registry transactions. See [deployment upgrade instructions](docs/05_Deployment.md#model-storage-and-reliability-upgrade) before rebuilding an existing installation.
+
 The current implementation is suitable for local and controlled self-hosted use. The following items are recorded before expanding toward multi-user production deployment:
 
-- **P0 reliability:** add runtime integration tests for Redis restart, worker recovery, retry, dead-letter replay, and graceful shutdown; make processing recovery atomic when multiple workers start together.
-- **P0 data durability:** persist the Redis queue and dead-letter list, and replace process-local file writes with atomic or database-backed repositories before running multiple Backend replicas.
+- **P0 reliability:** shared-volume ownership locks now protect live jobs during recovery; remaining Redis restart, dead-letter replay, idempotent output and graceful-shutdown coverage are tracked in ROADMAP.
+- **P0 data durability:** Redis AOF and published Docker packages are persistent, and Registry writes have cross-process transactions. Other JSON repositories and full backup/restore verification remain in ROADMAP.
 - **P0 input safety:** enforce JSON request body, row, column, and value-size limits in addition to the existing CSV byte limit.
 - **P0 access control:** refine token scopes and add an external identity/reverse-proxy integration before exposing model registry and queue operations outside a trusted network.
 - **P1 operations:** add service healthchecks, resource limits, log rotation, Redis authentication, backup/restore procedures, and immutable Docker image tags.
 - **P1 frontend quality:** split the monolithic `App.vue`, move all labels to structured i18n keys, add frontend unit/E2E tests, and code-split the large production bundle.
 - **P2 product roadmap:** complete Ridge and richer AutoML controls where they belong, then continue the planned standalone AutoML extraction and v0.8 observability dashboard.
 
-The recommended next implementation order is runtime integration coverage, queue recovery correctness, Redis persistence, input limits, and stronger external authentication. These changes reduce operational risk without changing the `ModelCatalog` or `PredictionService` application boundaries.
+Follow the R01–R19 order in ROADMAP for reliability work. Redis AOF is already enabled; additional input limits and stronger external authentication remain planned. These changes preserve the `ModelCatalog` and `PredictionService` application boundaries.
 
 ## Runtime selection
 

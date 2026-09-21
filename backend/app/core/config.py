@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="EDGEML_", case_sensitive=False)
 
     models_root: Path = Path(__file__).resolve().parents[2] / "ml_models"
+    bundled_models_root: Path | None = None
     datasets_root: Path = Path(__file__).resolve().parents[2] / "data" / "datasets"
     trained_models_root: Path = Path(__file__).resolve().parents[2] / "trained_models"
     training_jobs_root: Path = Path(__file__).resolve().parents[2] / "training_jobs"
