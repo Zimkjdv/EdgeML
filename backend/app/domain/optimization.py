@@ -27,6 +27,7 @@ class OptimizationRequest(BaseModel):
     count: int = Field(default=3, ge=1, le=5)
     parameters: list[ParameterRule] = Field(min_length=1, max_length=256)
     seed: int = Field(default=42, ge=0, le=2**32-1)
+    compare_baseline: bool = False
 
 
 class Recommendation(BaseModel):
@@ -45,3 +46,4 @@ class OptimizationResult(BaseModel):
     evaluated: int
     recommendations: list[Recommendation]
     best_error_by_iteration: list[float]
+    baseline: Recommendation | None = None

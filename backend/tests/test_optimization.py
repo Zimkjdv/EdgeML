@@ -87,6 +87,53 @@ def test_nonfinite_target_and_count_rejected():
     with pytest.raises(ValidationError): OptimizationRequest.model_validate(payload)
 
 
+@pytest.mark.parametrize('low,high,step', [(0.1, 0.3, 0.1), (-0.3, 0.3, 0.1), (1.1, 1.7, 0.2)])
+def test_decimal_step_includes_aligned_endpoint(low, high, step):
+    assert OptimizationService.snap_step(high, low, high, step) == high
+    assert low <= OptimizationService.snap_step(high + 10, low, high, step) <= high
+
+
+def test_step_does_not_include_unaligned_endpoint():
+    assert OptimizationService.snap_step(0.35, 0.1, 0.35, 0.1) == 0.3
+
+
+def test_achievable_candidates_precede_diverse_misses():
+    catalog = Catalog()
+    manifest = catalog.get('test')
+    manifest.features = [manifest.features[0]]
+    manifest.features[0].dtype = 'float64'
+    catalog.get = lambda _: manifest
+    class Identity:
+        def predict(self, frame): return frame['x'].to_numpy()
+    class IdentityFactory:
+        def create(self, manifest): return Identity()
+    req = OptimizationRequest(model_id='test', target=0, tolerance=.021, count=3,
+        parameters=[{'name':'x','optimize':True,'minimum':0,'maximum':1,'step':.01, 'value':.5}], compare_baseline=True)
+    result = OptimizationService(catalog, IdentityFactory()).run(req)
+    assert len(result.recommendations) == 3
+    assert all(r.within_tolerance for r in result.recommendations)
+    assert result.baseline.prediction == .5
+    assert result.baseline.parameters == {'x': .5}
+    assert result.baseline.absolute_error == .5
+    req.compare_baseline = False
+    without = OptimizationService(catalog, IdentityFactory()).run(req)
+    assert without.baseline is None
+    assert without.evaluated == result.evaluated
+    assert without.recommendations == result.recommendations
+    req.parameters[0].minimum = .1
+    req.parameters[0].maximum = .3
+    req.parameters[0].step = .2
+    endpoints = OptimizationService(catalog, IdentityFactory()).run(req)
+    assert {r.parameters['x'] for r in endpoints.recommendations} == {.1, .3}
+
+
+def test_missing_baseline_value_is_rejected():
+    req = request()
+    req.compare_baseline = True
+    with pytest.raises(PredictionValidationError, match='baseline'):
+        OptimizationService(Catalog(), Factory()).run(req)
+
+
 def test_trained_catalog_and_path_boundary(tmp_path):
     folder = tmp_path/'model'; folder.mkdir()
     manifest = Catalog().get('model')

@@ -1,4 +1,5 @@
 import math
+from decimal import Decimal, ROUND_FLOOR, ROUND_HALF_EVEN
 import numpy as np
 import pandas as pd
 from app.domain.model_catalog import ModelCatalog
@@ -8,6 +9,13 @@ from app.domain.errors import PredictionValidationError
 
 class OptimizationService:
     """Bounded mixed-variable evolutionary search through the predictor boundary."""
+    @staticmethod
+    def snap_step(value, low, high, step):
+        low, high, step = map(lambda x: Decimal(str(x)), (low, high, step))
+        last = int(((high-low)/step).to_integral_value(rounding=ROUND_FLOOR))
+        index = int(((Decimal(str(value))-low)/step).to_integral_value(rounding=ROUND_HALF_EVEN))
+        return float(low + min(last, max(0, index))*step)
+
     def __init__(self, catalog: ModelCatalog, factory: PredictorProvider, population=256, iterations=12, defaults=None):
         self.catalog, self.factory = catalog, factory
         self.population, self.iterations = population, iterations
@@ -50,9 +58,10 @@ class OptimizationService:
                 if not math.isfinite(p.maximum-p.minimum):
                     raise PredictionValidationError(f'{p.name}: numeric range is too large.')
                 step = p.step or (1 if integer else None)
-                if integer and (not p.minimum.is_integer() or not p.maximum.is_integer() or not float(step).is_integer()):
+                if integer and (not float(p.minimum).is_integer() or not float(p.maximum).is_integer() or not float(step).is_integer()):
                     raise PredictionValidationError(f'{p.name}: integer features require integer bounds and step.')
-                if step and (step > p.maximum-p.minimum or (p.maximum-p.minimum)/step > 1e9):
+                decimal_span = Decimal(str(p.maximum)) - Decimal(str(p.minimum))
+                if step and (Decimal(str(step)) > decimal_span or decimal_span / Decimal(str(step)) > 1e9):
                     raise PredictionValidationError(f'{p.name}: invalid step size.')
                 domains.append(('numeric', p.minimum, p.maximum, step, integer))
             else:
@@ -63,6 +72,26 @@ class OptimizationService:
         rng = np.random.default_rng(request.seed)
         predictor = self.factory.create(manifest)
         names = [f.name for f in manifest.features]
+        baseline = None
+        if request.compare_baseline:
+            values = []
+            for feature in manifest.features:
+                value = rules[feature.name].value
+                if value is None or isinstance(value, str) and (not value.strip() or len(value) > 1000):
+                    raise PredictionValidationError(f'{feature.name}: baseline value is required.')
+                if feature.dtype.startswith(('int', 'float')):
+                    try:
+                        value = float(value)
+                    except (ValueError, TypeError):
+                        raise PredictionValidationError(f'{feature.name}: baseline must be numeric.')
+                    if not math.isfinite(value) or feature.dtype.startswith('int') and not value.is_integer():
+                        raise PredictionValidationError(f'{feature.name}: invalid baseline value.')
+                values.append(value)
+            output = np.asarray(predictor.predict(pd.DataFrame([values], columns=names)), dtype=float).reshape(-1)
+            if len(output) != 1 or not np.isfinite(output).all():
+                raise PredictionValidationError('The model returned an invalid baseline prediction.')
+            error = abs(float(output[0])-request.target)
+            baseline = Recommendation(parameters=dict(zip(names, values)), prediction=float(output[0]), absolute_error=error, within_tolerance=error <= request.tolerance)
         seen, scored, history = set(), [], []
         for iteration in range(self.iterations):
             rows = []
@@ -79,8 +108,7 @@ class OptimizationService:
                         _, low, high, step, integer = domain
                         value = float(np.clip(rng.normal(parent[j], (high-low)*(.25/(iteration+1)**.5)), low, high)) if parent else float(rng.uniform(low, high))
                         if step:
-                            index = min(math.floor((high-low)/step), max(0, round((value-low)/step)))
-                            value = low + index*step
+                            value = self.snap_step(value, low, high, step)
                         value = int(round(value)) if integer else float(value)
                     row.append(value)
                 key = tuple(row)
@@ -101,14 +129,17 @@ class OptimizationService:
         def distance(a, b):
             return max([abs(a[j]-b[j])/(d[2]-d[1]) if d[0]=='numeric' else float(a[j]!=b[j])
                         for j, d in enumerate(domains) if d[0]!='fixed'], default=0)
-        for threshold in (.03, 0):
-            for item in scored:
-                if len(selected) == request.count:
-                    break
-                if all(distance(item[2], old[2]) > threshold for old in selected):
-                    selected.append(item)
+        # Exhaust distinct in-tolerance candidates before any out-of-tolerance ones.
+        for pool in ([item for item in scored if item[0] <= request.tolerance],
+                     [item for item in scored if item[0] > request.tolerance]):
+            for threshold in (.03, 0):
+                for item in pool:
+                    if len(selected) == request.count:
+                        break
+                    if all(distance(item[2], old[2]) > threshold for old in selected):
+                        selected.append(item)
         selected.sort(key=lambda item: item[0])
         return OptimizationResult(model_id=manifest.id, model_name=manifest.name, target=request.target,
-            tolerance=request.tolerance, seed=request.seed, evaluated=len(seen), best_error_by_iteration=history,
+            tolerance=request.tolerance, seed=request.seed, evaluated=len(seen), best_error_by_iteration=history, baseline=baseline,
             recommendations=[Recommendation(parameters=dict(zip(names, row)), prediction=y,
                 absolute_error=error, within_tolerance=error <= request.tolerance) for error,y,row in selected])

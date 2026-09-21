@@ -20,6 +20,8 @@ New training runs preserve `training_dataset_id` and `feature_defaults` in both 
 
 ## Search behavior
 
+High-priority review changes are recorded in [Optimization review](13_Optimization_Review.md). Enable baseline comparison to edit current values for adjustable inputs and compare baseline predicted Y and per-feature changes. Baselines default to training statistics and must be checked against actual operating values. Invalid fields are reported immediately with click-to-locate navigation.
+
 ### Importing fixed inputs from CSV
 
 Select the adjustable features first, then use **Import fixed features from CSV**. The file must be UTF-8 (a UTF-8 BOM is accepted), include feature names in its header, and contain at least one data row. Header matching is case-sensitive after trimming surrounding whitespace. Include every currently fixed feature. Adjustable feature columns and unrelated columns (for example the target Y) are ignored; they do not change search bounds or the requested target.
@@ -50,7 +52,7 @@ The shared bilingual navigation uses a collapsible grouped sidebar with consiste
 
 The service uses seeded mixed-variable population search, with global random exploration and mutations around better candidates. Default limits are 256 candidates per iteration and 12 iterations (at most 3,072 distinct model evaluations). Configure `EDGEML_OPTIMIZATION_POPULATION` (16–512) and `EDGEML_OPTIMIZATION_ITERATIONS` (1–20) in the backend environment. Launchers currently read only the API token from the root `.env`; export other settings explicitly for local execution or add them to the Compose backend environment.
 
-The objective is absolute error `abs(predicted_y - target_y)`. Recommendations prefer differences of more than 3% of at least one adjustable numeric range, or a different category. If needed, remaining slots use distinct candidates with smaller differences. This can trade a little target accuracy for alternative combinations. Results are sorted by target error. Fewer than the requested number are returned when not enough distinct candidates were found. Unreachable targets return the nearest candidates found with `within_tolerance: false`; global optimality is not guaranteed.
+The objective is absolute error `abs(predicted_y - target_y)`. In-tolerance candidates are selected before out-of-tolerance candidates. Within each group, recommendations prefer differences of more than 3% of at least one adjustable numeric range, or a different category, then fill with distinct candidates at smaller distances. Diversity cannot displace available in-tolerance candidates with misses. Results are sorted by target error. Fewer recommendations are returned when not enough distinct candidates were found. Unreachable targets return the nearest candidates found with `within_tolerance: false`; global optimality is not guaranteed. Decimal steps are anchored at the minimum; the maximum is included only when aligned to that grid.
 
 The seed makes a search repeatable for the same deterministic model, constraints, and runtime. Results and iteration history are returned directly and not persisted. Simulation does not create prediction-history entries. Requests run synchronously with bounded work; large models may take longer, and production-wide concurrency control is a follow-up.
 

@@ -48,6 +48,8 @@ Future improvements may add cross-feature constraints, weighted objectives, clas
 
 ## Improvement opportunities
 
+The high-priority page review (in-tolerance selection, input validation, baseline comparison and decimal steps) is implemented. See [review record and pending items](13_Optimization_Review.md). Recommendation diversity is now applied within the in-tolerance group first; misses are used only when there are too few distinct in-tolerance candidates.
+
 The current reverse search is useful for bounded, model-consistent recommendations, but the following improvements would make it more reliable in production:
 
 1. **Cross-feature constraints (highest priority).** Support rules such as `A + B <= limit`, valid category/value pairings, ratios, and features that must change together. Independent column bounds can otherwise produce combinations that are statistically or operationally invalid.
