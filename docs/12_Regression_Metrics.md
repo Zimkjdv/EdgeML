@@ -22,3 +22,5 @@ NRMSE and R² are null for constant targets. R² also requires at least two rows
 `cv_rmse_mean`, `cv_mae_mean`, and `cv_r2_mean` retain the separate fold-averaged scores. `rmse_std` is the population standard deviation (ddof=0) of fold RMSE, not NRMSE. Fold R² follows scikit-learn scoring conventions; it is not the headline OOF R².
 
 Existing artifacts are not rewritten. Old validation scores require retraining with the original data and settings to produce the new OOF scores. Re-running external evaluation updates test scores only. The UI identifies records without the new evaluation version as legacy.
+
+The trained-model detail card displays validation and test metrics together after selecting a model. Card visibility is controlled by Vue state, not CSS sibling positions: feature-importance and classification cards can change the order. The obsolete positional hiding rules were removed to restore the detail/rename cards without changing stored metrics or formulas.

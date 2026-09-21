@@ -290,6 +290,8 @@ The response includes `model_name`, `prediction_column`, a `records` array conta
 4. Review the background-job progress, then inspect the Draft model metrics.
 5. Publish the model to make it available in **Prediction**.
 
+Select a model in **Trained Models** to display its detail/evaluation card, including separate validation and test metrics. Optional feature-importance or classification cards do not hide these details; visibility follows model selection rather than card order.
+
 Training, its optional external test, and later **Trained Models → Evaluate** share the same missing-row rules: remove missing targets; with `numeric_imputer=drop`, also remove rows missing any selected numeric or categorical feature. Other imputation modes retain feature gaps for the fitted pipeline. Unselected columns never cause row removal. Cross-validation row/class counts are checked after cleaning; an empty evaluation set returns `422`. Existing saved metrics are unchanged until the model is retrained or evaluated again.
 
 Prediction has a separate row policy: it drops missing required input features and selected Ground Truth. Numeric values are validated first; integer inputs such as `1.9`, nonfinite values and values outside the manifest dtype range return `422` instead of being truncated or wrapped. Integral values such as `2.0` are accepted. CSV and JSON preserve integer precision during parsing, including columns with missing rows.
