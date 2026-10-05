@@ -3,6 +3,7 @@ from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import Response
+from starlette.concurrency import run_in_threadpool
 
 from app.api.dependencies import get_prediction_service
 from app.core.observability import record_prediction
@@ -83,7 +84,7 @@ async def predict(
         raise HTTPException(status_code=400, detail="CSV exceeds the configured upload size limit.")
 
     try:
-        result = service.predict_csv(
+        result = await run_in_threadpool(service.predict_csv,
             model_id=model_id,
             content=content,
             source_filename=file.filename,

@@ -1,5 +1,7 @@
 # Architecture
 
+CSV prediction reads the upload asynchronously and dispatches synchronous Pandas/model work to Starlette's bounded thread pool (`run_in_threadpool`). Routers still only translate HTTP; prediction validation and inference remain in `PredictionService`. Health and other API requests can respond while a CSV prediction is running. The existing shared thread-pool capacity bounds concurrency; CPU throughput still depends on model/native-library threads and available resources.
+
 ## Reliability boundaries (2026-09-21)
 
 - Publication uses a validated ID path, staged copy and atomic directory rename; display names are metadata only. Existing published artifacts are not recursively deleted before republishing.

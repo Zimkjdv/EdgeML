@@ -284,6 +284,8 @@ The response includes `model_name`, `prediction_column`, a `records` array conta
 
 ## Training workflow
 
+CSV prediction parsing and inference run in Starlette's bounded worker thread pool, keeping the API event loop available for health checks and other requests during prediction. This does not imply unlimited parallel model inference.
+
 Cross-validation trains once per fold and collects scores, predictions and probabilities together. Five folds plus the final model need six fits. Progress shows completed folds; preprocessing is still fitted separately inside each fold.
 
 Model evaluation, rename, publication, and deletion are serialized per model across API/worker processes. Model records and manifests use atomic replacement to prevent partial reads; local lock files must not be removed while services run. See [Storage](docs/03_Database.md).
