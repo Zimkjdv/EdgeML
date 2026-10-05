@@ -282,9 +282,15 @@ python predict_api_example.py
 
 The response includes `model_name`, `prediction_column`, a `records` array containing predictions, optional evaluation `metrics`, and `dropped_rows`. The legacy `records` request field is still accepted for compatibility, but new integrations should send `data`.
 
-## Training workflow
+### CSV prediction
+
+Prediction CSV parsing supports UTF-8/BOM, quoted commas/newlines and escaped quotes. Upload counts skip blank physical lines but count empty CSV records; dropped-row estimates check only required model features and selected Ground Truth, using the same explicit NA markers as the backend. Changing model/Ground Truth recalculates counts and clears stale results. Duplicate/empty headers or inconsistent row widths are rejected. Extra-column missing values do not remove rows.
+
+Docker Nginx now allows an 11 MiB request body (default backend limits: 5 MiB CSV file, 10 MiB JSON body) and 300-second send/read inactivity timeouts. Configure `EDGEML_PROXY_MAX_BODY_SIZE`, `EDGEML_PROXY_SEND_TIMEOUT`, and `EDGEML_PROXY_READ_TIMEOUT` together with backend limits if needed. Rebuild the frontend image to apply the template change; see [Deployment](docs/05_Deployment.md).
 
 CSV prediction parsing and inference run in Starlette's bounded worker thread pool, keeping the API event loop available for health checks and other requests during prediction. This does not imply unlimited parallel model inference.
+
+## Training workflow
 
 Cross-validation trains once per fold and collects scores, predictions and probabilities together. Five folds plus the final model need six fits. Progress shows completed folds; preprocessing is still fitted separately inside each fold.
 

@@ -1,0 +1,13 @@
+{
+  "na_values": ["", "#N/A", "#N/A N/A", "#NA", "-1.#IND", "-1.#QNAN", "-NaN", "-nan", "1.#IND", "1.#QNAN", "<NA>", "N/A", "NA", "NULL", "NaN", "None", "n/a", "nan", "null"],
+  "valid": [
+    {"csv": "﻿x,y,備註\r\n1,2,\r\n2,,\r\n3,4,\r\n", "required": ["x"], "truth": "", "total": 3, "dropped": 0},
+    {"csv": "x,y,備註\n1,2,\n2,,\n3,4,\n", "required": ["x"], "truth": "y", "total": 3, "dropped": 1},
+    {"csv": "x,y,備註\n1,2,\n2,,\n3,4,\n", "required": ["y"], "truth": "", "total": 3, "dropped": 1},
+    {"csv": "x,y,備註\n1,2,\n\n   \n,,\n3,4,\n", "required": ["x"], "truth": "", "total": 3, "dropped": 1},
+    {"csv": "x,y,備註\r\n1,2,\"中文,備註\r\n第二行\"\r\n2,3,\"他說\"\"好\"\"\"\r\n", "required": ["x"], "truth": "", "total": 2, "dropped": 0},
+    {"csv": "x,y\nNA,2\nNaN,3\nnull,4\nNULL,5\nNone,6\nN/A,7\n<NA>,8\n1,9\n", "required": ["x"], "truth": "", "total": 8, "dropped": 7},
+    {"csv": "x,y\n\"\",2\n\" \",3\n1,4\n", "required": ["x"], "truth": "", "total": 3, "dropped": 1}
+  ],
+  "invalid": ["x,x\n1,2\n", "x,\n1,2\n", "x,y\n1\n", "x,y\n1,2,3\n", "x,y\n1,\"bad\n", "x,y\n1,\"bad\"tail\n", "x,y\n1,ba\"d\n", "x,y\n"]
+}

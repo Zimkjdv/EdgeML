@@ -1,5 +1,17 @@
 # Deployment
 
+## Proxy uploads and long requests
+
+Frontend Nginx renders `nginx.conf` as `/etc/nginx/templates/default.conf.template` using these runtime environment variables (also configurable in Compose `.env`):
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `EDGEML_PROXY_MAX_BODY_SIZE` | `11m` | Entire request limit; allows default 5 MiB CSV plus multipart overhead and 10 MiB JSON |
+| `EDGEML_PROXY_SEND_TIMEOUT` | `300s` | Client-body / upstream-send inactivity timeout |
+| `EDGEML_PROXY_READ_TIMEOUT` | `300s` | Upstream-response inactivity timeout, including prediction/optimization |
+
+Backend remains authoritative: CSV file limit `EDGEML_MAX_UPLOAD_BYTES` (5242880), JSON body limit `EDGEML_MAX_JSON_BODY_BYTES` (10485760). If increasing either, raise the proxy request limit too and allow multipart overhead. Proxy rejection is HTTP 413; an over-limit CSV reaching the backend remains HTTP 400. Timeout settings are inactivity periods, not a guaranteed total operation duration or cancellation mechanism. New templates require a frontend rebuild; later environment-only changes require recreation. Use `deploy-docker.bat` for the initial upgrade. Tests target an isolated disposable Nginx/backend stack via `EDGEML_TEST_PROXY_URL`, including CSV above 1 MiB and both backend/proxy limits.
+
 On Windows, use the deployment launcher so the shared ML base is built before the application images:
 
 ```powershell

@@ -1,6 +1,6 @@
 # EdgeML ROADMAP
 
-更新：2026-09-21。此文件是全專案檢查後的修正順序與驗收清單；產品版本方向另見 [Future design](docs/06_Future.md)。
+更新：2026-10-05。此文件是全專案檢查後的修正順序與驗收清單；產品版本方向另見 [Future design](docs/06_Future.md)。
 
 狀態「已實作」表示程式與回歸測試已加入，不表示既有 Docker 環境已升級。每次完成項目應更新狀態、驗證結果與相關文件。
 
@@ -25,15 +25,15 @@ R03／R04 的支援範圍是 Windows 本機，或單一 Docker host 上所有 re
 | R06 | 高／已實作 | 預測整數特徵 `1.9` 被 astype 靜默改為 `1`；有缺值時分支不同 | 共用數值驗證檢查有限值、整數性及 signed／unsigned dtype 範圍；Decimal／nullable integer 保留有缺值欄位的大整數精度。CSV／JSON 實測 `422`、小數、分數文字、NaN／Inf、溢位、int64／uint64 邊界與缺值。 |
 | R07 | 中／已實作（單機範圍） | Dead-letter replay 先 enqueue 再把 failed 改 queued，Worker 可能讀到舊狀態 | dispatch／job lock 內先原子保存 queued／replay_pending，再以 Lua 移轉 Redis ID；派工後不覆寫 job。檔案失敗保留原件；Redis 結果不明時保留準備狀態，未派工的 dead-letter 可再次 replay。真 Redis 驗證立即消費、並行只派一次、活躍 worker、檔案失敗、Redis 成功前／後断線與準備後程序崩潰。 |
 | R08 | 中／已實作 | 訓練 drop 特徵缺值，但訓練時外部測試與後續 evaluate 只 drop target | `clean_supervised_frame` 統一訓練、兩個外部測試入口與 importance；drop 模式清理所有選取特徵，其他模式僅清理 target。清理後驗證 folds／class counts，空資料回報 validation error。中文／類別／未選欄位缺值及三入口指標一致性已測；舊指標需自行重訓／重新評估。 |
-| R09 | 中／待處理 | Prediction 前端以換行切 CSV，不支援引號內换行；缺值估算檢查全部欄位，與後端不同 | 共用可靠 CSV parser；明確對齊必要特徵／Ground Truth、NA 規則；測試換行、中文、額外欄位缺值與模型切換。 |
+| R09 | 中／已完成 | Prediction 原先以換行切 CSV，且缺值估算檢查全部欄位 | 2026-10-05 前端 prediction/optimization 共用 parser；中文/BOM/quoted multiline 支援，NA 明確化、只檢查必要特徵與所選 Ground Truth，模型／GT 改變重算且清除舊結果；前後端共用案例驗證。 |
 | R10 | 中／已完成 | async CSV route 原先直接做同步 Pandas／模型推論 | 2026-10-05 改為 Starlette 有界 threadpool；並行測試在推論尚未結束時 health/models 可回應，CSV 結果與錯誤契約維持。 |
 | R11 | 中／部分完成，仍待處理 | 資料集／歷史與工作狀態交易仍需完整並行保護 | Registry、job JSON、模型 record/metadata 已採原子寫入；模型 evaluate/rename/publish/delete 共用每模型鎖。尚需 dataset/history 原子寫入、工作狀態交易及跨檔崩潰復原。 |
 | R12 | 中／待處理 | 資料集空 CSV 的 EmptyDataError 未轉成使用者錯誤 | 一致 422 與清楚訊息；補空檔、只有 header、無效編碼、重複欄名及非有限統計值測試。 |
-| R13 | 中／待處理 | Docker Nginx 未與後端上傳大小及長請求 timeout 對齊 | 設定 CSV／JSON body 上限與 timeout 策略；驗證 1～5 MB CSV、JSON 邊界與耗時搜尋；不能只測直接 API port。 |
+| R13 | 中／已完成 | Docker Nginx 原先未與後端上傳大小及長請求 timeout 對齊 | 2026-10-05 runtime template 預設 11 MiB request cap、300s inactivity timeouts，Backend CSV 5 MiB/JSON 10 MiB 不變；隔離 Nginx 代理測試上傳及雙層邊界。 |
 
 ## 第三批：效能、維護與監控
 
-下一批從 R09 開始。R05 升級會關閉原本未設密碼／Token 的隱式匿名模式；本機需要匿名時請依 README 明確設定。R07 準備完成但 Redis 未派工時，job JSON 可顯示 `queued`／`replay_pending=true`，ID 仍在 dead-letter；恢復後重試同一 replay API。若 ID 已移出 dead-letter，請查看 job／queue 狀態，重試會回 `404`，不重複派工。共用本機 Volume 的限制與 at-least-once 語意不變；R19 冪等 artifact 仍待處理。
+R09、R10、R13、R14 已完成；下一批可從 R11 剩餘交易工作與 R12 資料集邊界開始。R05 升級會關閉原本未設密碼／Token 的隱式匿名模式；本機需要匿名時請依 README 明確設定。R07 準備完成但 Redis 未派工時，job JSON 可顯示 `queued`／`replay_pending=true`，ID 仍在 dead-letter；恢復後重試同一 replay API。若 ID 已移出 dead-letter，請查看 job／queue 狀態，重試會回 `404`，不重複派工。共用本機 Volume 的限制與 at-least-once 語意不變；R19 冪等 artifact 仍待處理。
 
 | ID | 優先度／狀態 | 問題及影響 | 建議修正與驗收 |
 | --- | --- | --- | --- |
@@ -57,6 +57,8 @@ R03／R04 的支援範圍是 Windows 本機，或單一 Docker host 上所有 re
 - 保留現有優點：Router／Service 分層、BasePredictor、Pipeline fold 內預處理、共用 regression_metrics、搜尋輸入限制與可重現種子。
 
 ## 驗證方式與限制
+
+- 2026-10-05 五項優化：Python 3.12 完整後端 **190 tests passed**，包含獨立真 Redis 與 Nginx 代理整合；前端 **14 tests passed**、TypeScript/Vite build 通過，Compose config 與 Nginx syntax 通過。代理實測 1.1 MiB/恰好 5 MiB CSV 成功、超過 CSV 5 MiB 被 Backend 拒絕、JSON 10 MiB 與 Proxy 11 MiB 邊界被拒絕。測試環境不映射主機 port、原始碼唯讀掛載，模型只使用複製的三個範例；沒有重算正式模型或重新部署業務容器。仍有既有依賴 deprecation/solver warnings 與前端 bundle 警告，列入 R18/R15。
 
 - 原分析基準：Python 3.12 後端 81 tests；前端 11 tests；Vite build 通過（bundle warning）。
 - 本批測試：`backend/tests/test_storage_safety.py`、`test_redis_training_job_queue.py`、`test_worker_recovery_integration.py`。

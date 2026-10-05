@@ -7,6 +7,7 @@ import OptimizationPage from './OptimizationPage.vue'
 import WorkspaceNavigation from './WorkspaceNavigation.vue'
 import FeatureImportance from './FeatureImportance.vue'
 import { sessionHeaders, sessionExpired } from './webAuth'
+import { parseCsv, predictionCsvStats, type CsvData } from './csv'
 
 type Feature = { name: string; dtype: string; required: boolean }
 type PredictionModel = { id: string; name: string; version: string; framework: string; problem_type: string; target: string; description: string; features: Feature[] }
@@ -45,6 +46,9 @@ const groundTruthColumn = ref('')
 const evaluationMetrics = ref<Record<string, number | null> | null>(null)
 const evaluationGroundTruth = ref('')
 const predictionFileStats = ref({ totalRows: 0, missingRows: 0, predictedRows: 0 })
+const predictionCsv = ref<CsvData | null>(null)
+const predictionFileError = ref('')
+const predictionMissingColumns = ref<string[]>([])
 const outputBlob = ref<Blob | null>(null)
 const datasetFile = ref<File | null>(null)
 const datasetLoading = ref(false)
@@ -259,10 +263,19 @@ const detectGroundTruthColumn = () => {
 }
 watch([predictionModelId, predictionFileColumns], detectGroundTruthColumn, { deep: true })
 
-const parseCsvRows = (csv: string) => {
-  const normalized = csv.replace(/^\uFEFF/, '').trim()
-  return normalized ? normalized.split(/\r?\n/).map(parseCsvLine) : []
-}
+watch([predictionCsv, selectedPredictionModel, groundTruthColumn], () => {
+  outputBlob.value = null; previewColumns.value = []; previewRows.value = []
+  evaluationMetrics.value = null; evaluationGroundTruth.value = ''
+  predictionMissingColumns.value = []
+  if (!predictionCsv.value) return
+  if (!selectedPredictionModel.value) {
+    predictionFileStats.value = { totalRows: predictionCsv.value.rows.length, missingRows: 0, predictedRows: 0 }
+    return
+  }
+  const stats = predictionCsvStats(predictionCsv.value, selectedPredictionModel.value.features, groundTruthColumn.value)
+  predictionFileStats.value = stats
+  predictionMissingColumns.value = stats.missingColumns
+}, { deep: true })
 const selectPredictionFile = async (file: { raw?: File }) => {
   predictionFile.value = file.raw ?? null
   outputBlob.value = null
@@ -274,39 +287,35 @@ const selectPredictionFile = async (file: { raw?: File }) => {
   evaluationMetrics.value = null
   evaluationGroundTruth.value = ''
   predictionFileStats.value = { totalRows: 0, missingRows: 0, predictedRows: 0 }
+  predictionCsv.value = null; predictionFileError.value = ''; predictionMissingColumns.value = []
   if (!predictionFile.value) return
-  const rows = parseCsvRows(await predictionFile.value.text())
-  const columns = rows.shift() ?? []
-  predictionFileColumns.value = columns
-  const dataRows = rows.filter((values) => values.some((value) => value.trim() !== ''))
-  const missingRows = dataRows.filter((values) => columns.some((_, index) => !(values[index] ?? '').trim())).length
-  predictionFileStats.value = { totalRows: dataRows.length, missingRows, predictedRows: dataRows.length - missingRows }
+  const selectedFile = predictionFile.value
+  try {
+    const text = await selectedFile.text()
+    if (predictionFile.value !== selectedFile) return
+    predictionCsv.value = parseCsv(text)
+    predictionFileColumns.value = predictionCsv.value.headers
+  } catch (error) {
+    if (predictionFile.value === selectedFile) predictionFileError.value = error instanceof Error ? error.message : 'CSV 格式不正確。'
+  }
 }
 const parseCsvPreview = (csv: string) => {
-  const rows = parseCsvRows(csv)
-  previewColumns.value = rows.shift() ?? []
-  const dataRows = rows.filter((values) => values.some((value) => value.trim() !== ''))
+  const parsed = parseCsv(csv)
+  previewColumns.value = parsed.headers
+  const dataRows = parsed.rows
   previewRows.value = dataRows.slice(0, 10).map((values) => Object.fromEntries(previewColumns.value.map((key, i) => [key, values[i] ?? ''])))
   return dataRows.length
 }
-const parseCsvLine = (line: string) => {
-  const values: string[] = []; let value = ''; let quoted = false
-  for (let index = 0; index < line.length; index += 1) {
-    const char = line[index]
-    if (char === '"' && quoted && line[index + 1] === '"') { value += '"'; index += 1 }
-    else if (char === '"') quoted = !quoted
-    else if (char === ',' && !quoted) { values.push(value); value = '' }
-    else value += char
-  }
-  values.push(value); return values
-}
 const runPrediction = async () => {
   if (!predictionModelId.value || !predictionFile.value) return ElMessage.warning('請選擇模型與 CSV 檔案。')
+  if (predictionFileError.value || !predictionCsv.value) return ElMessage.warning(predictionFileError.value || 'CSV 尚未解析完成。')
+  if (predictionMissingColumns.value.length) return ElMessage.warning(`CSV 缺少必要欄位：${predictionMissingColumns.value.join('、')}`)
+  const requestedModel = predictionModelId.value, requestedFile = predictionFile.value, requestedTruth = groundTruthColumn.value
   predictionLoading.value = true
   predictionUploadProgress.value = 0
   try {
     const form = new FormData(); form.append('model_id', predictionModelId.value); form.append('file', predictionFile.value)
-    form.append('ground_truth_column', groundTruthColumn.value)
+    form.append('ground_truth_column', groundTruthColumn.value || '')
     const response = await new Promise<XMLHttpRequest>((resolve, reject) => {
       const request = new XMLHttpRequest()
       request.open('POST', '/api/predict')
@@ -331,12 +340,15 @@ const runPrediction = async () => {
       request.addEventListener('error', () => reject(new Error('無法連線至預測服務。')))
       request.send(form)
     })
+    const resultBlob = response.response as Blob
+    const resultText = await resultBlob.text()
+    if (predictionModelId.value !== requestedModel || predictionFile.value !== requestedFile || groundTruthColumn.value !== requestedTruth) return
     const metricsHeader = response.getResponseHeader('X-Prediction-Metrics')
     evaluationMetrics.value = metricsHeader && metricsHeader !== '{}' ? JSON.parse(metricsHeader) : null
     evaluationGroundTruth.value = decodeURIComponent(response.getResponseHeader('X-Prediction-Ground-Truth') ?? '')
     const droppedRows = Number(response.getResponseHeader('X-Prediction-Dropped-Rows') ?? '0')
     if (Number.isFinite(droppedRows)) predictionFileStats.value.missingRows = droppedRows
-    outputBlob.value = response.response as Blob; predictionFileStats.value.predictedRows = parseCsvPreview(await outputBlob.value.text()); await refreshPredictionHistory(); ElMessage.success('預測已完成。')
+    outputBlob.value = resultBlob; predictionFileStats.value.predictedRows = parseCsvPreview(resultText); await refreshPredictionHistory(); ElMessage.success('預測已完成。')
   } catch (error) { predictionUploadProgress.value = 0; ElMessage.error(error instanceof Error ? error.message : '預測失敗。') } finally { predictionLoading.value = false }
 }
 const downloadPrediction = () => {
@@ -470,7 +482,9 @@ onMounted(async () => {
       <el-card class="workspace prediction-workspace"><template #header>{{ t('predictionWorkspace') }}</template><el-form label-position="top">
         <el-form-item :label="t('publishedModel')"><el-select v-model="predictionModelId" class="full-width" :placeholder="t('selectModel')"><el-option v-for="model in models" :key="model.id" :value="model.id" :label="`${model.name} · ${model.version}`" /></el-select><p v-if="selectedPredictionModel" class="helper">{{ selectedPredictionModel.description }}｜{{ locale === 'zh-TW' ? '需要欄位' : 'Required features' }}：{{ selectedPredictionModel.features.map(f => f.name).join('、') }}</p></el-form-item>
         <el-form-item :label="t('inputCsv')"><div class="prediction-upload-block"><div class="prediction-drop-zone"><el-upload :auto-upload="false" accept=".csv,text/csv" :limit="1" :on-change="selectPredictionFile"><el-button :icon="UploadFilled">{{ t('chooseCsv') }}</el-button></el-upload></div><div v-if="predictionFileStats.totalRows" class="prediction-file-stats"><el-tag type="info" effect="light">{{ t('uploadedRows') }}：{{ predictionFileStats.totalRows }}</el-tag><el-tag :type="predictionFileStats.missingRows ? 'warning' : 'success'" effect="light">{{ t('missingRowsDropped') }}：{{ predictionFileStats.missingRows }}</el-tag><el-tag type="success" effect="light">{{ t('rowsToPredict') }}：{{ predictionFileStats.predictedRows }}</el-tag></div><div v-if="predictionUploadProgress || predictionLoading" class="prediction-upload-progress"><div class="prediction-progress-heading"><span>{{ t('uploadProgress') }}</span><strong>{{ predictionUploadProgress }}%</strong></div><el-progress :percentage="predictionUploadProgress" :status="predictionLoading ? undefined : 'success'" :show-text="false" /><p class="helper">{{ predictionLoading && predictionUploadProgress >= 100 ? t('predictionProcessing') : '' }}</p></div><div v-if="predictionFileColumns.length" class="ground-truth-panel"><div class="ground-truth-heading"><span>{{ t('groundTruth') }}</span><el-tag size="small" effect="plain">{{ t('optional') }}</el-tag></div><el-select v-model="groundTruthColumn" class="full-width" clearable :placeholder="t('groundTruthPlaceholder')"><el-option v-for="column in groundTruthCandidates" :key="column" :label="column" :value="column" /></el-select><p class="helper">{{ t('groundTruthHint') }}</p></div></div></el-form-item>
-        <div class="prediction-actions"><el-button type="primary" :loading="predictionLoading" @click="runPrediction">{{ t('runPrediction') }}</el-button><el-button :icon="Download" :disabled="!outputBlob" @click="downloadPrediction">{{ t('downloadCsv') }}</el-button></div>
+        <el-alert v-if="predictionFileError || predictionMissingColumns.length" :title="predictionFileError || `CSV 缺少必要欄位：${predictionMissingColumns.join('、')}`" type="error" :closable="false" show-icon class="bottom-gap" />
+        <p v-if="predictionCsv" class="helper">移除列數只檢查模型必要特徵與所選 Ground Truth；額外欄位的缺值不影響預測。模型或 Ground Truth 改變時會重新計算。</p>
+        <div class="prediction-actions"><el-button type="primary" :loading="predictionLoading" :disabled="Boolean(predictionFileError) || Boolean(predictionMissingColumns.length)" @click="runPrediction">{{ t('runPrediction') }}</el-button><el-button :icon="Download" :disabled="!outputBlob" @click="downloadPrediction">{{ t('downloadCsv') }}</el-button></div>
       </el-form></el-card>
       <el-card v-if="previewColumns.length" class="result-card prediction-preview-card"><template #header><div class="result-heading">預測結果預覽 <span>前 10 筆</span></div></template><el-table :data="previewRows" max-height="360"><el-table-column v-for="column in previewColumns" :key="column" :prop="column" :label="column" show-overflow-tooltip><template #header><el-tooltip :content="column" placement="top"><span class="preview-column-header">{{ column }}</span></el-tooltip></template></el-table-column></el-table></el-card>
       <el-card v-if="evaluationMetrics" class="result-card prediction-evaluation-card"><template #header><div class="result-heading"><span>{{ t('groundTruthEvaluation') }}</span><el-tag type="success" effect="light">{{ evaluationGroundTruth }}</el-tag></div></template><el-descriptions v-if="selectedPredictionModel?.problem_type === 'regression'" :column="3" border><el-descriptions-item :label="t('metricMAE')">{{ formatNumber(evaluationMetrics.mae) }}</el-descriptions-item><el-descriptions-item :label="t('metricMAPE')">{{ formatNumber(evaluationMetrics.mape) }}</el-descriptions-item><el-descriptions-item :label="t('metricRMSE')">{{ formatNumber(evaluationMetrics.rmse) }}</el-descriptions-item><el-descriptions-item :label="t('metricR2')">{{ formatNumber(evaluationMetrics.r2) }}</el-descriptions-item><el-descriptions-item :label="t('metricPearsonR')">{{ formatNumber(evaluationMetrics.pearson_r) }}</el-descriptions-item><el-descriptions-item :label="t('metricMaxError')">{{ formatNumber(evaluationMetrics.max_error) }}</el-descriptions-item></el-descriptions><el-descriptions v-else :column="4" border><el-descriptions-item :label="t('metricAccuracy')">{{ formatNumber(evaluationMetrics.accuracy) }}</el-descriptions-item><el-descriptions-item :label="t('metricPrecision')">{{ formatNumber(evaluationMetrics.precision) }}</el-descriptions-item><el-descriptions-item :label="t('metricRecall')">{{ formatNumber(evaluationMetrics.recall) }}</el-descriptions-item><el-descriptions-item :label="t('metricF1')">{{ formatNumber(evaluationMetrics.f1) }}</el-descriptions-item></el-descriptions></el-card>

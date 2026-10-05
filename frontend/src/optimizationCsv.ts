@@ -1,47 +1,24 @@
+import { parseCsv, type CsvData } from './csv.ts'
+export type { CsvData } from './csv.ts'
+
 export class CsvImportError extends Error {
   zh: string
   constructor(zh: string, en: string) { super(en); this.zh = zh }
 }
-export type CsvData = { headers: string[]; rows: string[][] }
 export type FixedRule = { name: string; numeric: boolean; integer: boolean; optimize: boolean }
 const fail = (zh: string, en: string): never => { throw new CsvImportError(zh, en) }
 
 /** Strict CSV parsing: quoted commas/newlines, escaped quotes, BOM and CRLF. */
 export function parseFixedCsv(text: string): CsvData {
-  text = text.replace(/^\uFEFF/, '')
-  const records: string[][] = []
-  let row: string[] = [], field = '', quoted = false, closed = false
-  function pushField() {
-    if (field.length > 1000) fail('CSV 欄位內容不可超過 1000 字元。', 'CSV cells must not exceed 1,000 characters.')
-    row.push(field); field = ''; closed = false
-    if (row.length > 512) fail('CSV 不可超過 512 欄。', 'CSV must not exceed 512 columns.')
+  try {
+    const csv = parseCsv(text, { maxRows: 10000, maxColumns: 512, maxCellChars: 1000 })
+    csv.headers = csv.headers.map(value => value.trim())
+    if (new Set(csv.headers).size !== csv.headers.length) fail('CSV header 不可重複。', 'CSV headers must be unique.')
+    return csv
+  } catch (error) {
+    if (error instanceof CsvImportError) throw error
+    return fail('CSV 格式或大小不符合匯入要求。', error instanceof Error ? error.message : 'Invalid CSV.')
   }
-  function pushRow() {
-    pushField()
-    if (row.some(cell => cell.trim() !== '')) records.push(row)
-    row = []
-    if (records.length > 10001) fail('CSV 不可超過 10000 筆資料。', 'CSV must not exceed 10,000 data rows.')
-  }
-  for (let i = 0; i < text.length; i++) {
-    const char = text[i]
-    if (quoted) {
-      if (char === '"') {
-        if (text[i + 1] === '"') { field += '"'; i++ } else { quoted = false; closed = true }
-      } else field += char
-    } else if (char === ',') pushField()
-    else if (char === '\n' || char === '\r') { pushRow(); if (char === '\r' && text[i + 1] === '\n') i++ }
-    else if (char === '"' && !field && !closed) quoted = true
-    else if (closed || char === '"') fail('CSV 引號格式不正確。', 'CSV contains malformed quotes.')
-    else field += char
-  }
-  if (quoted) fail('CSV 引號未關閉。', 'CSV contains an unclosed quoted field.')
-  if (field || row.length || closed) pushRow()
-  if (records.length < 2) fail('CSV 需要特徵名稱 header 及至少一筆資料。', 'CSV requires feature headers and at least one data row.')
-  const headers = records[0].map(value => value.trim())
-  if (headers.some(value => !value) || new Set(headers).size !== headers.length) fail('CSV header 不可空白或重複。', 'CSV headers must be nonempty and unique.')
-  const rows = records.slice(1)
-  if (rows.some(values => values.length !== headers.length)) fail('CSV 每筆資料的欄數必須與 header 一致。', 'Every CSV row must match the header column count.')
-  return { headers, rows }
 }
 
 /** Validate the entire selected row before returning any updates. */

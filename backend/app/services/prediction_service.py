@@ -1,10 +1,10 @@
-from io import BytesIO
 from datetime import datetime, timezone
 from uuid import uuid4
 
 import pandas as pd
 from app.services.regression_metrics import regression_metrics
 from app.services.numeric_features import coerce_numeric_feature
+from app.services.prediction_csv import read_prediction_csv
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
 
 from app.domain.errors import PredictionValidationError
@@ -39,13 +39,10 @@ class PredictionService:
 
     def predict_csv(self, model_id: str, content: bytes, source_filename: str = "input.csv", ground_truth_column: str | None = None) -> PredictionOutput:
         manifest = self._catalog.get(model_id)
-        try:
-            # Preserve exact integers even when another row is missing a value.
-            integer_columns = {f.name: object for f in manifest.features
-                               if f.dtype.lower().startswith(('int', 'uint'))}
-            frame = pd.read_csv(BytesIO(content), dtype=integer_columns)
-        except (UnicodeDecodeError, pd.errors.ParserError, ValueError) as exc:
-            raise PredictionValidationError("The uploaded file is not a valid UTF-8 CSV.") from exc
+        # Preserve exact integers even when another row is missing a value.
+        integer_columns = {f.name: object for f in manifest.features
+                           if f.dtype.lower().startswith(('int', 'uint'))}
+        frame = read_prediction_csv(content, integer_columns)
 
         frame, predictions, metrics, evaluation_column, dropped_rows = self._predict_frame(frame, manifest, ground_truth_column)
         frame[manifest.prediction_column] = predictions
@@ -107,7 +104,8 @@ class PredictionService:
         dropped_rows = rows_before_cleaning - len(frame)
         if frame.empty:
             raise PredictionValidationError("CSV 清理缺值資料列後，沒有可預測的資料。")
-        feature_frame = frame[[feature.name for feature in manifest.features]]
+        # Optional inputs may be absent; pass NaN to the runtime/preprocessor.
+        feature_frame = frame.reindex(columns=[feature.name for feature in manifest.features])
         predictor = self._predictor_factory.create(manifest)
         predictions = predictor.predict(feature_frame)
         metrics: dict[str, float | None] = {}

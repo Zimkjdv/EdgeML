@@ -25,8 +25,8 @@ services:
       EDGEML_PREDICTION_HISTORY_FILE: /app/data/prediction_history.jsonl
       EDGEML_QUEUE_BACKEND: redis
       EDGEML_REDIS_URL: redis://redis:6379/0
-      EDGEML_MAX_UPLOAD_BYTES: "5242880"
-      EDGEML_MAX_JSON_BODY_BYTES: "10485760"
+      EDGEML_MAX_UPLOAD_BYTES: ${EDGEML_MAX_UPLOAD_BYTES:-5242880}
+      EDGEML_MAX_JSON_BODY_BYTES: ${EDGEML_MAX_JSON_BODY_BYTES:-10485760}
       EDGEML_API_TOKEN: ${EDGEML_API_TOKEN:-}
       EDGEML_ANONYMOUS_API: ${EDGEML_ANONYMOUS_API:-false}
       EDGEML_WEB_USERNAME: ${EDGEML_WEB_USERNAME:-admin}
@@ -65,6 +65,10 @@ services:
     build:
       context: ./frontend
     restart: unless-stopped
+    environment:
+      EDGEML_PROXY_MAX_BODY_SIZE: ${EDGEML_PROXY_MAX_BODY_SIZE:-11m}
+      EDGEML_PROXY_SEND_TIMEOUT: ${EDGEML_PROXY_SEND_TIMEOUT:-300s}
+      EDGEML_PROXY_READ_TIMEOUT: ${EDGEML_PROXY_READ_TIMEOUT:-300s}
     depends_on:
       - backend
     ports:
