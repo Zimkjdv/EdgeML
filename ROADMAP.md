@@ -27,7 +27,7 @@ R03／R04 的支援範圍是 Windows 本機，或單一 Docker host 上所有 re
 | R08 | 中／已實作 | 訓練 drop 特徵缺值，但訓練時外部測試與後續 evaluate 只 drop target | `clean_supervised_frame` 統一訓練、兩個外部測試入口與 importance；drop 模式清理所有選取特徵，其他模式僅清理 target。清理後驗證 folds／class counts，空資料回報 validation error。中文／類別／未選欄位缺值及三入口指標一致性已測；舊指標需自行重訓／重新評估。 |
 | R09 | 中／待處理 | Prediction 前端以換行切 CSV，不支援引號內换行；缺值估算檢查全部欄位，與後端不同 | 共用可靠 CSV parser；明確對齊必要特徵／Ground Truth、NA 規則；測試換行、中文、額外欄位缺值與模型切換。 |
 | R10 | 中／待處理 | async CSV route 直接做同步 Pandas／模型推論，阻塞 API event loop | 使用 threadpool 或獨立執行機制；驗證耗時預測時健康檢查與其他 API 仍可回應。 |
-| R11 | 中／部分完成，仍待處理 | 模型／資料集 JSON 直接覆寫；工作狀態交易仍需完整並行保護 | R04 已修 Registry；R07 已將 job JSON 改為 unique temp／fsync／atomic replace，避免部分檔案。尚需其他 JSON stores 原子寫入與各狀態轉移的完整交易保護，補讀寫並行與重啟回復測試。 |
+| R11 | 中／部分完成，仍待處理 | 資料集／歷史與工作狀態交易仍需完整並行保護 | Registry、job JSON、模型 record/metadata 已採原子寫入；模型 evaluate/rename/publish/delete 共用每模型鎖。尚需 dataset/history 原子寫入、工作狀態交易及跨檔崩潰復原。 |
 | R12 | 中／待處理 | 資料集空 CSV 的 EmptyDataError 未轉成使用者錯誤 | 一致 422 與清楚訊息；補空檔、只有 header、無效編碼、重複欄名及非有限統計值測試。 |
 | R13 | 中／待處理 | Docker Nginx 未與後端上傳大小及長請求 timeout 對齊 | 設定 CSV／JSON body 上限與 timeout 策略；驗證 1～5 MB CSV、JSON 邊界與耗時搜尋；不能只測直接 API port。 |
 
@@ -45,6 +45,8 @@ R03／R04 的支援範圍是 Windows 本機，或單一 Docker host 上所有 re
 | R19 | 中／待處理 | at-least-once 在 artifact 完成、job 確認前崩潰仍可能產生額外模型 | job-id 對應冪等輸出與提交協議；故障注入、worker graceful shutdown／Redis 重啟完整 E2E。 |
 
 ## 既有產品方向與後續工作
+
+- 2026-10-05 模型紀錄並行寫入已補強：evaluate/rename/publish/delete 使用共用每模型 OS 鎖；record/metadata 採 atomic JSON；新模型最後才公開 record。R11 的 dataset/history/job 多步交易及跨檔崩潰復原仍待處理。
 
 - 2026-10-05 評估可信度已實作：舊版評估醒目警示、random/time/group 驗證策略、相同時間點不跨折、可設定時間間隔與顯示有效／評估／暖機筆數。舊模型不自動改寫；策略應依使用情境選擇。
 

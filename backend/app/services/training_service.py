@@ -170,9 +170,10 @@ class TrainingService:
                 "excluded_rows": len(frame) - len(evaluated)},
             "manifest": manifest,
         }
-        (output_dir / "record.json").write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
-        (output_dir / "metadata.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+        write_json_atomic(output_dir / "metadata.json", manifest)
         (output_dir / "README.md").write_text(f"# {request.model_name}\n\nTrained by EdgeML.\n", encoding="utf-8")
+        # The record is the visibility marker; expose it only after artifacts exist.
+        write_json_atomic(output_dir / "record.json", record)
         result = TrainedModelDetail.model_validate(record)
         if progress: progress(100, "訓練完成")
         return result
@@ -280,6 +281,10 @@ class TrainingService:
         return self._read_job(job_id)[0]
 
     def evaluate(self, model_id: str, dataset_id: str) -> ExternalEvaluationResult:
+        with self._model_lock(model_id):
+            return self._evaluate(model_id, dataset_id)
+
+    def _evaluate(self, model_id: str, dataset_id: str) -> ExternalEvaluationResult:
         record = self.get(model_id)
         frame = self._datasets.frame(dataset_id)
         required = record.feature_columns + [record.target_column]
@@ -293,8 +298,13 @@ class TrainingService:
         payload = self._read_record(self._trained_root / model_id)
         payload["test_metrics"] = metrics; payload["test_rmse"] = metrics.get("rmse")
         payload["test_r2"] = metrics.get("r2")
-        (self._trained_root / model_id / "record.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        write_json_atomic(child_path(self._trained_root, model_id) / "record.json", payload)
         return ExternalEvaluationResult(metrics=metrics)
+
+    def _model_lock(self, model_id: str) -> FileLock:
+        child_path(self._trained_root, model_id)
+        # Outside the model folder so deletion cannot unlink a held lock.
+        return FileLock(child_path(self._trained_root / '.locks', f'{model_id}.lock'))
 
     def _write_job(self, job: TrainingJob, request: TrainingRequest) -> None:
         payload = {"job": job.model_dump(mode="json"), "request": request.model_dump(mode="json")}
@@ -319,7 +329,7 @@ class TrainingService:
     def publish(self, model_id: str) -> TrainedModelDetail:
         # Display names never participate in filesystem paths. Serialize publication
         # with rename/delete; publish an immutable artifact before changing the index.
-        with FileLock(self._publish_root / '.publication.lock'):
+        with FileLock(self._publish_root / '.publication.lock'), self._model_lock(model_id):
             record = self.get(model_id)
             source = child_path(self._trained_root, model_id)
             destination = child_path(self._publish_root, model_id)
@@ -342,11 +352,11 @@ class TrainingService:
                 self._model_registry.register(published_manifest, destination.name)
             payload = self._read_record(source)
             payload['status'] = 'published'
-            (source / 'record.json').write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding='utf-8')
+            write_json_atomic(source / 'record.json', payload)
             return TrainedModelDetail.model_validate(payload)
 
     def rename(self, model_id: str, name: str) -> TrainedModelDetail:
-        with FileLock(self._publish_root / '.publication.lock'):
+        with FileLock(self._publish_root / '.publication.lock'), self._model_lock(model_id):
             return self._rename(model_id, name)
 
     def _rename(self, model_id: str, name: str) -> TrainedModelDetail:
@@ -354,16 +364,16 @@ class TrainingService:
         payload = self._read_record(source)
         payload["name"] = name.strip()
         payload["manifest"]["name"] = name.strip()
-        (source / "record.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-        (source / "metadata.json").write_text(json.dumps(payload["manifest"], ensure_ascii=False, indent=2), encoding="utf-8")
+        write_json_atomic(source / "metadata.json", payload["manifest"])
         for metadata_path in self._publish_root.glob("*/metadata.json"):
             metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
             if metadata.get("id") == model_id:
                 metadata["name"] = name.strip()
-                metadata_path.write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
+                write_json_atomic(metadata_path, metadata)
                 if self._model_registry:
                     published_manifest = ModelManifest.model_validate({**metadata, "model_path": metadata_path.parent})
                     self._model_registry.update_manifest(published_manifest)
+        write_json_atomic(source / "record.json", payload)
         return TrainedModelDetail.model_validate(payload)
 
     def delete_many(self, model_ids: list[str]) -> None:
@@ -372,18 +382,22 @@ class TrainingService:
 
     def _delete_many(self, model_ids: list[str]) -> None:
         for model_id in model_ids:
-            source = child_path(self._trained_root, model_id)
-            self.get(model_id)
-            for metadata_path in self._publish_root.glob("*/metadata.json"):
-                metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-                if metadata.get("id") == model_id:
-                    shutil.rmtree(metadata_path.parent)
-                    if self._model_registry:
-                        try:
-                            self._model_registry.unregister(model_id)
-                        except ModelNotFoundError:
-                            pass
-            shutil.rmtree(source)
+            with self._model_lock(model_id):
+                self._delete_one(model_id)
+
+    def _delete_one(self, model_id: str) -> None:
+        source = child_path(self._trained_root, model_id)
+        self.get(model_id)
+        for metadata_path in self._publish_root.glob("*/metadata.json"):
+            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+            if metadata.get("id") == model_id:
+                shutil.rmtree(metadata_path.parent)
+                if self._model_registry:
+                    try:
+                        self._model_registry.unregister(model_id)
+                    except ModelNotFoundError:
+                        pass
+        shutil.rmtree(source)
 
     @staticmethod
     def _cv(target: pd.Series, request: TrainingRequest):
