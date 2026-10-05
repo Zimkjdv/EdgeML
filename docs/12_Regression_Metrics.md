@@ -1,5 +1,13 @@
 # Regression evaluation
 
+## Validation strategy
+
+Training accepts `validation_strategy: random | time | group` (default `random`). `time` and `group` require `validation_column`, separate from the target. Time values must be finite numbers or valid datetimes; batch/time identifiers cannot be missing after row cleaning. Group validation requires at least as many distinct batches as folds.
+
+Time validation sorts rows, splits distinct timestamps with an expanding training window, and keeps equal timestamps together. `time_gap` excludes that many distinct timestamps between training and validation, default zero. Initial warm-up rows are trained on but are not scored. Group validation keeps every batch entirely on one side of each fold. Preprocessing remains fitted only on each training fold. The final deployable model is fitted on all usable rows.
+
+`validation_context` records strategy, total/evaluated/excluded row counts and the split column. The detail page prominently distinguishes legacy versus current evaluation and shows coverage. Legacy artifacts remain unchanged. Choose the split that matches actual use: random folds alone may overestimate performance for adjacent industrial measurements or repeated batches.
+
 New trained records use `evaluation_version: oof-v2`. Validation metrics are calculated from all out-of-fold (OOF) predictions, paired with actual values by row position, including after missing rows are removed. External tests and prediction Ground Truth evaluation use the same metric function.
 
 For actual values y and predictions p:

@@ -284,6 +284,8 @@ The response includes `model_name`, `prediction_column`, a `records` array conta
 
 ## Training workflow
 
+Validation supports random folds, time-ordered expanding windows, and batch-separated folds. Choose a time/batch column when appropriate; timestamps/batches must not be missing. Time validation keeps equal timestamps together and optionally leaves a gap measured in distinct timestamps. Warm-up rows are excluded from validation scores; coverage is shown with the model. Existing models display a visible legacy-evaluation warning and require retraining for current metrics. See [Regression evaluation](docs/12_Regression_Metrics.md).
+
 1. Upload a CSV in **數據集管理**, inspect columns, and optionally rename its display name.
 2. In **模型訓練**, choose one numeric target and check the feature columns to use.
 3. Select an algorithm. Random Forest exposes tree-count and split/leaf controls; Gradient Boosting exposes `n_estimators` and `learning_rate`; XGBoost exposes its optional hyperparameter fields. Logistic Regression exposes `penalty`, `solver`, and `C` for classification. Leaving fields empty uses the estimator defaults.

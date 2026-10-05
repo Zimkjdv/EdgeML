@@ -54,6 +54,9 @@ class TrainingRequest(BaseModel):
     numeric_constant: float = 0
     categorical_constant: str = "Missing"
     cv_folds: int = Field(default=5, ge=2, le=10)
+    validation_strategy: Literal["random", "time", "group"] = "random"
+    validation_column: str | None = None
+    time_gap: int = Field(default=0, ge=0, le=1000)
     dimension_reduction: Literal["none", "truncated_svd"] = "none"
     svd_components: int = Field(default=10, ge=2, le=100)
     test_dataset_id: str | None = None
@@ -72,13 +75,14 @@ class TrainedModelSummary(BaseModel):
     test_rmse: float | None = None
     test_r2: float | None = None
     status: Literal["draft", "published"]
+    evaluation_version: str | None = None
 
 
 class TrainedModelDetail(TrainedModelSummary):
     feature_columns: list[str]
     validation_metrics: dict[str, float | None]
     test_metrics: dict[str, float | None] | None = None
-    evaluation_version: str | None = None
+    validation_context: dict[str, object] = Field(default_factory=dict)
     settings: dict[str, object]
     manifest: dict[str, object]
 

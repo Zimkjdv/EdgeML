@@ -48,6 +48,7 @@ from app.services.feature_importance_service import calculate_importance, save_i
 from app.core.config import get_settings
 from app.infrastructure.file_lock import FileLock, child_path
 from app.services.training_data import clean_supervised_frame
+from app.services.validation_strategy import validation_splits
 from app.infrastructure.atomic_json import write_json_atomic
 
 
@@ -89,26 +90,40 @@ class TrainingService:
         frame = self._datasets.frame(request.dataset_id)
         frame = clean_supervised_frame(frame, request.feature_columns, request.target_column, request.numeric_imputer)
         self._validate_request(frame, request)
+        frame, cv = validation_splits(frame, request)
         features = frame[request.feature_columns]
         target = frame[request.target_column] if request.problem_type == "classification" else pd.to_numeric(frame[request.target_column], errors="raise")
         pipeline = self._pipeline(features, request)
         if progress: progress(25, "進行交叉驗證")
-        cv = self._cv(target, request)
+        temporal = request.validation_strategy == "time"
         if request.problem_type == "classification":
             scores = cross_validate(
                 pipeline, features, target, cv=cv,
                 scoring={"accuracy": "accuracy", "f1": "f1_weighted", "precision": "precision_weighted", "recall": "recall_weighted"},
+                return_estimator=temporal, error_score="raise",
             )
         else:
             scores = cross_validate(
                 pipeline, features, target, cv=cv,
                 scoring={"rmse": "neg_root_mean_squared_error", "mae": "neg_mean_absolute_error", "r2": "r2"},
+                return_estimator=temporal, error_score="raise",
             )
-        oof_predictions = cross_val_predict(pipeline, features, target, cv=cv)
+        evaluated = np.concatenate([test for _, test in cv]) if temporal else np.arange(len(frame))
+        oof_predictions = (np.concatenate([estimator.predict(features.iloc[test])
+                           for estimator, (_, test) in zip(scores["estimator"], cv)]) if temporal
+                           else cross_val_predict(pipeline, features, target, cv=cv))
         oof_probabilities = None
         if request.problem_type == "classification" and target.nunique() == 2:
-            oof_probabilities = cross_val_predict(pipeline, features, target, cv=cv, method="predict_proba")[:, 1]
-        validation = self._classification_metrics(target, oof_predictions, scores, oof_probabilities) if request.problem_type == "classification" else self._regression_metrics(target, oof_predictions, scores)
+            if temporal:
+                positive = np.sort(target.unique())[1]
+                if any(len(estimator.classes_) != 2 for estimator in scores["estimator"]):
+                    raise PredictionValidationError("時間驗證的每個訓練折都必須包含兩個類別。")
+                oof_probabilities = np.concatenate([estimator.predict_proba(features.iloc[test])[:, list(estimator.classes_).index(positive)]
+                    for estimator, (_, test) in zip(scores["estimator"], cv)])
+            else:
+                oof_probabilities = cross_val_predict(pipeline, features, target, cv=cv, method="predict_proba")[:, 1]
+        evaluated_target = target.iloc[evaluated]
+        validation = self._classification_metrics(evaluated_target, oof_predictions, scores, oof_probabilities) if request.problem_type == "classification" else self._regression_metrics(evaluated_target, oof_predictions, scores)
         if progress: progress(70, "以完整資料集訓練模型")
         pipeline.fit(features, target)
         if progress: progress(85, "儲存模型 artifact")
@@ -150,6 +165,9 @@ class TrainingService:
             "test_metrics": test_metrics,
             "settings": request.model_dump(),
             "evaluation_version": "oof-v2",
+            "validation_context": {"strategy": request.validation_strategy, "column": request.validation_column,
+                "time_gap": request.time_gap, "total_rows": len(frame), "evaluated_rows": len(evaluated),
+                "excluded_rows": len(frame) - len(evaluated)},
             "manifest": manifest,
         }
         (output_dir / "record.json").write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")

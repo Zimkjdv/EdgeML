@@ -46,6 +46,8 @@ R03／R04 的支援範圍是 Windows 本機，或單一 Docker host 上所有 re
 
 ## 既有產品方向與後續工作
 
+- 2026-10-05 評估可信度已實作：舊版評估醒目警示、random/time/group 驗證策略、相同時間點不跨折、可設定時間間隔與顯示有效／評估／暖機筆數。舊模型不自動改寫；策略應依使用情境選擇。
+
 - 最佳化：真實工作進度／取消、CSV／JSON 匯出重現設定、小型離散空間枚舉、重複候選輪次改善、跨特徵製程限制；詳見 [Optimization review](docs/13_Optimization_Review.md)。
 - 正式環境：更細 Token scopes、Redis 存取控制／主機介面綁定、healthchecks、resource limits、log rotation、備份還原、HTTPS／公司認證整合與固定 image tags。
 - API：在解析前限制 request body（含 chunked）、分頁／歷史保留策略、錯誤回應一致性與輸入 schema 邊界。

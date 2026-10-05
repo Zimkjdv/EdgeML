@@ -1,5 +1,7 @@
 # API
 
+Training requests accept `validation_strategy` (`random`, `time`, `group`, default `random`), `validation_column` (required for time/group), and `time_gap` (default 0, measured in distinct timestamps). `GET /api/trained-models/{model_id}` includes `validation_context` with strategy and total/evaluated/excluded row counts. Time validation excludes the initial warm-up rows from scores. See [Regression evaluation](12_Regression_Metrics.md).
+
 Feature importance: `GET /api/trained-models/{model_id}/feature-importance?format=json` (or `csv`) returns the saved ranking. `POST` to the same endpoint computes or refreshes it using the original source dataset. See [Feature importance API](11_Feature_Importance.md#api) for response metadata and examples.
 
 ## Parameter optimization
