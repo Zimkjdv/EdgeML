@@ -1,5 +1,7 @@
 # Regression evaluation
 
+Each fold now fits the full preprocessing/estimator pipeline once and uses that same estimator for fold scores, OOF predictions and (for binary classification) probabilities. The final artifact is then trained once on all usable rows. Five folds therefore require six fits, versus the previous eleven for regression or sixteen for binary classification. Scores retain their existing definitions. The training progress reports completed folds. Time/group classification rejects training folds that lack any target class rather than silently misaligning probability columns.
+
 ## Validation strategy
 
 Training accepts `validation_strategy: random | time | group` (default `random`). `time` and `group` require `validation_column`, separate from the target. Time values must be finite numbers or valid datetimes; batch/time identifiers cannot be missing after row cleaning. Group validation requires at least as many distinct batches as folds.

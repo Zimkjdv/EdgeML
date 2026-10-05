@@ -29,7 +29,6 @@ from sklearn.metrics import (
     recall_score,
     roc_auc_score,
 )
-from sklearn.model_selection import KFold, StratifiedKFold, cross_val_predict, cross_validate
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import LabelEncoder, OneHotEncoder
 from sklearn.decomposition import TruncatedSVD
@@ -49,6 +48,7 @@ from app.core.config import get_settings
 from app.infrastructure.file_lock import FileLock, child_path
 from app.services.training_data import clean_supervised_frame
 from app.services.validation_strategy import validation_splits
+from app.services.cross_validation import evaluate_folds
 from app.infrastructure.atomic_json import write_json_atomic
 
 
@@ -95,35 +95,13 @@ class TrainingService:
         target = frame[request.target_column] if request.problem_type == "classification" else pd.to_numeric(frame[request.target_column], errors="raise")
         pipeline = self._pipeline(features, request)
         if progress: progress(25, "進行交叉驗證")
-        temporal = request.validation_strategy == "time"
-        if request.problem_type == "classification":
-            scores = cross_validate(
-                pipeline, features, target, cv=cv,
-                scoring={"accuracy": "accuracy", "f1": "f1_weighted", "precision": "precision_weighted", "recall": "recall_weighted"},
-                return_estimator=temporal, error_score="raise",
-            )
-        else:
-            scores = cross_validate(
-                pipeline, features, target, cv=cv,
-                scoring={"rmse": "neg_root_mean_squared_error", "mae": "neg_mean_absolute_error", "r2": "r2"},
-                return_estimator=temporal, error_score="raise",
-            )
-        evaluated = np.concatenate([test for _, test in cv]) if temporal else np.arange(len(frame))
-        oof_predictions = (np.concatenate([estimator.predict(features.iloc[test])
-                           for estimator, (_, test) in zip(scores["estimator"], cv)]) if temporal
-                           else cross_val_predict(pipeline, features, target, cv=cv))
-        oof_probabilities = None
-        if request.problem_type == "classification" and target.nunique() == 2:
-            if temporal:
-                positive = np.sort(target.unique())[1]
-                if any(len(estimator.classes_) != 2 for estimator in scores["estimator"]):
-                    raise PredictionValidationError("時間驗證的每個訓練折都必須包含兩個類別。")
-                oof_probabilities = np.concatenate([estimator.predict_proba(features.iloc[test])[:, list(estimator.classes_).index(positive)]
-                    for estimator, (_, test) in zip(scores["estimator"], cv)])
-            else:
-                oof_probabilities = cross_val_predict(pipeline, features, target, cv=cv, method="predict_proba")[:, 1]
+        fold_result = evaluate_folds(pipeline, features, target, cv, request.problem_type == "classification",
+            (lambda completed, total: progress(25 + int(40 * completed / total), f"交叉驗證 {completed}/{total} 折完成")) if progress else None)
+        evaluated = fold_result.indices
         evaluated_target = target.iloc[evaluated]
-        validation = self._classification_metrics(evaluated_target, oof_predictions, scores, oof_probabilities) if request.problem_type == "classification" else self._regression_metrics(evaluated_target, oof_predictions, scores)
+        validation = (self._classification_metrics(evaluated_target, fold_result.predictions, fold_result.scores, fold_result.probabilities)
+                      if request.problem_type == "classification" else
+                      self._regression_metrics(evaluated_target, fold_result.predictions, fold_result.scores))
         if progress: progress(70, "以完整資料集訓練模型")
         pipeline.fit(features, target)
         if progress: progress(85, "儲存模型 artifact")
@@ -398,12 +376,6 @@ class TrainingService:
                     except ModelNotFoundError:
                         pass
         shutil.rmtree(source)
-
-    @staticmethod
-    def _cv(target: pd.Series, request: TrainingRequest):
-        if request.problem_type == "classification":
-            return StratifiedKFold(n_splits=request.cv_folds, shuffle=True, random_state=42)
-        return KFold(n_splits=request.cv_folds, shuffle=True, random_state=42)
 
     @staticmethod
     def _regression_metrics(target, predictions, scores) -> dict[str, float | None]:

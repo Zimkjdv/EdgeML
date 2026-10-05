@@ -37,7 +37,7 @@ R03／R04 的支援範圍是 Windows 本機，或單一 Docker host 上所有 re
 
 | ID | 優先度／狀態 | 問題及影響 | 建議修正與驗收 |
 | --- | --- | --- | --- |
-| R14 | 中／待處理 | CV scores／OOF predictions／二元機率分別重訓，5-fold 回歸約 11 次 fit，二元分類約 16 次 | 每折一次 fit 收集全部結果；確保預處理仍在 fold 內、指標定義不變，記錄時間改善。 |
+| R14 | 中／已完成 | CV scores／OOF predictions／二元機率原先分別重訓 | 2026-10-05 每折一次 fit 收集全部結果，5-fold + 最終模型共 6 次 fit；與 sklearn 原流程比對分數／預測／機率，驗證 fold 內預處理及 fit 次數。時間改善依資料與模型而異，不宣稱固定倍數。 |
 | R15 | 中／待處理 | App.vue 集中太多頁面、API 與狀態，維護及測試困難；bundle 偏大 | 分頁組件／composables、錯誤處理、lazy loading；包含模型切換、polling cleanup、外部評估後清單刷新與 E2E。 |
 | R16 | 中／待處理 | DOM 文字替換實作翻譯，可能改到模型／特徵的使用者資料 | 所有 UI label 使用翻譯 key，資料文字原樣顯示；中英文切換回歸測試。 |
 | R17 | 中／待處理 | Worker 記憶體訓練指標不會自動出現在 Backend `/metrics` | 規劃 Worker exporter 或集中彙總；實際多 Worker 訓練確認 count／active／duration。 |

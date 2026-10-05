@@ -284,6 +284,8 @@ The response includes `model_name`, `prediction_column`, a `records` array conta
 
 ## Training workflow
 
+Cross-validation trains once per fold and collects scores, predictions and probabilities together. Five folds plus the final model need six fits. Progress shows completed folds; preprocessing is still fitted separately inside each fold.
+
 Model evaluation, rename, publication, and deletion are serialized per model across API/worker processes. Model records and manifests use atomic replacement to prevent partial reads; local lock files must not be removed while services run. See [Storage](docs/03_Database.md).
 
 Validation supports random folds, time-ordered expanding windows, and batch-separated folds. Choose a time/batch column when appropriate; timestamps/batches must not be missing. Time validation keeps equal timestamps together and optionally leaves a gap measured in distinct timestamps. Warm-up rows are excluded from validation scores; coverage is shown with the model. Existing models display a visible legacy-evaluation warning and require retraining for current metrics. See [Regression evaluation](docs/12_Regression_Metrics.md).
