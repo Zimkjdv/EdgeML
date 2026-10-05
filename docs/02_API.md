@@ -1,5 +1,12 @@
 # API
 
+## Post-training test evaluation
+
+- `POST /api/trained-models/{model_id}/evaluate-csv`: multipart form with `file` (UTF-8 CSV, optional BOM). Uses the configured CSV file limit; unsupported extension/oversize returns 400, missing model 404, invalid CSV/columns/values or no usable rows 422. Parsing/inference runs in the bounded thread pool. The raw upload is not persisted or registered as a dataset.
+- `POST /api/trained-models/{model_id}/evaluate`: existing JSON request `{ "dataset_id": "..." }` uses a stored dataset.
+
+Both require normal API/browser authentication, work for Draft/Published models and return `{ "metrics": { ... }, "context": { "source": "csv|dataset", "source_name": "...", "dataset_id": null, "input_rows": 100, "evaluated_rows": 98, "dropped_rows": 2, "evaluated_at": "..." } }`. The same context is saved under model detail `test_evaluation`. All training feature columns and the model target are required. Success atomically replaces test scores only; a failed test preserves previous scores, validation metrics and artifacts.
+
 Prediction CSV uses UTF-8 (optional BOM), comma delimiters, double-quoted multiline fields and doubled quote escaping. Headers must be nonempty/unique and every data record must match the header width. Header names are preserved exactly. Blank physical lines are skipped; records such as `,,` and quoted empty fields count as rows. Required-feature and selected Ground Truth NA values remove rows; unused columns do not. The explicit, case-sensitive NA tokens are empty string, `#N/A`, `#N/A N/A`, `#NA`, `-1.#IND`, `-1.#QNAN`, `-NaN`, `-nan`, `1.#IND`, `1.#QNAN`, `<NA>`, `N/A`, `NA`, `NULL`, `NaN`, `None`, `n/a`, `nan`, `null`. Spaces are not automatically NA (invalid numeric spaces still fail numeric validation). The same parser is used for frontend preview/counting; shared fixture tests verify both implementations. Successful responses retain `X-Prediction-Dropped-Rows` as the authoritative result.
 
 Training requests accept `validation_strategy` (`random`, `time`, `group`, default `random`), `validation_column` (required for time/group), and `time_gap` (default 0, measured in distinct timestamps). `GET /api/trained-models/{model_id}` includes `validation_context` with strategy and total/evaluated/excluded row counts. Time validation excludes the initial warm-up rows from scores. See [Regression evaluation](12_Regression_Metrics.md).

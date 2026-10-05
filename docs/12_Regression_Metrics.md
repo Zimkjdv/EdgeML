@@ -1,5 +1,11 @@
 # Regression evaluation
 
+## Evaluate an already trained model
+
+The model detail/evaluation card includes **Additional test evaluation**, with **Upload test CSV** and **Use existing dataset** options. Draft and Published models both support evaluation; no training worker or retraining is needed. CSV columns must include every training feature and the saved target as Ground Truth. Uploaded test CSVs are processed in memory and are not saved as datasets.
+
+The model's saved missing-value policy applies: missing targets are removed; `numeric_imputer=drop` also removes missing selected features, while other policies use the saved preprocessor. Success updates only test metrics/summary scores and saves `test_evaluation` provenance (source, filename or dataset name/ID, input/evaluated/dropped row counts, evaluation time). The most recent successful test replaces previous test scores. Existing validation metrics and the fitted artifact are preserved. Errors leave previous test results intact. Details and list scores update immediately; provenance remains visible after reload.
+
 Each fold now fits the full preprocessing/estimator pipeline once and uses that same estimator for fold scores, OOF predictions and (for binary classification) probabilities. The final artifact is then trained once on all usable rows. Five folds therefore require six fits, versus the previous eleven for regression or sixteen for binary classification. Scores retain their existing definitions. The training progress reports completed folds. Time/group classification rejects training folds that lack any target class rather than silently misaligning probability columns.
 
 ## Validation strategy

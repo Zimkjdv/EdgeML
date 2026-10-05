@@ -78,11 +78,22 @@ class TrainedModelSummary(BaseModel):
     evaluation_version: str | None = None
 
 
+class TestEvaluationContext(BaseModel):
+    source: Literal["csv", "dataset"]
+    source_name: str
+    dataset_id: str | None = None
+    input_rows: int
+    evaluated_rows: int
+    dropped_rows: int
+    evaluated_at: datetime
+
+
 class TrainedModelDetail(TrainedModelSummary):
     feature_columns: list[str]
     validation_metrics: dict[str, float | None]
     test_metrics: dict[str, float | None] | None = None
     validation_context: dict[str, object] = Field(default_factory=dict)
+    test_evaluation: TestEvaluationContext | None = None
     settings: dict[str, object]
     manifest: dict[str, object]
 
@@ -128,6 +139,7 @@ class ExternalEvaluationRequest(BaseModel):
 
 class ExternalEvaluationResult(BaseModel):
     metrics: dict[str, float | None]
+    context: TestEvaluationContext | None = None
 
 
 class TrainedModelDeleteRequest(BaseModel):

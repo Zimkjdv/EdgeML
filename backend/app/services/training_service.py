@@ -39,7 +39,7 @@ from app.domain.errors import ModelNotFoundError, PredictionValidationError
 from app.domain.model_catalog import ModelRegistry
 from app.domain.schemas import ModelManifest
 from app.domain.training_schemas import TrainedModelDetail, TrainedModelSummary, TrainingRequest
-from app.domain.training_schemas import ExternalEvaluationResult, TrainingJob
+from app.domain.training_schemas import ExternalEvaluationResult, TestEvaluationContext, TrainingJob
 from app.core.observability import training_finished, training_started
 from app.services.dataset_service import DatasetService
 from app.services.regression_metrics import regression_metrics
@@ -49,6 +49,7 @@ from app.infrastructure.file_lock import FileLock, child_path
 from app.services.training_data import clean_supervised_frame
 from app.services.validation_strategy import validation_splits
 from app.services.cross_validation import evaluate_folds
+from app.services.prediction_csv import read_prediction_csv
 from app.infrastructure.atomic_json import write_json_atomic
 
 
@@ -265,19 +266,43 @@ class TrainingService:
     def _evaluate(self, model_id: str, dataset_id: str) -> ExternalEvaluationResult:
         record = self.get(model_id)
         frame = self._datasets.frame(dataset_id)
+        source = self._datasets.get(dataset_id)
+        return self._evaluate_frame(record, frame, source.name, dataset_id)
+
+    def evaluate_csv(self, model_id: str, content: bytes, filename: str) -> ExternalEvaluationResult:
+        with self._model_lock(model_id):
+            record = self.get(model_id)
+            integer_columns = {feature['name']: object for feature in record.manifest.get('features', [])
+                               if feature.get('dtype', '').lower().startswith(('int', 'uint'))}
+            frame = read_prediction_csv(content, integer_columns)
+            source_name = filename.replace('\\', '/').rsplit('/', 1)[-1]
+            return self._evaluate_frame(record, frame, source_name)
+
+    def _evaluate_frame(self, record: TrainedModelDetail, frame: pd.DataFrame,
+                        source_name: str, dataset_id: str | None = None) -> ExternalEvaluationResult:
         required = record.feature_columns + [record.target_column]
         missing = [column for column in required if column not in frame]
         if missing: raise PredictionValidationError(f"外部測試集缺少欄位：{', '.join(missing)}")
+        input_rows = len(frame)
         frame = clean_supervised_frame(frame, record.feature_columns, record.target_column, record.settings.get('numeric_imputer', 'median'))
-        pipeline = joblib.load(self._trained_root / model_id / "model.pkl")
-        actual = frame[record.target_column]
-        predicted = pipeline.predict(frame[record.feature_columns])
-        metrics = self._classification_metrics_from_predictions(actual, predicted) if record.problem_type == "classification" else self._metrics(pd.to_numeric(actual, errors="raise"), predicted)
-        payload = self._read_record(self._trained_root / model_id)
+        source = child_path(self._trained_root, record.id)
+        pipeline = joblib.load(source / "model.pkl")
+        try:
+            actual = frame[record.target_column]
+            if record.problem_type == 'regression': actual = pd.to_numeric(actual, errors='raise')
+            predicted = pipeline.predict(frame[record.feature_columns])
+            metrics = self._classification_metrics_from_predictions(actual, predicted) if record.problem_type == "classification" else self._metrics(actual, predicted)
+        except ValueError as exc:
+            raise PredictionValidationError('外部測試資料型態不正確：' + str(exc)) from exc
+        context = TestEvaluationContext(source='dataset' if dataset_id else 'csv', source_name=source_name,
+            dataset_id=dataset_id, input_rows=input_rows, evaluated_rows=len(frame),
+            dropped_rows=input_rows - len(frame), evaluated_at=datetime.now(timezone.utc))
+        payload = self._read_record(source)
         payload["test_metrics"] = metrics; payload["test_rmse"] = metrics.get("rmse")
         payload["test_r2"] = metrics.get("r2")
-        write_json_atomic(child_path(self._trained_root, model_id) / "record.json", payload)
-        return ExternalEvaluationResult(metrics=metrics)
+        payload['test_evaluation'] = context.model_dump(mode='json')
+        write_json_atomic(source / "record.json", payload)
+        return ExternalEvaluationResult(metrics=metrics, context=context)
 
     def _model_lock(self, model_id: str) -> FileLock:
         child_path(self._trained_root, model_id)

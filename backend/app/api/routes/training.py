@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from starlette.concurrency import run_in_threadpool
+from app.core.config import get_settings
 from fastapi.responses import Response
 from typing import Literal
 from app.api.dependencies import get_feature_importance_service
@@ -110,3 +112,20 @@ def publish_trained_model(
 def evaluate_trained_model(model_id: str, request: ExternalEvaluationRequest, service: TrainingService = Depends(get_training_service)) -> ExternalEvaluationResult:
     try: return service.evaluate(model_id, request.dataset_id)
     except (ModelNotFoundError, PredictionValidationError) as exc: raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/trained-models/{model_id}/evaluate-csv", response_model=ExternalEvaluationResult)
+async def evaluate_trained_model_csv(model_id: str, file: UploadFile = File(...),
+                                     service: TrainingService = Depends(get_training_service)) -> ExternalEvaluationResult:
+    if not file.filename or not file.filename.lower().endswith('.csv'):
+        raise HTTPException(400, 'Only .csv files are accepted.')
+    limit = get_settings().max_upload_bytes
+    content = await file.read(limit + 1)
+    if len(content) > limit:
+        raise HTTPException(400, 'CSV exceeds the configured upload size limit.')
+    try:
+        return await run_in_threadpool(service.evaluate_csv, model_id, content, file.filename)
+    except ModelNotFoundError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except PredictionValidationError as exc:
+        raise HTTPException(422, str(exc)) from exc
