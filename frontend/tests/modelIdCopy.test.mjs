@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import postcss from 'postcss'
 import { copyText } from '../src/clipboard.ts'
 
 const modelId = '67f88ae0-ad99-4f5c-b099-16a9c8059756'
@@ -61,4 +62,22 @@ test('registry binds model ID, not package name; displayed and copied IDs share 
   assert.match(cell, /:content="t\('copyModelId'\)"/)
   assert.match(cell, /:aria-label="t\('copyModelId'\)"/)
   assert.doesNotMatch(cell, /t\('copy'\)/, 'copy button should be icon-only')
+})
+
+test('registry limits ID width while preserving full tooltip/copy text and action space', () => {
+  const app = readFileSync(new URL('../src/App.vue', import.meta.url), 'utf8')
+  const table = app.split('<el-table class="registry-table"')[1].split('</el-table>')[0]
+  assert.match(table, /prop="id"[^>]* width="200"/)
+  assert.doesNotMatch(table, /prop="id"[^>]*min-width=/, 'ID must not expand into spare table width')
+  assert.match(table, /prop="name"[^>]*min-width="180"[^>]*show-overflow-tooltip/)
+  assert.match(table, /width="220" class-name="registry-actions-cell"/)
+  const component = readFileSync(new URL('../src/ModelIdCell.vue', import.meta.url), 'utf8')
+  const rules = postcss.parse(component.split('<style scoped>')[1].split('</style>')[0])
+  const declarations = new Map()
+  rules.walkRules('.model-id-value', rule => rule.walkDecls(declaration => declarations.set(declaration.prop, declaration.value)))
+  assert.equal(declarations.get('min-width'), '0')
+  assert.equal(declarations.get('overflow'), 'hidden')
+  assert.equal(declarations.get('text-overflow'), 'ellipsis')
+  assert.match(component, /await copyText\(props\.modelId\)/)
+  assert.match(component, /:content="modelId"/)
 })

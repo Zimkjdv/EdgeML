@@ -155,6 +155,8 @@ The **Model Registry → Model ID** column displays each registry response's `id
 
 Automatic copying uses the browser Clipboard API where allowed, with a legacy copy fallback for HTTP intranet pages. If browser policy blocks both methods, the UI reports failure and the ID text can be selected/copied manually. The action copies the ID only, without JSON formatting, labels or surrounding quotes.
 
+The UI keeps the ID column at a compact fixed width and visually truncates long IDs with an ellipsis; this is a CSS-only display change. The tooltip, selectable text and clipboard value still contain the original full ID. Model identifiers and API request/response fields are unchanged.
+
 ## `GET /api/prediction-history`
 
 Returns successful prediction records in reverse chronological order. Each record contains its identifier, model identifier and name, sanitized source filename, input row count, and UTC creation time. The history contains metadata only.

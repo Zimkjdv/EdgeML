@@ -63,7 +63,7 @@ For integrations that need to discover models, use `GET /api/models/ids` to retr
 - Replace runtime folder scanning with a file-backed model registry while keeping `ModelCatalog` as the Prediction application boundary.
 - Add a Model Registry page for viewing, enabling, disabling, and unregistering trusted model packages.
 - Refine the registry table with compact responsive columns, clear status badges, action buttons, and hover details for truncated values.
-- The registry's **Model ID** column displays the API identifier, not the package directory. Click the copy icon (tooltip: **Copy model ID**) to copy the complete ID into the CSV or JSON Prediction API's `model_id` field; hover shows long IDs in full. IDs are selectable for manual copying if browser clipboard policy blocks automatic copying. Only active models can be used for prediction.
+- The registry's compact **Model ID** column displays the API identifier, not the package directory. Long IDs are visually shortened to leave space for model names and actions; click the copy icon (tooltip: **Copy model ID**) to copy the complete ID into the CSV or JSON Prediction API's `model_id` field. Hover shows the full ID, and copying never includes the displayed ellipsis. IDs are selectable for manual copying if browser clipboard policy blocks automatic copying. Only active models can be used for prediction.
 - Published model artifacts remain operator-controlled files; registry removal never accepts or deletes serialized artifacts through HTTP.
 
 ### v0.6 in progress

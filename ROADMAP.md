@@ -48,6 +48,8 @@ R09、R10、R13、R14 已完成；下一批可從 R11 剩餘交易工作與 R12 
 
 - 2026-10-06 模型註冊庫使用 API 的模型 ID 取代套件目錄欄位，支援完整 ID tooltip／一鍵複製 icon（含 tooltip 與無障礙標籤）／手動選取；中文與英文提示同步更新，保留既有套件路徑與 Registry API 契約。
 
+- 2026-10-06 註冊庫 ID 欄位縮為固定 200px，以 CSS 省略長 ID，tooltip／複製仍保留全文；加寬模型名稱與操作欄位、移除操作按鈕重複間距，避免 ID 擠壓其他欄位。
+
 - 2026-10-05 已訓練模型詳細卡片補測入口：直接上傳測試 CSV 或選既有資料集，儲存測試來源／筆數／時間並同步詳細指標與清單；Draft/Published 均可、不需重新訓練，錯誤不覆寫舊分數。直接 CSV 不持久化。
 
 - 2026-10-05 模型紀錄並行寫入已補強：evaluate/rename/publish/delete 使用共用每模型 OS 鎖；record/metadata 採 atomic JSON；新模型最後才公開 record。R11 的 dataset/history/job 多步交易及跨檔崩潰復原仍待處理。

@@ -1016,6 +1016,7 @@ body {
   font-size: 14px;
   font-weight: 750;
 }
+.registry-actions .el-button + .el-button { margin-left: 0; }
 .registry-actions .el-button--warning {
   border-color: #f5d18d;
   background: #fff9eb;
