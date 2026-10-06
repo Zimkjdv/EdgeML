@@ -26,6 +26,12 @@ def test_registry_lists_bootstrapped_models(tmp_path) -> None:
         "customer-churn-v1",
     }.issubset({item["id"] for item in response.json()})
     assert next(item for item in response.json() if item["id"] == "house-price-v1")["status"] == "active"
+    house = next(item for item in response.json() if item["id"] == "house-price-v1")
+    assert house["package_name"] == "HousePrice"
+    models_root = Path(__file__).resolve().parents[1] / "ml_models"
+    catalog = FileModelRegistry(tmp_path / "model_registry.json", models_root)
+    assert catalog.get(house["id"]).id == house["id"]
+    assert house["id"] in {model.id for model in catalog.list()}
 
 
 def test_registry_status_controls_prediction_catalog(tmp_path) -> None:

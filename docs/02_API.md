@@ -151,6 +151,10 @@ JSON requests are limited by `EDGEML_MAX_JSON_BODY_BYTES` (default 10 MiB), `EDG
 - `PATCH /api/model-registry/{model_id}/status`: enable or disable a registered model in the Prediction selector.
 - `DELETE /api/model-registry/{model_id}`: remove a registry entry without deleting the trusted package files.
 
+The **Model Registry → Model ID** column displays each registry response's `id`. Its icon-only copy button (tooltip and accessible label: **Copy model ID**) copies the full value, including IDs visually shortened by the table. Supply that value as `model_id` in `POST /api/predict` or `POST /api/predict/json`. The registry response's `package_name` is an internal artifact directory, not the API identifier: for example, `HousePrice` is the directory and `house-price-v1` is the ID. No API fields or existing model IDs have changed. Registry rows include disabled models, but only active IDs are accepted for prediction.
+
+Automatic copying uses the browser Clipboard API where allowed, with a legacy copy fallback for HTTP intranet pages. If browser policy blocks both methods, the UI reports failure and the ID text can be selected/copied manually. The action copies the ID only, without JSON formatting, labels or surrounding quotes.
+
 ## `GET /api/prediction-history`
 
 Returns successful prediction records in reverse chronological order. Each record contains its identifier, model identifier and name, sanitized source filename, input row count, and UTC creation time. The history contains metadata only.

@@ -7,6 +7,7 @@ import OptimizationPage from './OptimizationPage.vue'
 import WorkspaceNavigation from './WorkspaceNavigation.vue'
 import FeatureImportance from './FeatureImportance.vue'
 import ModelEvaluation from './ModelEvaluation.vue'
+import ModelIdCell from './ModelIdCell.vue'
 import { applyEvaluation, type EvaluationContext, type EvaluationResult } from './modelEvaluation'
 import { sessionHeaders, sessionExpired } from './webAuth'
 import { parseCsv, predictionCsvStats, type CsvData } from './csv'
@@ -573,7 +574,7 @@ onMounted(async () => {
           <el-table-column prop="framework" :label="t('framework')" width="108" />
           <el-table-column prop="problem_type" :label="t('problemType')" width="138" show-overflow-tooltip />
           <el-table-column prop="target" :label="t('target')" min-width="120" />
-          <el-table-column prop="package_name" :label="t('package')" min-width="160" show-overflow-tooltip />
+          <el-table-column prop="id" :label="t('modelId')" min-width="260"><template #default="scope"><ModelIdCell :model-id="scope.row.id" /></template></el-table-column>
           <el-table-column :label="t('status')" width="100" class-name="registry-status-cell"><template #default="scope"><el-tag :type="scope.row.status === 'active' ? 'success' : 'info'">{{ scope.row.status === 'active' ? t('active') : t('disabled') }}</el-tag></template></el-table-column>
           <el-table-column :label="t('actions')" width="196" class-name="registry-actions-cell"><template #default="scope"><div class="registry-actions"><el-button link :type="scope.row.status === 'active' ? 'warning' : 'success'" @click="updateRegistryStatus(scope.row)">{{ scope.row.status === 'active' ? t('disable') : t('enable') }}</el-button><el-button link type="danger" @click="unregisterModel(scope.row)">{{ t('unregister') }}</el-button></div></template></el-table-column>
         </el-table>
