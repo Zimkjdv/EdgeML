@@ -9,7 +9,7 @@ from app.api.dependencies import get_prediction_service
 from app.core.observability import record_prediction
 from app.core.config import get_settings
 from app.domain.errors import ModelNotFoundError, PredictionValidationError
-from app.domain.schemas import JsonPredictionOutput, JsonPredictionRequest, PredictionHistoryRecord
+from app.domain.schemas import JsonPredictionOutput, JsonPredictionRequest, PredictionHistoryRecord, TrainingRangePolicy
 from app.services.prediction_service import PredictionService
 
 router = APIRouter()
@@ -54,6 +54,7 @@ def predict_json(
             records=records,
             source_name=request.source_name,
             ground_truth_column=request.ground_truth_column,
+            training_range_policy=request.training_range_policy,
         )
         record_prediction("success")
         return result
@@ -73,6 +74,7 @@ async def predict(
     model_id: str = Form(...),
     file: UploadFile = File(...),
     ground_truth_column: str | None = Form(None),
+    training_range_policy: TrainingRangePolicy = Form("none"),
     service: PredictionService = Depends(get_prediction_service),
 ) -> Response:
     settings = get_settings()
@@ -89,6 +91,7 @@ async def predict(
             content=content,
             source_filename=file.filename,
             ground_truth_column=ground_truth_column,
+            training_range_policy=training_range_policy,
         )
     except ModelNotFoundError as exc:
         record_prediction("not_found")
@@ -109,5 +112,6 @@ async def predict(
         # HTTP headers are Latin-1 in Starlette; percent-encode Chinese column names.
         "X-Prediction-Ground-Truth": quote(result.ground_truth_column or "", safe=""),
         "X-Prediction-Dropped-Rows": str(result.dropped_rows),
+        "X-Prediction-Out-Of-Range-Rows": str(result.out_of_range_rows),
     }
     return Response(content=result.csv_content, media_type="text/csv; charset=utf-8", headers=headers)

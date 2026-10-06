@@ -1,4 +1,6 @@
 .env
+examples/.env.local
+examples/*.local.ini
 .venv/
 .venv*/
 __pycache__/

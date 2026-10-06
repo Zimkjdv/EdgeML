@@ -115,10 +115,11 @@ Multipart form fields:
 - `model_id`: model identifier from `GET /api/models`.
 - `file`: a UTF-8 CSV file.
 - `ground_truth_column` (optional): the answer/target column to score. If omitted, EdgeML automatically uses the manifest target when that column exists in the uploaded CSV. Send an empty value to force prediction-only mode.
+- `training_range_policy` (optional): `none` (default, allow extrapolation) or `drop` (exclude rows with any numeric input outside the saved training min/max; inclusive boundaries).
 
 The request validates its size and CSV headers, drops rows with missing required feature values (and missing Ground Truth values when evaluation is enabled), runs a prediction on the remaining rows, and returns a CSV attachment containing the original input columns and the manifest's `prediction_column`. Regression prediction and `prediction_error` values in the returned CSV are rounded to four decimal places; evaluation metrics still use the full-precision predictions. Regression files with Ground Truth also receive `prediction_error`; classification files receive `prediction_correct`. If every row is removed, the request returns a validation error. The response is intentionally stateless: the browser uses the returned CSV for preview and download.
 
-When Ground Truth is available, evaluation metrics are returned in the response headers: `X-Prediction-Metrics` (JSON), `X-Prediction-Ground-Truth` (URL-encoded column name), and `X-Prediction-Dropped-Rows`. Regression metrics include MAE, MAPE (%), RMSE, maximum error, R², and Pearson R. Classification metrics include accuracy, weighted precision, weighted recall, and weighted F1.
+Response headers include `X-Prediction-Metrics` (JSON), `X-Prediction-Ground-Truth` (URL-encoded column name), `X-Prediction-Dropped-Rows` (total excluded rows), and `X-Prediction-Out-Of-Range-Rows` (the training-range subset of that total). Metrics are populated when Ground Truth is available. Regression metrics include MAE, MAPE (%), RMSE, maximum error, R², and Pearson R. Classification metrics include accuracy, weighted precision, weighted recall, and weighted F1.
 
 Every successful request also writes prediction metadata to the configured history repository. Uploaded CSV contents and prediction outputs are not retained.
 
@@ -127,6 +128,8 @@ Errors use JSON with `detail` and appropriate HTTP status codes: 400 for invalid
 CSV and JSON share numeric validation: integer dtypes require finite, mathematically integral values within their signed/unsigned bit range. `2.0` and `2e1` are accepted; `1.9`, infinity, invalid numeric text and overflow return `422` naming the column. Floating dtypes also reject infinity and conversion overflow. Actual missing values still follow the existing row-drop policy; invalid nonmissing values are not silently dropped even if another column in the same row is missing. Integer parsing preserves exact int64/uint64 values when mixed with missing rows; callers must also preserve precision before submitting JSON (for example, send large integers as decimal strings from JavaScript).
 
 ## `POST /api/predict/json`
+
+For the standalone MySQL source/output examples (whole table or required time range), see [DB Prediction client](14_DB_Prediction_Client.md). Both entrypoints process all matching source rows in batches by default; `--limit` is optional. These clients preview-filter locally and opt into the same training-range policy on Prediction; no separate filtering endpoint is needed.
 
 Use this endpoint when the caller already has data from a database, service, or in-memory application. It accepts JSON instead of a CSV upload:
 
@@ -141,7 +144,15 @@ Use this endpoint when the caller already has data from a database, service, or 
 }
 ```
 
-`ground_truth_column` is optional and enables evaluation when each data item includes that field. The response contains `model_id`, `model_name`, `prediction_column`, a `records` array with the original fields plus predictions, `metrics`, `ground_truth_column`, and `dropped_rows`. Rows missing required feature values (or the selected Ground Truth value) are excluded and counted in `dropped_rows`. The endpoint writes metadata-only prediction history with `source_name` (or `json-api` when omitted). For backward compatibility, the initial `records` request field is still accepted; new clients should use `data`.
+`ground_truth_column` is optional and enables evaluation when each data item includes that field. The response contains `model_id`, `model_name`, `prediction_column`, a `records` array with the original fields plus predictions, `metrics`, `ground_truth_column`, `dropped_rows`, and `out_of_range_rows`. Rows missing required feature values (or the selected Ground Truth value) are excluded and counted in `dropped_rows`. The endpoint writes metadata-only prediction history with `source_name` (or `json-api` when omitted). For backward compatibility, the initial `records` request field is still accepted; new clients should use `data`.
+
+### Optional training-range filtering (CSV and JSON)
+
+Supply `"training_range_policy": "drop"` in the JSON body, or `training_range_policy=drop` in the CSV multipart form. The server filters numeric features against `minimum`/`maximum` stored in the trusted model manifest's `feature_defaults`; callers do **not** need to fetch metadata first. Bounds are inclusive. Any out-of-range numeric feature excludes the whole row; a row with multiple out-of-range features is counted once. Required/Ground Truth missing rows are removed first. `out_of_range_rows` is included in `dropped_rows`, not additional to it. Remaining rows keep their original order and extra identifiers; integrations must match retained row identifiers, not zip results against unfiltered source rows.
+
+With `drop`, absent/invalid numeric training snapshots or an empty surviving batch return `422` before inference/history. The server does not read a database or recompute bounds from a mutable dataset. Type errors and nonfinite nonmissing values still return `422`; this policy is not a general invalid-value sanitizer. Optional missing inputs stay available for preprocessing, and categorical features do not get a min/max or membership filter. Evaluation only uses retained rows. Models without saved bounds continue to work with the default `none`.
+
+Training min/max are observed data ranges, **not** process safety limits or proof that an outside value is erroneous. Therefore filtering is opt-in and existing CSV/JSON callers and the Prediction UI keep their previous behavior unless they send `drop`.
 
 JSON requests are limited by `EDGEML_MAX_JSON_BODY_BYTES` (default 10 MiB), `EDGEML_MAX_JSON_RECORDS` (default 10,000), `EDGEML_MAX_JSON_COLUMNS` (default 256), and `EDGEML_MAX_JSON_VALUE_CHARS` (default 10,000). Requests over a configured limit return `413`.
 

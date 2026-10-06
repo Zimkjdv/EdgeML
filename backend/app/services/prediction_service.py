@@ -5,11 +5,18 @@ import pandas as pd
 from app.services.regression_metrics import regression_metrics
 from app.services.numeric_features import coerce_numeric_feature
 from app.services.prediction_csv import read_prediction_csv
+from app.services.prediction_ranges import filter_training_ranges
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
 
 from app.domain.errors import PredictionValidationError
 from app.domain.model_catalog import ModelCatalog
-from app.domain.schemas import JsonPredictionOutput, ModelSummary, PredictionHistoryRecord, PredictionOutput
+from app.domain.schemas import (
+    JsonPredictionOutput,
+    ModelSummary,
+    PredictionHistoryRecord,
+    PredictionOutput,
+    TrainingRangePolicy,
+)
 from app.infrastructure.predictor_factory import PredictorFactory
 from app.repositories.prediction_history import PredictionHistoryRepository
 
@@ -37,17 +44,22 @@ class PredictionService:
     def list_history(self) -> list[PredictionHistoryRecord]:
         return self._history_repository.list()
 
-    def predict_csv(self, model_id: str, content: bytes, source_filename: str = "input.csv", ground_truth_column: str | None = None) -> PredictionOutput:
+    def predict_csv(
+        self, model_id: str, content: bytes, source_filename: str = "input.csv",
+        ground_truth_column: str | None = None, training_range_policy: TrainingRangePolicy = "none",
+    ) -> PredictionOutput:
         manifest = self._catalog.get(model_id)
         # Preserve exact integers even when another row is missing a value.
         integer_columns = {f.name: object for f in manifest.features
                            if f.dtype.lower().startswith(('int', 'uint'))}
         frame = read_prediction_csv(content, integer_columns)
 
-        frame, predictions, metrics, evaluation_column, dropped_rows = self._predict_frame(frame, manifest, ground_truth_column)
+        frame, predictions, metrics, evaluation_column, dropped_rows, out_of_range_rows = self._predict_frame(
+            frame, manifest, ground_truth_column, training_range_policy,
+        )
         frame[manifest.prediction_column] = predictions
         if manifest.problem_type == "regression":
-            frame[manifest.prediction_column] = pd.Series(predictions, index=frame.index).round(4)
+            frame[manifest.prediction_column] = pd.Series(predictions, index=frame.index, dtype='float64').round(4)
         if evaluation_column and manifest.problem_type == "regression":
             actual_numeric = pd.to_numeric(frame[evaluation_column], errors="raise")
             frame["prediction_error"] = (pd.Series(predictions, index=frame.index) - actual_numeric).round(4)
@@ -55,15 +67,23 @@ class PredictionService:
             frame["prediction_correct"] = predictions == frame[evaluation_column]
         csv_content = frame.to_csv(index=False).encode("utf-8")
         self._record_history(manifest, source_filename, len(frame))
-        return PredictionOutput(filename=f"{manifest.name}_predictions.csv", csv_content=csv_content, metrics=metrics, ground_truth_column=evaluation_column, dropped_rows=dropped_rows)
+        return PredictionOutput(
+            filename=f"{manifest.name}_predictions.csv", csv_content=csv_content, metrics=metrics,
+            ground_truth_column=evaluation_column, dropped_rows=dropped_rows, out_of_range_rows=out_of_range_rows,
+        )
 
-    def predict_json(self, model_id: str, records: list[dict], source_name: str | None = None, ground_truth_column: str | None = None) -> JsonPredictionOutput:
+    def predict_json(
+        self, model_id: str, records: list[dict], source_name: str | None = None,
+        ground_truth_column: str | None = None, training_range_policy: TrainingRangePolicy = "none",
+    ) -> JsonPredictionOutput:
         manifest = self._catalog.get(model_id)
         frame = pd.DataFrame(records, dtype=object)
-        frame, predictions, metrics, evaluation_column, dropped_rows = self._predict_frame(frame, manifest, ground_truth_column)
+        frame, predictions, metrics, evaluation_column, dropped_rows, out_of_range_rows = self._predict_frame(
+            frame, manifest, ground_truth_column, training_range_policy,
+        )
         frame[manifest.prediction_column] = predictions
         if manifest.problem_type == "regression":
-            frame[manifest.prediction_column] = pd.Series(predictions, index=frame.index).round(4)
+            frame[manifest.prediction_column] = pd.Series(predictions, index=frame.index, dtype='float64').round(4)
         if evaluation_column and manifest.problem_type == "regression":
             actual_numeric = pd.to_numeric(frame[evaluation_column], errors="raise")
             frame["prediction_error"] = (pd.Series(predictions, index=frame.index) - actual_numeric).round(4)
@@ -80,9 +100,12 @@ class PredictionService:
             metrics=metrics,
             ground_truth_column=evaluation_column,
             dropped_rows=dropped_rows,
+            out_of_range_rows=out_of_range_rows,
         )
 
-    def _predict_frame(self, frame: pd.DataFrame, manifest, ground_truth_column: str | None):
+    def _predict_frame(self, frame: pd.DataFrame, manifest, ground_truth_column: str | None, training_range_policy: TrainingRangePolicy = "none"):
+        if training_range_policy not in ('none', 'drop'):
+            raise PredictionValidationError("training_range_policy must be 'none' or 'drop'.")
         self._validate_frame(frame, manifest.features)
         # ``None`` means automatic detection (the manifest target is preferred).
         # An empty form value explicitly disables evaluation, which lets the UI
@@ -104,6 +127,12 @@ class PredictionService:
         dropped_rows = rows_before_cleaning - len(frame)
         if frame.empty:
             raise PredictionValidationError("CSV 清理缺值資料列後，沒有可預測的資料。")
+        out_of_range_rows = 0
+        if training_range_policy == 'drop':
+            frame, out_of_range_rows = filter_training_ranges(frame, manifest)
+            dropped_rows += out_of_range_rows
+            if frame.empty:
+                raise PredictionValidationError("依訓練範圍篩選後，沒有可預測的資料。")
         # Optional inputs may be absent; pass NaN to the runtime/preprocessor.
         feature_frame = frame.reindex(columns=[feature.name for feature in manifest.features])
         predictor = self._predictor_factory.create(manifest)
@@ -111,7 +140,7 @@ class PredictionService:
         metrics: dict[str, float | None] = {}
         if evaluation_column:
             metrics = self._evaluate_predictions(manifest.problem_type, frame[evaluation_column], predictions)
-        return frame, predictions, metrics, evaluation_column, dropped_rows
+        return frame, predictions, metrics, evaluation_column, dropped_rows, out_of_range_rows
 
     def _record_history(self, manifest, source_filename: str, row_count: int) -> None:
         self._history_repository.add(

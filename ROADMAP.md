@@ -46,6 +46,12 @@ R09、R10、R13、R14 已完成；下一批可從 R11 剩餘交易工作與 R12 
 
 ## 既有產品方向與後續工作
 
+- 2026-10-06 新增 `examples/` 的獨立 MySQL Prediction 整表與時間範圍入口：piapi_fd 資料／中文 mapping → 訓練快照與 JSON Prediction API → piapifd_edge 資料庫的新表 `pidata1_predict`。預設不限總筆數、每批 200 筆，`--limit` 僅供選填試跑；時間高水位避免追逐持續新增列。依指定訓練 min/max 排除資料，保留 NULL 實際值、主鍵冪等及交易防護。文件為 `docs/14_DB_Prediction_Client.md`，保留原第 13 號文件。程式預設只 preview；實際 DB 寫入須明確指定 write。
+
+- 2026-10-06 CSV／JSON Prediction 增加可選 `training_range_policy=drop`，後端依模型套件訓練快照排除數值超界列；`none` 預設維持原行為。新增範圍排除數量（包含於總 dropped_rows），缺少快照／全數排除回傳 422；Server 不讀 DB 或可變來源資料集。DB 範例預先篩選並啟用 API 再檢查，確保回應 timestamp 對應後才寫入。單元測試使用隔離模擬資料與 Python 3.12 測試容器。
+
+- 2026-10-06 使用者明確要求實際 DB 寫入後，以本地 Python 3.12 API 8000 完成來源 2,018 筆掃描、55 筆預測寫入新表 `piapifd_edge.pidata1_predict`；回讀確認實際值均為 NULL、全部來源欄位比對差異為 0，來源保持唯讀。名稱差異改以明確 JSON alias 設定處理（前段水份／水分、濃乾／稀乾空格），不修改來源 mapping。另修正 float32 回歸輸出的四位小數 JSON 序列化，既有結果不覆寫。
+
 - 2026-10-06 模型註冊庫使用 API 的模型 ID 取代套件目錄欄位，支援完整 ID tooltip／一鍵複製 icon（含 tooltip 與無障礙標籤）／手動選取；中文與英文提示同步更新，保留既有套件路徑與 Registry API 契約。
 
 - 2026-10-06 註冊庫 ID 欄位縮為固定 200px，以 CSS 省略長 ID，tooltip／複製仍保留全文；加寬模型名稱與操作欄位、移除操作按鈕重複間距，避免 ID 擠壓其他欄位。

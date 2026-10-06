@@ -6,6 +6,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
 
+TrainingRangePolicy = Literal["none", "drop"]
+
 
 class FeatureSpec(BaseModel):
     name: str
@@ -61,6 +63,7 @@ class PredictionOutput(BaseModel):
     metrics: dict[str, float | None] = Field(default_factory=dict)
     ground_truth_column: str | None = None
     dropped_rows: int = 0
+    out_of_range_rows: int = 0
 
 
 class JsonPredictionRequest(BaseModel):
@@ -69,6 +72,7 @@ class JsonPredictionRequest(BaseModel):
     records: list[dict[str, Any]] | None = Field(default=None, min_length=1)
     ground_truth_column: str | None = None
     source_name: str | None = Field(default=None, max_length=200)
+    training_range_policy: TrainingRangePolicy = "none"
 
     @model_validator(mode="after")
     def validate_input_data(self) -> "JsonPredictionRequest":
@@ -91,6 +95,7 @@ class JsonPredictionOutput(BaseModel):
     metrics: dict[str, float | None] = Field(default_factory=dict)
     ground_truth_column: str | None = None
     dropped_rows: int = 0
+    out_of_range_rows: int = 0
 
 
 class PredictionHistoryRecord(BaseModel):
