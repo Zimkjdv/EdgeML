@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Feature importance component preview (synthetic data)</title>
+  </head>
+  <body>
+    <div id="preview"></div>
+    <script type="module">
+      // Development-only visual fixture: mounts the real component with synthetic
+      // rankings. No authentication, production datasets or model inference.
+      import { createApp, h } from 'vue'
+      import ElementPlus, { ElButton, ElCard } from 'element-plus'
+      import 'element-plus/dist/index.css'
+      import '../../src/styles.css'
+      import FeatureImportance from '../../src/FeatureImportance.vue'
+      import { locale } from '../../src/i18n'
+
+      locale.value = 'zh-TW'
+      const names = ['基重', '車速', '紙種', '中克重(DCS)', '面克重(DCS)', '濃乾 總量',
+        '濃乾 (面)', '底克重(DCS)', '濃乾 (底)', '稀乾 總量', '濃乾 (中)', '稀乾 (面)',
+        '稀乾 (中)', '稀乾 (底)', '前段水份', '面塗佈量', '底塗佈量', '面 J/W', '中 J/W',
+        '底 J/W（中文長欄位名稱顯示測試）']
+      const report = {
+        model_id: 'synthetic-preview', model_name: '預覽模型', method: 'permutation',
+        metric: 'rmse_increase', data_source: 'training', sample_count: 500,
+        total_rows: 800, repeats: 3, seed: 42, baseline_score: 0.12855,
+        dataset_id: 'synthetic', computed_at: '2026-10-07T00:00:00Z',
+        rankings: names.map((feature, index) => ({
+          rank: index + 1, feature, importance: index === 19 ? -0.008 : 0.94 / (index + 1) ** 1.8,
+          std: 0.014 / (index + 1),
+        })),
+      }
+      window.fetch = async (input, options = {}) => {
+        if (options.method && options.method !== 'GET') throw new Error('Preview is read-only')
+        const url = new URL(String(input), location.href)
+        if (url.pathname !== '/api/trained-models/synthetic-preview/feature-importance') {
+          throw new Error('Unexpected preview request')
+        }
+        if (url.searchParams.get('format') === 'csv') {
+          const csv = '\ufeffrank,feature,importance,std\r\n' + report.rankings
+            .map(row => [row.rank, row.feature, row.importance, row.std].join(',')).join('\r\n')
+          return new Response(csv, { headers: { 'Content-Type': 'text/csv' } })
+        }
+        return new Response(JSON.stringify(report), { headers: { 'Content-Type': 'application/json' } })
+      }
+      createApp({
+        setup: () => () => h('main', { style: 'padding:20px' }, [
+          h('p', '元件預覽 · 合成資料（不使用正式模型）'),
+          h(ElButton, { onClick: () => { locale.value = locale.value === 'en' ? 'zh-TW' : 'en' } }, () => '切換語言'),
+          h('section', { class: 'trained-models-page', style: 'margin-top:16px' }, [
+            h(FeatureImportance, { modelId: 'synthetic-preview' }),
+            h(ElCard, { class: 'result-card unified-model-detail' }, {
+              header: () => h('div', { class: 'result-heading' }, '預覽模型：模型詳細資訊與評估'),
+              default: () => h('p', '卡片對齊檢查（合成資料，未執行模型測試）'),
+            }),
+          ]),
+        ]),
+      }).use(ElementPlus).mount('#preview')
+    </script>
+  </body>
+</html>

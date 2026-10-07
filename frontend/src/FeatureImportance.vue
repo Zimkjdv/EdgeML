@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { computed, onUnmounted, ref, watch } from 'vue'
+import { computed, onUnmounted, ref, useId, watch } from 'vue'
 import { locale } from './i18n'
 import { sessionHeaders, sessionExpired } from './webAuth'
-type Ranking = { rank: number; feature: string; importance: number; std: number }
-type Report = { model_name: string; metric: string; data_source: string; sample_count: number; repeats: number; baseline_score: number; rankings: Ranking[] }
+import { visibleImportanceRankings, TOP_FEATURE_COUNT, type ImportanceRanking } from './featureImportanceView'
+type Report = { model_name: string; metric: string; data_source: string; sample_count: number; repeats: number; baseline_score: number; rankings: ImportanceRanking[] }
 const props = defineProps<{ modelId: string }>()
 const report = ref<Report | null>(null), busy = ref(false), missing = ref(false), error = ref('')
+const showAll = ref(false), chartId = useId()
+const visibleRankings = computed(() => visibleImportanceRankings(report.value?.rankings || [], showAll.value))
 const label = (zh: string, en: string) => locale.value === 'en' ? en : zh
 const fmt = (value: number) => new Intl.NumberFormat(locale.value === 'en' ? 'en' : 'zh-TW', { maximumSignificantDigits: 5 }).format(value)
 let revision = 0
@@ -18,6 +20,7 @@ const barStyle = (value: number) => ({ left: `${scale(Math.min(0, value))}%`, wi
 async function load(method = 'GET') {
   const current = ++revision
   busy.value = true; error.value = ''; missing.value = false; report.value = null
+  showAll.value = false
   try {
     const response = await fetch(`/api/trained-models/${encodeURIComponent(props.modelId)}/feature-importance`, { method, headers: sessionHeaders() })
     if (current !== revision) return
@@ -55,11 +58,19 @@ onUnmounted(() => { revision++ })
     <p v-if="missing">{{ label('此模型尚未保存特徵重要度，可使用原始資料補算。', 'This model has no saved importance report. Compute one using its source data.') }}</p>
     <el-button v-if="missing || error" :disabled="busy" @click="load('POST')">{{ label('計算特徵重要度', 'Compute feature importance') }}</el-button>
     <template v-if="report">
-      <p class="importance-summary">{{ label('置換重要度', 'Permutation importance') }} · {{ report.metric === 'accuracy_drop' ? label('準確率下降量', 'Accuracy decrease') : label('RMSE 增加量', 'RMSE increase') }} · {{ report.sample_count }} {{ label('筆資料', 'rows') }} · {{ report.repeats }} {{ label('次重複', 'repeats') }}</p>
-      <p class="importance-summary">{{ report.data_source === 'external_test' ? label('資料來源：外部測試集', 'Data: external test set') : label('資料來源：訓練集（可能高估，非獨立測試結果）', 'Data: training set (may be optimistic; not an independent test)') }} · {{ label('基準分數', 'Baseline score') }}: {{ fmt(report.baseline_score) }}</p>
+      <div class="importance-meta">
+        <p class="importance-summary">{{ label('置換重要度', 'Permutation importance') }} · {{ report.metric === 'accuracy_drop' ? label('準確率下降量', 'Accuracy decrease') : label('RMSE 增加量', 'RMSE increase') }} · {{ report.sample_count }} {{ label('筆資料', 'rows') }} · {{ report.repeats }} {{ label('次重複', 'repeats') }}</p>
+        <p class="importance-summary">{{ report.data_source === 'external_test' ? label('資料來源：外部測試集', 'Data: external test set') : label('資料來源：訓練集（可能高估，非獨立測試結果）', 'Data: training set (may be optimistic; not an independent test)') }} · {{ label('基準分數', 'Baseline score') }}: {{ fmt(report.baseline_score) }}</p>
+      </div>
       <p class="importance-help">{{ label('數值越大，打亂該特徵後表現下降越多。負值表示打亂後表現改善；相關特徵可能互相分攤重要度。± 為重複置換的標準差，非信賴區間。', 'Larger values mean more performance loss when shuffled. Negative values indicate improvement after shuffling; correlated features may share importance. ± shows repeat standard deviation, not a confidence interval.') }}</p>
-      <ol class="importance-chart" :aria-label="label('特徵重要度長條圖，由高至低', 'Feature importance bars, highest first')">
-        <li v-for="row in report.rankings" :key="row.feature">
+      <div class="importance-toolbar">
+        <span>{{ label(`顯示 ${visibleRankings.length} / ${report.rankings.length} 個特徵`, `Showing ${visibleRankings.length} / ${report.rankings.length} features`) }}</span>
+        <el-button v-if="report.rankings.length > TOP_FEATURE_COUNT" size="small" :aria-expanded="showAll" :aria-controls="chartId" @click="showAll = !showAll">
+          {{ showAll ? label('只看前 10 名', 'Show top 10') : label('查看全部', 'Show all') }}
+        </el-button>
+      </div>
+      <ol :id="chartId" class="importance-chart" tabindex="0" :aria-label="label('特徵重要度長條圖，由高至低', 'Feature importance bars, highest first')">
+        <li v-for="row in visibleRankings" :key="row.feature">
           <span class="importance-name" :title="row.feature">{{ row.rank }}. {{ row.feature }}</span>
           <div class="importance-track" aria-hidden="true"><span class="importance-zero" :style="{ left: `${scale(0)}%` }"/><span class="importance-bar" :class="{ negative: row.importance < 0 }" :style="barStyle(row.importance)"/></div>
           <span class="importance-value">{{ fmt(row.importance) }} <small>± {{ fmt(row.std) }}</small></span>
@@ -70,5 +81,29 @@ onUnmounted(() => { revision++ })
 </template>
 
 <style scoped>
-.importance-heading {display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.importance-heading h3 {margin:0;font-size:19px;color:#204a78}.importance-summary {font-size:14px;color:#4c6480;line-height:1.6}.importance-help {font-size:13px;color:#718096;line-height:1.7}.importance-chart {list-style:none;padding:0;margin:20px 0 0;max-height:600px;overflow:auto}.importance-chart li {display:grid;grid-template-columns:minmax(140px,240px) minmax(100px,1fr) 170px;align-items:center;gap:16px;padding:10px 4px;border-bottom:1px solid #edf1f7}.importance-name {font-size:14px;color:#284768;overflow-wrap:anywhere}.importance-track {height:20px;background:#f1f5fb;position:relative;border-radius:4px}.importance-bar {position:absolute;height:100%;background:#438be0;border-radius:3px}.importance-bar.negative {background:#da9a40}.importance-zero {position:absolute;height:100%;width:1px;background:#859ab4;z-index:1}.importance-value {font-variant-numeric:tabular-nums;font-size:13px;color:#294b72;text-align:right}.importance-value small {color:#7b8798}@media(max-width:650px) {.importance-chart li {grid-template-columns:1fr 110px;gap:8px}.importance-track {grid-row:2;grid-column:1 / -1}.importance-value small {display:block}}
+.feature-importance { width: 100%; max-width: none; }
+.feature-importance :deep(.el-card__header) { padding: 16px 22px; }
+.feature-importance :deep(.el-card__body) { padding: 16px 22px 20px; }
+.importance-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.importance-heading h3 { margin: 0; font-size: 17px; color: #204a78; }
+.importance-meta { display: flex; flex-wrap: wrap; gap: 4px 18px; }
+.importance-summary { margin: 0; font-size: 13px; color: #4c6480; line-height: 1.6; }
+.importance-help { margin: 8px 0 12px; font-size: 12px; color: #718096; line-height: 1.6; }
+.importance-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 10px; color: #6a7f98; font-size: 12px; }
+.importance-chart { list-style: none; padding: 0; margin: 8px 0 0; max-height: 360px; overflow: auto; scrollbar-gutter: stable; }
+.importance-chart:focus-visible { outline: 2px solid #438be0; outline-offset: 3px; }
+.importance-chart li { display: grid; grid-template-columns: minmax(120px, 180px) minmax(60px, 1fr) 174px; align-items: center; gap: 12px; min-height: 32px; padding: 5px 4px; border-bottom: 1px solid #edf1f7; }
+.importance-name { min-width: 0; font-size: 13px; color: #284768; overflow-wrap: anywhere; }
+.importance-track { height: 12px; background: #f1f5fb; position: relative; border-radius: 4px; }
+.importance-bar { position: absolute; height: 100%; background: #438be0; border-radius: 3px; }
+.importance-bar.negative { background: #da9a40; }
+.importance-zero { position: absolute; height: 100%; width: 1px; background: #859ab4; z-index: 1; }
+.importance-value { font-variant-numeric: tabular-nums; font-size: 12px; color: #294b72; text-align: right; }
+.importance-value small { color: #7b8798; }
+@media (max-width: 650px) {
+  .feature-importance :deep(.el-card__header), .feature-importance :deep(.el-card__body) { padding: 14px; }
+  .importance-chart li { grid-template-columns: minmax(0, 1fr) 130px; gap: 5px 8px; }
+  .importance-track { grid-row: 2; grid-column: 1 / -1; }
+  .importance-value small { display: block; }
+}
 </style>

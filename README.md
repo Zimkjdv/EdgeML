@@ -377,7 +377,9 @@ When updating an existing local environment after pulling the training module, r
 
 ## Future roadmap
 
-Trained models now include original-feature permutation importance, shown as a descending bar chart with CSV download. New training saves the report automatically; older models can compute it from their saved artifact and source dataset. JSON/CSV retrieval and explicit recomputation are available at `/api/trained-models/{model_id}/feature-importance`. See [Feature importance ranking](docs/11_Feature_Importance.md) for method definitions, limitations, and CMD API examples.
+Trained models now include original-feature permutation importance, shown in a full-width card aligned with the model details below, with a compact chart (top 10 by default, with Show all and full CSV download). New training saves the report automatically; older models can compute it from their saved artifact and source dataset. JSON/CSV retrieval and explicit recomputation are available at `/api/trained-models/{model_id}/feature-importance`.
+
+API integrations can query `GET /api/models/{model_id}/feature-importance` (or `?format=csv`) using the same active **Model ID** as Prediction. This returns the complete published ranking, not only the chart's top 10, without loading training data or running inference. Missing/invalid reports return `409`; missing/disabled models return `404`. After backfilling or recomputing a trained model's report, explicitly publish it again to refresh the published snapshot without replacing the prediction artifact. Normal API-token authentication applies. See [Feature importance ranking](docs/11_Feature_Importance.md) for method definitions, limitations, and API examples.
 
 The workspace now uses a grouped, collapsible left sidebar instead of horizontal tabs, with a compact page-title toolbar and a stationary language switch. Desktop collapse preference is remembered locally; screens up to 900 px use a navigation drawer. See [Workspace navigation](docs/08_Workspace_Navigation.md).
 

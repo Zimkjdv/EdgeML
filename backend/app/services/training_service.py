@@ -43,7 +43,7 @@ from app.domain.training_schemas import ExternalEvaluationResult, TestEvaluation
 from app.core.observability import training_finished, training_started
 from app.services.dataset_service import DatasetService
 from app.services.regression_metrics import regression_metrics
-from app.services.feature_importance_service import calculate_importance, save_importance
+from app.services.feature_importance_service import ImportanceUnavailable, calculate_importance, read_importance, save_importance
 from app.core.config import get_settings
 from app.infrastructure.file_lock import FileLock, child_path
 from app.services.training_data import clean_supervised_frame
@@ -336,12 +336,22 @@ class TrainingService:
             record = self.get(model_id)
             source = child_path(self._trained_root, model_id)
             destination = child_path(self._publish_root, model_id)
+            importance = None
+            if (source / 'feature_importance.json').exists():
+                try:
+                    importance = read_importance(source, record.id, record.name)
+                except ImportanceUnavailable as exc:
+                    raise PredictionValidationError(str(exc)) from exc
             if destination.exists():
                 metadata = json.loads((destination / 'metadata.json').read_text(encoding='utf-8'))
                 if metadata.get('id') != model_id:
                     raise PredictionValidationError('Published package ID conflicts with the requested model.')
                 if not (destination / record.manifest.get('artifact', 'model.pkl')).is_file():
                     raise PredictionValidationError('Existing published artifact is missing; restore the package before republishing.')
+                # Explicit republishing refreshes the report snapshot, never the artifact.
+                # GET remains read-only and does not fall back to mutable training data.
+                if importance is not None:
+                    save_importance(destination, importance)
             else:
                 temporary = Path(tempfile.mkdtemp(prefix='.publish-', dir=self._publish_root))
                 try:

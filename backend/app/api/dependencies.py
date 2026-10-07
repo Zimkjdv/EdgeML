@@ -20,7 +20,7 @@ from app.services.queue_operations_service import QueueOperationsService
 from app.infrastructure.trained_model_catalog import TrainedModelCatalog
 from app.services.optimization_service import OptimizationService
 from app.services.optimization_defaults import OptimizationDefaults
-from app.services.feature_importance_service import FeatureImportanceService
+from app.services.feature_importance_service import FeatureImportanceService, PublishedFeatureImportanceService
 
 
 def get_feature_importance_service() -> FeatureImportanceService:
@@ -116,6 +116,10 @@ def _request_token(request: Request) -> str:
 def get_model_registry() -> FileModelRegistry:
     settings = get_settings()
     return FileModelRegistry(settings.model_registry_file, settings.models_root)
+
+
+def get_published_feature_importance_service() -> PublishedFeatureImportanceService:
+    return PublishedFeatureImportanceService(get_model_registry())
 
 
 @lru_cache

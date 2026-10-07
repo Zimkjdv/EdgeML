@@ -10,8 +10,10 @@ from typing import Callable
 
 import numpy as np
 import pandas as pd
+from pydantic import ValidationError
 
 from app.domain.errors import ModelNotFoundError, PredictionValidationError
+from app.domain.feature_importance import FeatureImportanceReport
 from app.domain.model_catalog import ModelCatalog
 from app.domain.optimization import PredictorProvider
 from app.services.dataset_service import DatasetService
@@ -81,6 +83,53 @@ def save_importance(folder: Path, report: dict):
             os.unlink(temporary)
 
 
+def read_importance(folder: Path, model_id: str, model_name: str) -> dict:
+    """Read a saved snapshot without loading a predictor or its source dataset."""
+    path = folder / 'feature_importance.json'
+    if path.resolve().parent != folder.resolve():
+        raise ImportanceUnavailable('Saved feature importance is outside the model package.')
+    try:
+        payload = json.loads(path.read_text(encoding='utf-8'))
+    except FileNotFoundError:
+        raise ImportanceUnavailable('Feature importance has not been computed or included in this package.') from None
+    except (OSError, UnicodeError, ValueError):
+        raise ImportanceUnavailable('Saved feature importance cannot be read. Restore or recompute the report.') from None
+    try:
+        return FeatureImportanceReport.model_validate({**payload, 'model_id': model_id, 'model_name': model_name}).model_dump(mode='json')
+    except (TypeError, ValidationError):
+        raise ImportanceUnavailable('Saved feature importance is invalid. Restore or recompute the report.') from None
+
+
+def importance_csv(report: dict) -> str:
+    stream = io.StringIO()
+    fields = ['rank', 'feature', 'importance', 'std', 'model_id', 'method', 'metric', 'data_source', 'dataset_id', 'sample_count', 'repeats', 'seed']
+    writer = csv.DictWriter(stream, fieldnames=fields)
+    writer.writeheader()
+    for item in report['rankings']:
+        row = {key: item.get(key, report.get(key)) for key in fields}
+        # Prevent spreadsheet formula execution when opening user-named features.
+        for key, value in row.items():
+            if isinstance(value, str) and value.lstrip().startswith(('=', '+', '-', '@')):
+                row[key] = "'" + value
+        writer.writerow(row)
+    return '\ufeff' + stream.getvalue()
+
+
+class PublishedFeatureImportanceService:
+    """Read-only report lookup using the same active catalog IDs as Prediction."""
+
+    def __init__(self, catalog: ModelCatalog):
+        self.catalog = catalog
+
+    def get(self, model_id: str) -> dict:
+        manifest = self.catalog.get(model_id)
+        return read_importance(manifest.model_path, manifest.id, manifest.name)
+
+    @staticmethod
+    def csv(report: dict) -> str:
+        return importance_csv(report)
+
+
 class FeatureImportanceService:
     def __init__(self, catalog: ModelCatalog, factory: PredictorProvider, datasets: DatasetService, root: Path):
         self.catalog, self.factory, self.datasets, self.root = catalog, factory, datasets, root.resolve()
@@ -93,11 +142,8 @@ class FeatureImportanceService:
 
     def get(self, model_id: str) -> dict:
         folder = self._folder(model_id)
-        path = folder / 'feature_importance.json'
-        if not path.is_file():
-            raise ImportanceUnavailable('Feature importance has not been computed. Use POST to compute it.')
         record = json.loads((folder / 'record.json').read_text(encoding='utf-8'))
-        return {**json.loads(path.read_text(encoding='utf-8')), 'model_id': model_id, 'model_name': record['name']}
+        return read_importance(folder, model_id, record['name'])
 
     def compute(self, model_id: str) -> dict:
         folder = self._folder(model_id)
@@ -122,15 +168,4 @@ class FeatureImportanceService:
 
     @staticmethod
     def csv(report: dict) -> str:
-        stream = io.StringIO()
-        fields = ['rank', 'feature', 'importance', 'std', 'model_id', 'method', 'metric', 'data_source', 'dataset_id', 'sample_count', 'repeats', 'seed']
-        writer = csv.DictWriter(stream, fieldnames=fields)
-        writer.writeheader()
-        for item in report['rankings']:
-            row = {key: item.get(key, report.get(key)) for key in fields}
-            # Prevent spreadsheet formula execution when opening user-named features.
-            for key, value in row.items():
-                if isinstance(value, str) and value.lstrip().startswith(('=', '+', '-', '@')):
-                    row[key] = "'" + value
-            writer.writerow(row)
-        return '\ufeff' + stream.getvalue()
+        return importance_csv(report)
