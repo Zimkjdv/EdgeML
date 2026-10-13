@@ -1,13 +1,14 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.domain.schemas import FeatureSpec
 from app.domain.dataset_identifiers import DatasetIdentifier
 
 
 class ColumnProfile(BaseModel):
+    model_config = ConfigDict(allow_inf_nan=False)
     name: str
     raw_dtype: str
     ml_type: Literal["numeric", "categorical"]

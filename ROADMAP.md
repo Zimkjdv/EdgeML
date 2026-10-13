@@ -12,7 +12,6 @@
 
 | ID | 優先度／狀態 | 證據與影響 | 修正方向與驗收條件 |
 | --- | --- | --- | --- |
-| R12（補充） | 高／待處理，隔離案例已重現 | 空檔拋出未轉換的 `EmptyDataError`；重複欄名被 Pandas 靜默改成 `x.1`；含 Inf 的 profile 無法通過嚴格 JSON 序列化。與 Prediction CSV 驗證不一致。 | 統一空檔、只有 header、重複欄名、非有限值的政策與 422 回應，保留 UTF-8/CP950/Big5 支援；失敗不得留下半套 CSV/JSON。另明確說明 IQR=0 時的異值計數政策並加測試。 |
 | R21 | 高／待處理，函式層已重現 | 兩個內建分類模型使用 `binary_classification`，Prediction 評估只辨識 `classification`；提供 Ground Truth 時，數字標籤會進入回歸指標分支。 | 在 manifest 載入層正規化舊問題類型、未知類型明確拒絕；分類不回傳回歸指標。以兩個範例模型及數字／文字標籤補 CSV/JSON HTTP 測試，保留既有模型相容性。 |
 | R22 | 高／待處理，靜態確認 | JSON Prediction 的 Content-Length 檢查位於 request model 解析後，缺少 header 時不能充當完整 body 上限；直接 Backend 入口不受 Nginx 上限保護。 | 在解析前累計 ASGI body 大小，涵蓋 chunked／無 Content-Length；限制資料值型別與大小。測超限回應、恰好邊界、正常批次、代理及直連入口，不以巨大正式請求驗證。 |
 
@@ -45,7 +44,7 @@
 | R29 | 中／待處理 | 未找到已追蹤的 GitHub Actions；測試與 build 通過不保證 runtime、UI 或套件相容性全部被覆盖。 | Windows/Linux 核心測試、前端全部測試/型別/build、自有隔離 Redis/Nginx integration 與 UI E2E；清楚報告 skip，加入本輪負面案例與依賴 warnings 追蹤，不接正式 DB。 |
 | R30 | 中／待處理 | AGENTS 仍描述早期 v0.1；README/架構/未來文件部分計畫與目前功能、runtime 說明未同步；Worker 引用 API dependencies 作組裝入口。 | 文件分清目前能力、部署前置與未完成項目，核對 local/hybrid/full Docker、Python 版本及 fresh Compose/base image 前置。README 保留入口，細節移 docs；抽出共用 composition root，保持未來訓練可獨立，無須現在重寫成微服務。 |
 
-建議批次：先 R12/R21/R22，再 R11/R19/R23；其後完成 R25/R15/R16 與 R18/R29，剩餘產品、UI、維運改善依實際使用負載排程。每項修正均需獨立驗收並更新文件；每項完成後先 commit/push，再處理下一項。
+建議批次：先 R21/R22，再 R11/R19/R23；其後完成 R25/R15/R16 與 R18/R29，剩餘產品、UI、維運改善依實際使用負載排程。每項修正均需獨立驗收並更新文件；每項完成後先 commit/push，再處理下一項。
 
 ## 驗收與操作原則
 

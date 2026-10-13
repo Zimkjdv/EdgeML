@@ -17,6 +17,16 @@ csv.field_size_limit(max(csv.field_size_limit(), 100 * 1024 * 1024))
 def read_prediction_csv(content: bytes, integer_columns: dict) -> pd.DataFrame:
     try:
         text = content.decode('utf-8-sig')
+    except UnicodeError as exc:
+        raise PredictionValidationError(f'Invalid UTF-8 CSV: {exc}') from exc
+    return read_csv_text(text, integer_columns)
+
+
+def read_csv_text(text: str, integer_columns: dict | None = None) -> pd.DataFrame:
+    """Validate decoded CSV before Pandas can rename headers or discard cells."""
+    try:
+        if '\x00' in text:
+            raise ValueError('NUL characters are not allowed')
         # Validate quote placement too; csv.reader alone accepts quotes in bare cells.
         quoted = closed = field_started = False
         i = 0
@@ -48,4 +58,4 @@ def read_prediction_csv(content: bytes, integer_columns: dict) -> pd.DataFrame:
         # Pandas handles numeric inference, while the explicit NA list stays stable.
         return pd.read_csv(StringIO(text), dtype=integer_columns, keep_default_na=False, na_values=CSV_NA_VALUES)
     except (UnicodeError, csv.Error, pd.errors.ParserError, pd.errors.EmptyDataError, ValueError) as exc:
-        raise PredictionValidationError(f'Invalid UTF-8 CSV: {exc}') from exc
+        raise PredictionValidationError(f'Invalid CSV: {exc}') from exc

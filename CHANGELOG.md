@@ -2,6 +2,14 @@
 
 完成紀錄、歷史驗證與部署限制保存在此；未完成工作與驗收條件見 [ROADMAP.md](ROADMAP.md)。每項修正有獨立 commit/push，發布程式不代表自動升級業務容器。
 
+## 2026-10-13 — R12 CSV 邊界與 profile
+
+- Dataset 與 Prediction 共用 CSV syntax/NA 政策，空檔／只有 header／重複欄名／缺欄或多欄／錯誤引號／NUL 回傳 422；保留 UTF-8/BOM/CP950/Big5 中文資料及 quoted multiline。
+- 數值欄 Inf/-Inf 拒絕上傳；極端有限值以縮放中間值計算統計，無法表示的統計回傳 null。sample std、缺值與 IQR=0 的計數政策已明確文件化。
+- 完整 profile／response 在儲存前驗證；metadata 使用 atomic JSON。新上傳 CSV 或 metadata 寫入失敗會清除該次 partial CSV，既有資料集保留；完整並行交易仍列 R11。
+- 定向測試 72 passed、2 skipped（Windows symlink 權限）；涵蓋錯誤 HTTP 回應、四種編碼、IQR=0、極端統計與兩種寫入故障。
+- 提交前 Windows/Python 3.12 完整回歸 265 passed、15 skipped；隔離 Linux ML base 的 Dataset/Prediction CSV 測試 40 passed。有限極端值測試不再產生新增的 overflow warning。
+
 ## 2026-10-13 — R20 資料集路徑安全
 
 - 資料集 ID 共用 canonical UUID 驗證；read/rename/delete/frame、訓練主／測試資料集及後續補測均拒絕路徑參照。
