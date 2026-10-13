@@ -1,5 +1,6 @@
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
 
 from app.api.router import api_router
 from app.api.dependencies import require_api_token
@@ -7,6 +8,7 @@ from app.api.routes.health import router as health_router
 from app.api.routes.web_session import router as web_session_router
 from app.core.observability import RequestContextMiddleware, configure_logging
 from app.core.config import get_settings
+from app.core.request_limits import JsonPredictionBodyLimitMiddleware, prediction_request_validation_handler
 from app.infrastructure.model_storage import initialize_model_storage
 
 
@@ -14,6 +16,8 @@ def create_app() -> FastAPI:
     configure_logging()
     initialize_model_storage(get_settings())
     app = FastAPI(title="EdgeML", version="0.7.3")
+    app.add_exception_handler(RequestValidationError, prediction_request_validation_handler)
+    app.add_middleware(JsonPredictionBodyLimitMiddleware)
     app.add_middleware(RequestContextMiddleware)
     app.add_middleware(
         CORSMiddleware,

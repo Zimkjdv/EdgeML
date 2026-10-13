@@ -160,6 +160,10 @@ Training min/max are observed data ranges, **not** process safety limits or proo
 
 JSON requests are limited by `EDGEML_MAX_JSON_BODY_BYTES` (default 10 MiB), `EDGEML_MAX_JSON_RECORDS` (default 10,000), `EDGEML_MAX_JSON_COLUMNS` (default 256), and `EDGEML_MAX_JSON_VALUE_CHARS` (default 10,000). Requests over a configured limit return `413`.
 
+The body limit counts actual bytes **before** JSON decoding or request-schema validation, including requests without Content-Length or using chunked transfer. An oversized declared Content-Length is rejected without reading the body; a smaller declared length cannot bypass actual-byte counting. Exactly the configured byte limit is accepted for subsequent validation; one extra byte returns `413`. Invalid or duplicate Content-Length headers return `400`. Direct Backend and Nginx-proxied callers receive the same Backend limit; Nginx retains its separate, normally larger limit. Byte counts include UTF-8 encoding, whitespace, and all JSON fields, not just prediction records.
+
+Values inside `data` or legacy `records` must be scalar strings, finite numbers, booleans, or `null`. Nested objects/arrays and numeric NaN/Infinity (including overflowing JSON numbers) return `422`; use `null` for missing data. Integers retain Python integer precision. String values and column names both use `EDGEML_MAX_JSON_VALUE_CHARS`; record and per-record column counts retain their existing limits. Prediction validation errors report location/type/message without reflecting the submitted input, so invalid nonfinite numbers do not break error-response JSON. Size rejections preserve CORS and X-Request-ID and do not invoke prediction/history.
+
 ## Model registry APIs
 
 - `GET /api/model-registry`: list all registered model packages and lifecycle status.

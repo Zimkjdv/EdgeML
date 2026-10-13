@@ -22,6 +22,8 @@ The latest Prediction update rounds regression `prediction` and `prediction_erro
 
 Prediction clients can use either `POST /api/predict` for CSV upload/download or `POST /api/predict/json` for direct JSON `data` from a database or service integration. The JSON endpoint returns prediction records and evaluation metadata without creating a temporary CSV file.
 
+JSON Prediction enforces the configured body limit before decoding (10 MiB by default), including chunked requests. Data values must be scalar strings, finite numbers, booleans, or `null`; nested values and numeric NaN/Infinity return `422`. Existing record/column limits remain, and oversized strings or column names return `413`. See [API limits](docs/02_API.md#post-apipredictjson).
+
 Ground Truth evaluation uses the model's canonical problem type: regression metrics for regression, and accuracy/weighted precision/recall/F1 for classification. Legacy binary/multiclass classification manifests load as `classification` automatically, including the bundled CreditRisk and CustomerChurn examples; CSV and JSON support numeric and text class labels.
 
 `predict_api_example.py` includes `get_model_id_by_name("HousePrice")`, a requests-based example of calling `GET /api/models/by-name/{model_name}` before submitting a JSON prediction.
@@ -107,13 +109,12 @@ The current implementation is suitable for local and controlled self-hosted use.
 
 - **P0 reliability:** shared-volume ownership locks protect live jobs during recovery; dead-letter replay now has real-Redis concurrency, crash, and error-injection coverage. Redis restart, idempotent output and broader graceful-shutdown coverage remain in ROADMAP.
 - **P0 data durability:** Redis AOF and published Docker packages are persistent, and Registry writes have cross-process transactions. Other JSON repositories and full backup/restore verification remain in ROADMAP.
-- **P0 input safety:** enforce JSON request body, row, column, and value-size limits in addition to the existing CSV byte limit.
 - **P0 access control:** refine token scopes and add an external identity/reverse-proxy integration before exposing model registry and queue operations outside a trusted network.
 - **P1 operations:** add service healthchecks, resource limits, log rotation, Redis authentication, backup/restore procedures, and immutable Docker image tags.
 - **P1 frontend quality:** split the monolithic `App.vue`, move all labels to structured i18n keys, add frontend unit/E2E tests, and code-split the large production bundle.
 - **P2 product roadmap:** complete Ridge and richer AutoML controls where they belong, then continue the planned standalone AutoML extraction and v0.8 observability dashboard.
 
-Follow the prioritized outstanding work in [ROADMAP.md](ROADMAP.md) and completed changes in [CHANGELOG.md](CHANGELOG.md). Dataset IDs use canonical UUIDs; read, rename, delete, training, and evaluation reject paths and linked files outside their storage boundary. Dataset CSV uploads reject empty/header-only files, duplicate headers, malformed rows, and infinite numeric values with `422`, while retaining Chinese encoding support and missing-value profiling. See the [API contract](docs/02_API.md#dataset-identifiers-and-storage-boundaries). Redis AOF is already enabled; additional input limits and stronger external authentication remain planned. These changes preserve the `ModelCatalog` and `PredictionService` application boundaries.
+Follow the prioritized outstanding work in [ROADMAP.md](ROADMAP.md) and completed changes in [CHANGELOG.md](CHANGELOG.md). Dataset IDs use canonical UUIDs; read, rename, delete, training, and evaluation reject paths and linked files outside their storage boundary. Dataset CSV uploads reject empty/header-only files, duplicate headers, malformed rows, and infinite numeric values with `422`, while retaining Chinese encoding support and missing-value profiling. See the [API contract](docs/02_API.md#dataset-identifiers-and-storage-boundaries). Redis AOF is already enabled; broader concurrency protection and stronger external authentication remain planned. These changes preserve the `ModelCatalog` and `PredictionService` application boundaries.
 
 ## Runtime selection
 

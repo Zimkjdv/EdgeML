@@ -1,13 +1,26 @@
 from datetime import date, datetime
 from pathlib import Path
 
-from typing import Literal
+from typing import Annotated, Literal
 from typing import Any
+from math import isfinite
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, BeforeValidator, Field, StrictBool, StrictFloat, StrictInt, StrictStr, model_validator
 from app.domain.problem_types import ProblemType
 
 TrainingRangePolicy = Literal["none", "drop"]
+
+
+def validate_prediction_scalar(value):
+    if value is not None and type(value) not in (str, int, float, bool):
+        raise ValueError('Prediction values must be scalar strings, numbers, booleans, or null.')
+    if isinstance(value, float) and not isfinite(value):
+        raise ValueError('Prediction numbers must be finite; NaN and Infinity are not allowed.')
+    return value
+
+
+PredictionScalar = Annotated[StrictStr | StrictInt | StrictFloat | StrictBool | None,
+                             BeforeValidator(validate_prediction_scalar)]
 
 
 class FeatureSpec(BaseModel):
@@ -69,8 +82,8 @@ class PredictionOutput(BaseModel):
 
 class JsonPredictionRequest(BaseModel):
     model_id: str = Field(min_length=1)
-    data: list[dict[str, Any]] | None = Field(default=None, min_length=1)
-    records: list[dict[str, Any]] | None = Field(default=None, min_length=1)
+    data: list[dict[str, PredictionScalar]] | None = Field(default=None, min_length=1)
+    records: list[dict[str, PredictionScalar]] | None = Field(default=None, min_length=1)
     ground_truth_column: str | None = None
     source_name: str | None = Field(default=None, max_length=200)
     training_range_policy: TrainingRangePolicy = "none"
@@ -84,7 +97,7 @@ class JsonPredictionRequest(BaseModel):
         return self
 
     @property
-    def input_data(self) -> list[dict[str, Any]]:
+    def input_data(self) -> list[dict[str, PredictionScalar]]:
         return self.data if self.data is not None else self.records or []
 
 

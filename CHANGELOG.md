@@ -2,6 +2,14 @@
 
 完成紀錄、歷史驗證與部署限制保存在此；未完成工作與驗收條件見 [ROADMAP.md](ROADMAP.md)。每項修正有獨立 commit/push，發布程式不代表自動升級業務容器。
 
+## 2026-10-13 — R22 JSON 解析前大小上限與 scalar 契約
+
+- pure ASGI middleware 在 JSON decoding/Pydantic 前限制實際位元組，涵蓋無 Content-Length、chunked、偽小 header、trailing slash 與 mount prefix；超限 413、錯誤／重複 Content-Length 400，恰好邊界正常接受。
+- data/records 僅接受 str/int/finite float/bool/null；巢狀值與 NaN/Inf 回 422，錯誤只回 loc/type/msg，避免不合法 JSON 或反射原始資料。整數及布林型別保留，字串與欄名大小受既有設定限制。
+- CORS、X-Request-ID 與 HTTP logging 包住 body limit；body 超限不進入 JSON decoder、推論或 history。CSV 與其他 endpoint 保留自己的 body 政策。
+- Windows/Python 3.12 最終完整後端 317 passed、22 skipped；其中 7 個新增整合案例需獨立環境，已另行在隔離 Backend/Nginx 通過。其餘跳過為既有環境條件 13 項與 Windows symlink 權限 2 項。34 個新增核心邊界案例在完整回歸中通過，包含標準 JSON 指數溢位（±1e999）。Compose config 與 git diff whitespace 檢查通過。
+- 隔離整合 7 passed：Backend 1 KiB／Nginx 2 KiB，直連與代理、固定大小與 chunked、恰好上限／多 1 byte、代理自身上限與 scalar 422 一致性。原始碼唯讀、只複製 HousePrice 範例、無 host ports，臨時容器與網路已清理，業務環境未部署。
+
 ## 2026-10-13 — R21 分類 Prediction 評估
 
 - ModelManifest/ModelSummary 共用 canonical problem type；舊 binary_classification/multiclass_classification 在載入時正規化，不修改既有模型檔。未知類型在 manifest 邊界拒絕，Prediction 回 422 並且不執行推論或記錄成功歷史。
