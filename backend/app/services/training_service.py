@@ -6,7 +6,9 @@ import shutil
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
-from uuid import uuid4
+from uuid import NAMESPACE_URL, uuid4, uuid5
+import hashlib
+import os
 from functools import wraps
 from threading import Lock
 from weakref import WeakValueDictionary
@@ -106,9 +108,18 @@ class TrainingService:
         self._model_registry = model_registry
         self._logger = logging.getLogger("edgeml.training")
         self._state_locks = WeakValueDictionary()
+        self._model_locks = WeakValueDictionary()
         self._state_locks_guard = Lock()
 
-    def train(self, request: TrainingRequest, progress=None) -> TrainedModelDetail:
+    def train(self, request: TrainingRequest, progress=None, *, model_id: str | None = None,
+              job_id: str | None = None) -> TrainedModelDetail:
+        model_id = model_id or str(uuid4())
+        with self._model_lock(model_id):
+            return self._train_model(request, progress, model_id, job_id)
+
+    def _train_model(self, request, progress, model_id, job_id):
+        if child_path(self._trained_root, model_id).exists():
+            raise PredictionValidationError('Output model already exists; refusing to overwrite it.')
         if progress: progress(10, "驗證資料與訓練設定")
         frame = self._datasets.frame(request.dataset_id)
         frame = clean_supervised_frame(frame, request.feature_columns, request.target_column, request.numeric_imputer)
@@ -139,12 +150,7 @@ class TrainingService:
                                          request.test_dataset_id or request.dataset_id,
                                          'external_test' if request.test_dataset_id else 'training',
                                          get_settings().importance_max_samples, get_settings().importance_repeats)
-        model_id = str(uuid4())
         completed_at = datetime.now(timezone.utc)
-        output_dir = self._trained_root / model_id
-        output_dir.mkdir()
-        save_importance(output_dir, importance)
-        joblib.dump(pipeline, output_dir / "model.pkl")
         manifest = self._manifest(model_id, request, completed_at, validation, test_metrics, features)
         from app.domain.feature_defaults import summarize_features
         manifest['training_dataset_id'] = request.dataset_id
@@ -171,13 +177,70 @@ class TrainingService:
                 "excluded_rows": len(frame) - len(evaluated)},
             "manifest": manifest,
         }
-        write_json_atomic(output_dir / "metadata.json", manifest)
-        (output_dir / "README.md").write_text(f"# {request.model_name}\n\nTrained by EdgeML.\n", encoding="utf-8")
-        # The record is the visibility marker; expose it only after artifacts exist.
-        write_json_atomic(output_dir / "record.json", record)
+        self._commit_model(model_id, job_id, request, pipeline, importance, manifest, record)
         result = TrainedModelDetail.model_validate(record)
         if progress: progress(100, "訓練完成")
         return result
+
+    @staticmethod
+    def _request_digest(request):
+        payload = json.dumps(request.model_dump(mode='json'), sort_keys=True, ensure_ascii=False, separators=(',', ':'))
+        return hashlib.sha256(payload.encode()).hexdigest()
+
+    @staticmethod
+    def _artifact_digest(path):
+        digest = hashlib.sha256()
+        with path.open('rb') as stream:
+            for chunk in iter(lambda: stream.read(1024 * 1024), b''): digest.update(chunk)
+        return digest.hexdigest()
+
+    def _commit_model(self, model_id, job_id, request, pipeline, importance, manifest, record):
+        stage = Path(tempfile.mkdtemp(prefix=f'.staging-{model_id}-', dir=self._trained_root))
+        # This directory was created by this attempt and checked inside the root.
+        stage = child_path(self._trained_root, stage.name)
+        destination = child_path(self._trained_root, model_id)
+        try:
+            write_json_atomic(stage / 'owner.json', {'job_id': job_id, 'request_sha256': self._request_digest(request)})
+            save_importance(stage, importance)
+            with (stage / 'model.pkl').open('wb') as stream:
+                joblib.dump(pipeline, stream)
+                stream.flush(); os.fsync(stream.fileno())
+            write_json_atomic(stage / 'metadata.json', manifest)
+            (stage / 'README.md').write_text(f'# {request.model_name}\n\nTrained by EdgeML.\n', encoding='utf-8')
+            record['output_commit'] = {'job_id': job_id, 'request_sha256': self._request_digest(request),
+                                       'artifact_sha256': self._artifact_digest(stage / 'model.pkl')}
+            write_json_atomic(stage / 'record.json', record)
+            if destination.exists():
+                raise PredictionValidationError('Output destination already exists.')
+            stage.rename(destination)
+        finally:
+            if stage.exists():
+                shutil.rmtree(child_path(self._trained_root, stage.name))
+
+    def _recover_output(self, job, request):
+        destination = child_path(self._trained_root, job.output_model_id)
+        if not destination.exists(): return None
+        if not all((destination / name).is_file() for name in ('record.json', 'metadata.json', 'model.pkl')):
+            raise PredictionValidationError('Committed output is incomplete; restore it before retrying.')
+        payload = self._read_record(destination)
+        commit = payload.get('output_commit', {})
+        if (commit.get('job_id') != job.id or commit.get('request_sha256') != self._request_digest(request)
+                or commit.get('artifact_sha256') != self._artifact_digest(destination / 'model.pkl')):
+            raise PredictionValidationError('Existing output ownership/configuration/artifact verification failed.')
+        ModelManifest.model_validate({**payload['manifest'], 'model_path': destination})
+        if not (destination / 'metadata.json').is_file():
+            raise PredictionValidationError('Committed output metadata is missing.')
+        return TrainedModelDetail.model_validate(payload)
+
+    def _archive_incomplete_staging(self, job, request):
+        for stage in self._trained_root.glob(f'.staging-{job.output_model_id}-*'):
+            stage = child_path(self._trained_root, stage.name)
+            owner_path = stage / 'owner.json'
+            owner = json.loads(owner_path.read_text(encoding='utf-8')) if owner_path.exists() else None
+            if owner is not None and owner != {'job_id': job.id, 'request_sha256': self._request_digest(request)}:
+                raise PredictionValidationError('Staging ownership verification failed.')
+            archive = child_path(self._trained_root, f'.abandoned-{job.output_model_id}-{uuid4().hex}')
+            stage.rename(archive)  # Preserve incomplete diagnostic files; never publish them.
 
     def create_job(self, request: TrainingRequest) -> TrainingJob:
         job = TrainingJob(id=str(uuid4()), status="queued", progress=0, message="等待訓練開始")
@@ -202,11 +265,13 @@ class TrainingService:
             self._write_job(job, request)
         return job
 
-    def recover_pending_dispatch(self, queue) -> None:
-        for marker in self._jobs_root.glob('.dispatch-*.txn'):
-            job_id = marker.name[len('.dispatch-'):-4]
+    def recover_pending_dispatch(self, queue, include_confirmed: bool = False) -> None:
+        ids = {marker.name[len('.dispatch-'):-4] for marker in self._jobs_root.glob('.dispatch-*.txn')}
+        if include_confirmed:
+            ids.update(path.stem for path in self._jobs_root.glob('*.json'))
+        for job_id in ids:
             def eligible():
-                try: return self.get_job(job_id).status == 'queued'
+                try: return self.get_job(job_id).status in ({'queued', 'running'} if include_confirmed else {'queued'})
                 except ModelNotFoundError: return False
             queue.ensure_enqueued(job_id, eligible)
             self.confirm_dispatch(job_id)
@@ -232,6 +297,7 @@ class TrainingService:
         if job.status not in {"queued", "running"}:
             raise PredictionValidationError(f"Training job '{job_id}' is not available to run.")
         job.attempt += 1
+        job.output_model_id = job.output_model_id or str(uuid5(NAMESPACE_URL, 'edgeml:training-job/' + job.id))
         job.replay_pending = False
         job.error = None
         job.started_at = datetime.now(timezone.utc)
@@ -242,11 +308,59 @@ class TrainingService:
 
     @job_execution
     def run_job(self, job_id: str, worker_id: str | None = None) -> TrainingJob:
-        job, request = self._begin_job(job_id, worker_id)
+        job, request = self._read_job(job_id)
+        if job.status == 'completed': return job
+        if job.status not in {'queued', 'running'}:
+            raise PredictionValidationError('Training job is not available to run.')
+        job.output_model_id = job.output_model_id or str(uuid5(NAMESPACE_URL, 'edgeml:training-job/' + job.id))
+        with self._model_lock(job.output_model_id):
+            try:
+                result = self._recover_output(job, request)
+            except (PredictionValidationError, ModelNotFoundError, ValueError) as exc:
+                with self._job_state_lock(job.id):
+                    current, saved = self._read_job(job.id)
+                    if current.status != 'cancelled':
+                        current.status, current.error = 'failed', str(exc)
+                        current.message, current.completed_at = '模型成果驗證失敗', datetime.now(timezone.utc)
+                        self._write_job(current, saved)
+                raise
+            if result is not None:
+                return self._complete_job(job, request, result, worker_id)
+            job, request = self._begin_job(job_id, worker_id)
+            return self._run_job_output(job, request, worker_id)
+
+    def has_committed_output(self, job_id: str) -> bool:
+        try:
+            job, request = self._read_job(job_id)
+            if not job.output_model_id: return False
+            with self._model_lock(job.output_model_id):
+                return self._recover_output(job, request) is not None
+        except (ModelNotFoundError, PredictionValidationError, OSError, ValueError):
+            return False
+
+    def _complete_job(self, job, request, result, worker_id):
+        with self._job_state_lock(job.id):
+            current, request = self._read_job(job.id)
+            if current.status in {'completed', 'cancelled'}: return current
+            if current.attempt != job.attempt:
+                raise PredictionValidationError('A newer job attempt owns this output.')
+            current.status, current.progress, current.message = 'completed', 100, '訓練完成'
+            current.output_model_id = current.result_model_id = result.id
+            current.worker_id = worker_id or current.worker_id
+            current.completed_at, current.error = datetime.now(timezone.utc), None
+            self._write_job(current, request)
+            return current
+
+    def _run_job_output(self, job, request, worker_id):
+        job_id = job.id
         started_at = training_started()
         self._logger.info("Training job started", extra={"event": "training.job.started", "job_id": job_id, "worker_id": worker_id})
         try:
-            result = self.train(request, lambda progress, message: self._update_job(job, request, progress, message))
+            result = self._recover_output(job, request)
+            if result is None:
+                self._archive_incomplete_staging(job, request)
+                result = self.train(request, lambda progress, message: self._update_job(job, request, progress, message),
+                                    model_id=job.output_model_id, job_id=job.id)
         except Exception as exc:
             self._logger.exception("Training job failed", extra={"event": "training.job.failed", "job_id": job_id, "worker_id": worker_id})
             job.status, job.message, job.error = "failed", "訓練失敗", str(exc)
@@ -258,9 +372,11 @@ class TrainingService:
                 extra={"event": "training.job.finished", "job_id": job_id, "model_id": job.result_model_id, "worker_id": worker_id},
             )
             raise
-        job.status, job.progress, job.message, job.result_model_id = "completed", 100, "訓練完成", result.id
-        job.completed_at = datetime.now(timezone.utc)
-        self._write_job(job, request)
+        try:
+            job = self._complete_job(job, request, result, worker_id)
+        except Exception:
+            training_finished('confirmation_pending', started_at)
+            raise
         training_finished(job.status, started_at)
         self._logger.info(
             "Training job finished",
@@ -269,11 +385,11 @@ class TrainingService:
         return job
 
     @job_state_transaction
-    def schedule_retry(self, job_id: str, max_attempts: int) -> TrainingJob:
+    def schedule_retry(self, job_id: str, max_attempts: int, *, committed_output: bool = False) -> TrainingJob:
         """Move a failed job back to queued state when attempts remain."""
 
         job, request = self._read_job(job_id)
-        if job.status != "failed" or job.attempt >= max_attempts:
+        if job.status != "failed" or (job.attempt >= max_attempts and not committed_output):
             return job
         job.status = "queued"
         job.progress = 0
@@ -367,9 +483,16 @@ class TrainingService:
         return ExternalEvaluationResult(metrics=metrics, context=context)
 
     def _model_lock(self, model_id: str) -> FileLock:
+        if model_id.startswith('.'):
+            raise ModelNotFoundError('Internal staging models are not available.')
         child_path(self._trained_root, model_id)
         # Outside the model folder so deletion cannot unlink a held lock.
-        return FileLock(child_path(self._trained_root / '.locks', f'{model_id}.lock'))
+        with self._state_locks_guard:
+            lock = self._model_locks.get(model_id)
+            if lock is None:
+                lock = FileLock(child_path(self._trained_root / '.locks', f'{model_id}.lock'))
+                self._model_locks[model_id] = lock
+            return lock
 
     def _write_job(self, job: TrainingJob, request: TrainingRequest) -> None:
         with self._job_state_lock(job.id):
@@ -402,10 +525,11 @@ class TrainingService:
             return lock
 
     def list(self) -> list[TrainedModelSummary]:
-        records = [TrainedModelSummary.model_validate(self._read_record(path.parent)) for path in self._trained_root.glob("*/record.json")]
+        records = [TrainedModelSummary.model_validate(self._read_record(path.parent)) for path in self._trained_root.glob("*/record.json") if not path.parent.name.startswith('.')]
         return sorted(records, key=lambda item: item.completed_at, reverse=True)
 
     def get(self, model_id: str) -> TrainedModelDetail:
+        if model_id.startswith('.'): raise ModelNotFoundError('Internal staging models are not available.')
         return TrainedModelDetail.model_validate(self._read_record(child_path(self._trained_root, model_id)))
 
     def publish(self, model_id: str) -> TrainedModelDetail:

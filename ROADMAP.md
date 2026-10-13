@@ -12,7 +12,6 @@
 
 | ID | 優先度／狀態 | 證據與影響 | 修正方向與驗收條件 |
 | --- | --- | --- | --- |
-| R19（補充） | 高／待處理 | 訓練輸出使用新 UUID；模型 record 已保存、job 尚未標完成的崩潰窗口，重試仍可能建立第二個模型。既有 ownership lock 不等於輸出冪等。 | job ID 對應可恢復輸出提交；在 artifact、record、job 各階段故障注入，恢復後只產生一個可見成果。驗證 Worker 停止寬限與長任務策略，維持單 host/shared-volume 的支援界線。 |
 | R23 | 中／待處理，UI/文件靜態確認 | 新文件要求重新發布來更新 importance snapshot，但已發布模型 UI 只有「載入到 Prediction」，沒有重新發布入口；API 可做，UI 流程不完整。 | 提供明確的報告重新計算／更新發布快照操作、權限與確認；顯示報告來源、計算時間及發布狀態。測舊模型補算後以 canonical model ID 取得新快照，model.pkl 不被替換，詳細指標仍保留。 |
 | R24 | 中／待處理 | 訓練設定主要保留請求值，不足以完整追溯當時資料版本、套件版本與實際解析後參數；分類清單仍以回歸欄位為主。 | 保存資料 checksum、已解析參數、runtime 版本、驗證策略與 split 摘要；分類依問題類型顯示適當指標，補混淆矩陣與標籤順序契約。資料集內容預覽採分頁，避免直接回傳整個 CSV。 |
 
@@ -36,11 +35,11 @@
 | R29 | 中／待處理 | 未找到已追蹤的 GitHub Actions；測試與 build 通過不保證 runtime、UI 或套件相容性全部被覆盖。 | Windows/Linux 核心測試、前端全部測試/型別/build、自有隔離 Redis/Nginx integration 與 UI E2E；清楚報告 skip，加入本輪負面案例與依賴 warnings 追蹤，不接正式 DB。 |
 | R30 | 中／待處理 | AGENTS 仍描述早期 v0.1；README/架構/未來文件部分計畫與目前功能、runtime 說明未同步；Worker 引用 API dependencies 作組裝入口。 | 文件分清目前能力、部署前置與未完成項目，核對 local/hybrid/full Docker、Python 版本及 fresh Compose/base image 前置。README 保留入口，細節移 docs；抽出共用 composition root，保持未來訓練可獨立，無須現在重寫成微服務。 |
 
-建議批次：先 R19/R23/R24；其後完成 R25/R15/R16 與 R18/R29，剩餘產品、UI、維運改善依實際使用負載排程。每項修正均需獨立驗收並更新文件；每項完成後先 commit/push，再處理下一項。完成紀錄詳見 CHANGELOG。
+建議批次：先 R23/R24；其後完成 R25/R15/R16 與 R18/R29，剩餘產品、UI、維運改善依實際使用負載排程。每項修正均需獨立驗收並更新文件；每項完成後先 commit/push，再處理下一項。完成紀錄詳見 CHANGELOG。
 
 ## 驗收與操作原則
 
 - 使用隔離暫存資料、複製的範例模型與獨立測試服務；不可使用正式 DB／模型／工作／Token／Registry 資料進行故障測試。
 - 真 Redis 測試需提供獨立的 EDGEML_TEST_REDIS_URL；跳過測試不等於驗證通過。
-- 單 host/shared-volume Worker 鎖仍不保證 exactly-once，NFS/SMB 或不同 host 不在現有支援範圍；R19 保留輸出冪等工作。
+- 單 host/shared-volume Worker 鎖仍不保證 exactly-once，NFS/SMB 或不同 host 不在現有支援範圍；輸出冪等已實作，仍不等於分散式 exactly-once。
 - 保留 Router/Service、BasePredictor、fold 內預處理、OOF 與測試指標分離；長期訓練平台抽離方向見 [Future design](docs/06_Future.md)。

@@ -23,6 +23,7 @@ services:
       EDGEML_TRAINED_MODELS_ROOT: /app/data/trained_models
       EDGEML_TRAINING_JOBS_ROOT: /app/data/training_jobs
       EDGEML_PREDICTION_HISTORY_FILE: /app/data/prediction_history.jsonl
+      EDGEML_PREDICTION_HISTORY_MAX_RECORDS: ${EDGEML_PREDICTION_HISTORY_MAX_RECORDS:-0}
       EDGEML_QUEUE_BACKEND: redis
       EDGEML_REDIS_URL: redis://redis:6379/0
       EDGEML_MAX_UPLOAD_BYTES: ${EDGEML_MAX_UPLOAD_BYTES:-5242880}
@@ -46,6 +47,7 @@ services:
       context: ./backend
     command: ["python", "-m", "app.workers.training_worker"]
     restart: unless-stopped
+    stop_grace_period: ${EDGEML_WORKER_STOP_GRACE_PERIOD:-10m}
     environment:
       EDGEML_MODELS_ROOT: /app/data/published_models
       EDGEML_BUNDLED_MODELS_ROOT: /app/ml_models

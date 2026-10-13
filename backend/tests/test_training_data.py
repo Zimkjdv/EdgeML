@@ -58,7 +58,7 @@ def test_cv_counts_are_checked_after_feature_missing_rows_drop(tmp_path, classif
     options = {'problem_type': 'classification', 'algorithm': 'random_forest_classifier'} if classification else {'cv_folds': 4}
     with pytest.raises(PredictionValidationError, match='交叉驗證'):
         service.train(request(dataset.id, **options))
-    assert list((tmp_path / 'trained').iterdir()) == []
+    assert not [p for p in (tmp_path / 'trained').iterdir() if not p.name.startswith('.')]
 
 
 def test_all_rows_dropped_returns_validation_error_in_training(tmp_path):

@@ -50,14 +50,17 @@ def run_worker() -> None:
     _install_signal_handlers(stop_event)
     worker_id = f"{socket.gethostname()}-{os.getpid()}"
     logger.info("Training worker started", extra={"event": "training.worker.started", "worker_id": worker_id})
+    reconcile_all = True
 
     while not stop_event.is_set():
         try:
             # Also recover crashes while other replicas remain running.
-            service.recover_pending_dispatch(queue)
+            service.recover_pending_dispatch(queue, include_confirmed=reconcile_all)
+            reconcile_all = False
             queue.recover_processing()
             job_id = queue.consume(timeout=5)
         except redis.RedisError:
+            reconcile_all = True
             logger.exception("Training queue connection failed", extra={"event": "training.worker.queue_error", "worker_id": worker_id})
             stop_event.wait(5)
             continue
@@ -72,13 +75,14 @@ def run_worker() -> None:
             logger.exception("Training worker failed to execute job", extra={"event": "training.worker.job_error", "job_id": job_id, "worker_id": worker_id})
             try:
                 job = service.get_job(job_id)
+                committed_output = _is_retryable_error(exc) and service.has_committed_output(job_id)
                 if job.status == "cancelled":
                     logger.info(
                         "Cancelled training job acknowledged",
                         extra={"event": "training.worker.job_cancelled", "job_id": job_id, "worker_id": worker_id},
                     )
-                elif _is_retryable_error(exc) and job.attempt < settings.training_max_attempts:
-                    service.schedule_retry(job_id, settings.training_max_attempts)
+                elif _is_retryable_error(exc) and (job.attempt < settings.training_max_attempts or committed_output):
+                    service.schedule_retry(job_id, settings.training_max_attempts, committed_output=committed_output)
                     delay = _retry_delay(job.attempt, settings.training_retry_backoff_seconds, settings.training_retry_backoff_max_seconds)
                     if stop_event.is_set() or (delay and stop_event.wait(delay)):
                         acknowledge = False

@@ -10,6 +10,7 @@ class TrainedModelCatalog:
         self.root = root.resolve()
 
     def get(self, model_id: str) -> ModelManifest:
+        if model_id.startswith('.'): raise ModelNotFoundError('Internal staging models are not available.')
         folder = (self.root / model_id).resolve()
         if folder.parent != self.root or not (folder / 'record.json').is_file():
             raise ModelNotFoundError('Trained model was not found.')
@@ -18,7 +19,7 @@ class TrainedModelCatalog:
 
     def list(self) -> list[ModelSummary]:
         return [ModelSummary.model_validate(self.get(p.parent.name).model_dump())
-                for p in self.root.glob('*/record.json')]
+                for p in self.root.glob('*/record.json') if not p.parent.name.startswith('.')]
 
     def find_id_by_name(self, name: str) -> str:
         for model in self.list():

@@ -10,7 +10,7 @@ class FileModelCatalog:
         self._models_root = models_root
 
     def list(self) -> list[ModelSummary]:
-        manifests = [self._read_manifest(path) for path in self._models_root.glob("*/metadata.json")]
+        manifests = [self._read_manifest(path) for path in self._metadata_paths()]
         return [
             ModelSummary(
                 id=item.id,
@@ -27,7 +27,7 @@ class FileModelCatalog:
         ]
 
     def get(self, model_id: str) -> ModelManifest:
-        for path in self._models_root.glob("*/metadata.json"):
+        for path in self._metadata_paths():
             manifest = self._read_manifest(path)
             if manifest.id == model_id:
                 return manifest
@@ -35,7 +35,7 @@ class FileModelCatalog:
 
     def find_id_by_name(self, name: str) -> str:
         normalized_name = name.strip().casefold()
-        for path in self._models_root.glob("*/metadata.json"):
+        for path in self._metadata_paths():
             manifest = self._read_manifest(path)
             if manifest.name.strip().casefold() == normalized_name:
                 return manifest.id
@@ -46,3 +46,6 @@ class FileModelCatalog:
         payload = json.loads(metadata_path.read_text(encoding="utf-8"))
         payload["model_path"] = metadata_path.parent
         return ModelManifest.model_validate(payload)
+
+    def _metadata_paths(self):
+        return (path for path in self._models_root.glob('*/metadata.json') if not path.parent.name.startswith('.'))

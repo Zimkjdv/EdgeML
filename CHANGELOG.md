@@ -2,6 +2,14 @@
 
 完成紀錄、歷史驗證與部署限制保存在此；未完成工作與驗收條件見 [ROADMAP.md](ROADMAP.md)。每項修正有獨立 commit/push，發布程式不代表自動升級業務容器。
 
+## 2026-10-13 — R19 冪等訓練輸出與 Worker 復原
+
+- 每個 job 在 fit 前保留固定 output_model_id；hidden staging 完整寫入／fsync／record marker 後 atomic directory rename 才公開模型。job ownership、request hash 與 artifact SHA256 驗證後沿用既有成果，不再 fit；確認重試不增加 fit attempt。
+- 真實程序在 pickle／record／成果目錄 rename／job completion 四階段退出後，固定 ID 且只保留一個可見模型。staging/abandoned 不出現在模型 API，未完成 staging 保留供診斷；修改過的 committed artifact 拒絕覆寫。
+- Worker 啟動／Redis reconnect 會協調 queued/running 檔案狀態，即使 confirmed Redis ID 遺失也可恢復；活躍 owner lock 不被接走。已完成成果的暫時確認錯誤可跨 fit 上限重試，而不重新訓練。
+- Docker stop grace 預設 10m，可用 EDGEML_WORKER_STOP_GRACE_PERIOD 調整；SIGTERM 完成當前工作，強制中止則依上述協議復原。舊 completed job 保留原 ID，缺 job association 的升級前孤立 artifact 不自動猜測或刪除。
+- Windows 最終完整後端 340 passed、28 skipped。隔離 Linux 的 output/Worker/Redis 整合 22 passed、1 skipped；另透過真正 docker restart 測試 Redis 1 passed。臨時 Redis/network/scenario volume 已清理，無 host ports、業務資料與容器未部署。Compose 同步傳遞 history retention 設定。
+
 ## 2026-10-13 — R11 檔案交易、歷史復原與派工 outbox
 
 - Dataset 跨程序鎖序列化 read/rename/delete/frame；rename 使用 atomic JSON。upload/delete intent markers 支援真實程序崩潰後復原，未標記的既有 orphan 檔案不刪除。

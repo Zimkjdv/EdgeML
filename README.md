@@ -16,7 +16,7 @@ EdgeML is a self-hosted, plugin-oriented platform for batch predictions from CSV
 | v0.6 API Authentication | In progress | SQLite-backed API token generation, listing, one-time display, scoped access, and revocation |
 | v0.7.1 Observability | Completed | Health endpoints, request logging, and Prometheus metrics |
 | v0.7.2 Queue Workers | Completed | Redis-backed asynchronous training worker with Docker end-to-end verification |
-| v0.7.3 Queue Operations | In progress | Backend retry, dead-letter routing, graceful shutdown, queue-control APIs, Queue Operations UI, and worker-capacity controls; runtime integration coverage remains next |
+| v0.7.3 Queue Operations | In progress | Backend retry, dead-letter routing, graceful shutdown, queue-control APIs, Queue Operations UI, and worker-capacity controls; idempotent output, SIGTERM and Redis restart recovery tested; richer capacity controls remain planned |
 
 The latest Prediction update rounds regression `prediction` and `prediction_error` values to four decimal places in the returned CSV. Full-precision values remain in the evaluation calculations. Long prediction-preview headers and cell values expose tooltips so Chinese and long feature names remain readable.
 
@@ -97,7 +97,7 @@ For integrations that need to discover models, use `GET /api/models/ids` to retr
 - The frontend now includes a Queue Operations page for queue depth, queued/processing IDs, retry attempts, dead-letter inspection, requeue, and cancellation.
 - Queue Operations refreshes automatically and supports running multiple Docker worker replicas against the shared Redis queue.
 - Windows launchers cover the hybrid Redis/local workflow, full Docker startup, and rebuild/deploy flows.
-- Remaining v0.7.3 work is runtime integration coverage and richer capacity controls.
+- Remaining v0.7.3 work is richer capacity controls and operational monitoring.
 
 ## Optimization backlog
 
@@ -107,7 +107,7 @@ The second batch (R05–R08) adds explicit anonymous-development configuration, 
 
 The current implementation is suitable for local and controlled self-hosted use. The following items are recorded before expanding toward multi-user production deployment:
 
-- **P0 reliability:** shared-volume ownership locks protect live jobs during recovery; dead-letter replay now has real-Redis concurrency, crash, and error-injection coverage. Redis restart, idempotent output and broader graceful-shutdown coverage remain in ROADMAP.
+- **P0 reliability:** shared-volume ownership locks protect live jobs during recovery; dead-letter replay now has real-Redis concurrency, crash, and error-injection coverage. Idempotent output, Worker SIGTERM and Redis restart recovery have isolated integration coverage; capacity/monitoring improvements remain in ROADMAP.
 - **P0 data durability:** Redis AOF, published packages, dataset transactions, job-state/outbox transactions, and history recovery are implemented. Full backup/restore verification remains in ROADMAP.
 - **P0 access control:** refine token scopes and add an external identity/reverse-proxy integration before exposing model registry and queue operations outside a trusted network.
 - **P1 operations:** add service healthchecks, resource limits, log rotation, Redis authentication, backup/restore procedures, and immutable Docker image tags.
@@ -395,7 +395,7 @@ Optimization now prefills numeric ranges and fixed median/mode values from the m
 Parameter Optimization is available as a new bilingual page: select a trained regression model (including drafts) or an active registry model, set target Y, fix unselected X features, and search for 1–5 input combinations within numeric bounds/steps or allowed categories. Results show predicted Y, target error, and tolerance status. See [Parameter optimization simulation](docs/07_Parameter_Optimization.md) for setup, API examples, limitations, and follow-up plans.
 
 - v0.7.3 in progress: bounded retries, exponential backoff, dead-letter routing, graceful worker shutdown, Queue Operations APIs, Queue Operations UI, and worker replica guidance are implemented.
-- v0.7.3 follow-up: add runtime integration tests and richer worker-capacity controls.
+- v0.7.3 follow-up: richer worker-capacity controls and operational monitoring.
 - v0.8: add a frontend observability dashboard for API health, registry availability, training activity, prediction outcomes, and operational errors.
 
 ## Documentation

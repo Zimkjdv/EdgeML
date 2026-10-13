@@ -106,6 +106,7 @@ class TrainingJob(BaseModel):
     progress: int = Field(ge=0, le=100)
     message: str
     result_model_id: str | None = None
+    output_model_id: str | None = None
     error: str | None = None
     queued_at: datetime | None = None
     started_at: datetime | None = None
