@@ -10,6 +10,13 @@ class FeatureImportanceRank(BaseModel):
     std: float
 
 
+class ImportancePublication(BaseModel):
+    status: Literal['draft', 'unregistered', 'missing', 'current', 'stale']
+    registry_status: Literal['active', 'disabled'] | None = None
+    published_at: str | None = None
+    published_computed_at: str | None = None
+
+
 class FeatureImportanceReport(BaseModel):
     model_config = ConfigDict(allow_inf_nan=False)
     model_id: str
@@ -25,3 +32,5 @@ class FeatureImportanceReport(BaseModel):
     seed: int
     computed_at: str
     rankings: list[FeatureImportanceRank]
+    published_at: str | None = None
+    publication: ImportancePublication | None = None

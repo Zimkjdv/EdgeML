@@ -12,7 +12,6 @@
 
 | ID | 優先度／狀態 | 證據與影響 | 修正方向與驗收條件 |
 | --- | --- | --- | --- |
-| R23 | 中／待處理，UI/文件靜態確認 | 新文件要求重新發布來更新 importance snapshot，但已發布模型 UI 只有「載入到 Prediction」，沒有重新發布入口；API 可做，UI 流程不完整。 | 提供明確的報告重新計算／更新發布快照操作、權限與確認；顯示報告來源、計算時間及發布狀態。測舊模型補算後以 canonical model ID 取得新快照，model.pkl 不被替換，詳細指標仍保留。 |
 | R24 | 中／待處理 | 訓練設定主要保留請求值，不足以完整追溯當時資料版本、套件版本與實際解析後參數；分類清單仍以回歸欄位為主。 | 保存資料 checksum、已解析參數、runtime 版本、驗證策略與 split 摘要；分類依問題類型顯示適當指標，補混淆矩陣與標籤順序契約。資料集內容預覽採分頁，避免直接回傳整個 CSV。 |
 
 ### 第三優先：效能、架構與 UI
@@ -35,7 +34,7 @@
 | R29 | 中／待處理 | 未找到已追蹤的 GitHub Actions；測試與 build 通過不保證 runtime、UI 或套件相容性全部被覆盖。 | Windows/Linux 核心測試、前端全部測試/型別/build、自有隔離 Redis/Nginx integration 與 UI E2E；清楚報告 skip，加入本輪負面案例與依賴 warnings 追蹤，不接正式 DB。 |
 | R30 | 中／待處理 | AGENTS 仍描述早期 v0.1；README/架構/未來文件部分計畫與目前功能、runtime 說明未同步；Worker 引用 API dependencies 作組裝入口。 | 文件分清目前能力、部署前置與未完成項目，核對 local/hybrid/full Docker、Python 版本及 fresh Compose/base image 前置。README 保留入口，細節移 docs；抽出共用 composition root，保持未來訓練可獨立，無須現在重寫成微服務。 |
 
-建議批次：先 R23/R24；其後完成 R25/R15/R16 與 R18/R29，剩餘產品、UI、維運改善依實際使用負載排程。每項修正均需獨立驗收並更新文件；每項完成後先 commit/push，再處理下一項。完成紀錄詳見 CHANGELOG。
+建議批次：先 R24；其後完成 R25/R15/R16 與 R18/R29，剩餘產品、UI、維運改善依實際使用負載排程。每項修正均需獨立驗收並更新文件；每項完成後先 commit/push，再處理下一項。完成紀錄詳見 CHANGELOG。
 
 ## 驗收與操作原則
 

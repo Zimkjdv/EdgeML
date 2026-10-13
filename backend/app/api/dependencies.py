@@ -26,7 +26,8 @@ from app.services.feature_importance_service import FeatureImportanceService, Pu
 def get_feature_importance_service() -> FeatureImportanceService:
     settings = get_settings()
     return FeatureImportanceService(TrainedModelCatalog(settings.trained_models_root), PredictorFactory(),
-                                    get_dataset_service(), settings.trained_models_root)
+                                    get_dataset_service(), settings.trained_models_root,
+                                    settings.models_root, get_model_registry())
 from app.repositories.web_session import WebSessionRepository
 from app.services.web_session_service import WebSessionService
 

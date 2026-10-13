@@ -4,6 +4,7 @@ import io
 import json
 import os
 import tempfile
+from contextlib import nullcontext
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
@@ -14,11 +15,12 @@ from pydantic import ValidationError
 
 from app.domain.errors import ModelNotFoundError, PredictionValidationError
 from app.domain.feature_importance import FeatureImportanceReport
-from app.domain.model_catalog import ModelCatalog
+from app.domain.model_catalog import ModelCatalog, ModelRegistry
 from app.domain.optimization import PredictorProvider
 from app.services.dataset_service import DatasetService
 from app.core.config import get_settings
 from app.services.training_data import clean_supervised_frame
+from app.infrastructure.file_lock import FileLock, child_path
 
 
 class ImportanceUnavailable(Exception):
@@ -77,6 +79,8 @@ def save_importance(folder: Path, report: dict):
     try:
         with os.fdopen(descriptor, 'w', encoding='utf-8') as stream:
             json.dump(report, stream, ensure_ascii=False, allow_nan=False, indent=2)
+            stream.flush()
+            os.fsync(stream.fileno())
         os.replace(temporary, folder / 'feature_importance.json')
     finally:
         if os.path.exists(temporary):
@@ -95,9 +99,33 @@ def read_importance(folder: Path, model_id: str, model_name: str) -> dict:
     except (OSError, UnicodeError, ValueError):
         raise ImportanceUnavailable('Saved feature importance cannot be read. Restore or recompute the report.') from None
     try:
-        return FeatureImportanceReport.model_validate({**payload, 'model_id': model_id, 'model_name': model_name}).model_dump(mode='json')
+        return FeatureImportanceReport.model_validate({**payload, 'model_id': model_id, 'model_name': model_name}).model_dump(mode='json', exclude_none=True)
     except (TypeError, ValidationError):
         raise ImportanceUnavailable('Saved feature importance is invalid. Restore or recompute the report.') from None
+
+
+def published_package(root: Path, model_id: str, registry: ModelRegistry | None = None) -> tuple[Path | None, str | None]:
+    """Resolve canonical IDs including legacy, differently named package folders."""
+    if registry is not None:
+        entry = next((item for item in registry.list_registry() if item.id == model_id), None)
+        return (child_path(root, entry.package_name), entry.status) if entry else (None, None)
+    matches = [path.parent for path in root.glob('*/metadata.json')
+               if not path.parent.name.startswith('.') and json.loads(path.read_text(encoding='utf-8')).get('id') == model_id]
+    if len(matches) > 1:
+        raise PredictionValidationError('Multiple published packages share this model ID.')
+    return (child_path(root, matches[0].name), None) if matches else (None, None)
+
+
+def importance_identity(report: dict) -> str:
+    return json.dumps({key: value for key, value in report.items()
+                       if key not in {'model_id', 'model_name', 'publication', 'published_at'}},
+                      sort_keys=True, ensure_ascii=False, allow_nan=False)
+
+
+def publish_importance(folder: Path, report: dict) -> None:
+    snapshot = {key: value for key, value in report.items() if key != 'publication'}
+    snapshot['published_at'] = datetime.now(timezone.utc).isoformat()
+    save_importance(folder, snapshot)
 
 
 def importance_csv(report: dict) -> str:
@@ -131,21 +159,53 @@ class PublishedFeatureImportanceService:
 
 
 class FeatureImportanceService:
-    def __init__(self, catalog: ModelCatalog, factory: PredictorProvider, datasets: DatasetService, root: Path):
+    def __init__(self, catalog: ModelCatalog, factory: PredictorProvider, datasets: DatasetService, root: Path,
+                 publish_root: Path | None = None, registry: ModelRegistry | None = None):
         self.catalog, self.factory, self.datasets, self.root = catalog, factory, datasets, root.resolve()
+        self.publish_root, self.registry = publish_root, registry
 
     def _folder(self, model_id: str) -> Path:
-        folder = (self.root / model_id).resolve()
-        if folder.parent != self.root or not (folder / 'record.json').is_file():
+        folder = child_path(self.root, model_id)
+        if model_id.startswith('.') or not (folder / 'record.json').is_file():
             raise ModelNotFoundError('Trained model was not found.')
         return folder
 
     def get(self, model_id: str) -> dict:
-        folder = self._folder(model_id)
-        record = json.loads((folder / 'record.json').read_text(encoding='utf-8'))
-        return read_importance(folder, model_id, record['name'])
+        with self._publication_lock(), self._lock(model_id):
+            folder = self._folder(model_id)
+            record = json.loads((folder / 'record.json').read_text(encoding='utf-8'))
+            return self._report(folder, record)
+
+    def _publication_lock(self):
+        return FileLock(self.publish_root / '.publication.lock') if self.publish_root else nullcontext()
+
+    def _lock(self, model_id):
+        self._folder(model_id)
+        return FileLock(child_path(self.root / '.locks', f'{model_id}.lock'))
+
+    def _report(self, folder, record):
+        report = read_importance(folder, record['id'], record['name'])
+        if not self.publish_root:
+            return report
+        state = {'status': 'draft'}
+        if record.get('status') == 'published':
+            destination, status = published_package(self.publish_root, record['id'], self.registry)
+            state = {'status': 'unregistered'} if destination is None else {'status': 'missing', 'registry_status': status}
+            if destination:
+                try:
+                    saved = read_importance(destination, record['id'], record['name'])
+                    state.update(status='current' if importance_identity(saved) == importance_identity(report) else 'stale',
+                                 published_at=saved.get('published_at'), published_computed_at=saved['computed_at'])
+                except ImportanceUnavailable:
+                    pass
+        report['publication'] = state
+        return report
 
     def compute(self, model_id: str) -> dict:
+        with self._publication_lock(), self._lock(model_id):
+            return self._compute(model_id)
+
+    def _compute(self, model_id: str) -> dict:
         folder = self._folder(model_id)
         record = json.loads((folder / 'record.json').read_text(encoding='utf-8'))
         settings = record['settings']
@@ -164,7 +224,7 @@ class FeatureImportanceService:
                                       'external_test' if settings.get('test_dataset_id') else 'training',
                                       get_settings().importance_max_samples, get_settings().importance_repeats)
         save_importance(folder, report)
-        return self.get(model_id)
+        return self._report(folder, record)
 
     @staticmethod
     def csv(report: dict) -> str:

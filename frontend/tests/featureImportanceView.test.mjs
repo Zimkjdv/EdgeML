@@ -4,6 +4,18 @@ import { readFileSync } from 'node:fs'
 import postcss from 'postcss'
 import { TOP_FEATURE_COUNT, visibleImportanceRankings } from '../src/featureImportanceView.ts'
 
+test('recomputation and snapshot update are distinct confirmed actions with stale-response guards', () => {
+  const component = readFileSync(new URL('../src/FeatureImportance.vue', import.meta.url), 'utf8')
+  assert.match(component, /ElMessageBox\.confirm/)
+  assert.match(component, /id === props\.modelId && current === revision/)
+  assert.match(component, /publish \? '\/publish' : ''/)
+  assert.match(component, /if \(method === 'GET'\) report\.value = null/)
+  assert.match(component, /模型停用中/)
+  assert.match(component, /report\.publication\?\.published_at/)
+  const app = readFileSync(new URL('../src/App.vue', import.meta.url), 'utf8')
+  assert.match(app, /model-evaluation-panel, \.feature-importance/)
+})
+
 const rankings = Array.from({ length: 20 }, (_, index) => ({
   rank: index + 1, feature: `中文特徵 ${index}`, importance: 0.1 - index * 0.01, std: 0.002,
 }))

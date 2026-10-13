@@ -2,6 +2,13 @@
 
 完成紀錄、歷史驗證與部署限制保存在此；未完成工作與驗收條件見 [ROADMAP.md](ROADMAP.md)。每項修正有獨立 commit/push，發布程式不代表自動升級業務容器。
 
+## 2026-10-13 — R23 重要度重算與發布快照操作
+
+- 已訓練模型提供確認式「重新計算重要度」與「更新 Prediction 快照」，顯示來源、計算時間、快照時間、同步／待更新／缺失／未註冊與停用狀態。失敗保留現有報告，快切模型不套用舊確認／回應。
+- 新增 POST /api/trained-models/{model_id}/feature-importance/publish；沿用 token/session/CSRF，canonical ID 解析舊中文套件目錄，SHA256 驗證 artifact 一致，只原子更新 importance，不替換模型、重新啟用或更改詳細指標。計算與 model mutation 共用 lock，報告 flush/fsync 後 replace。
+- 重要度專項 18 passed；前端 26 passed、型別／build 通過。隔離合成資料瀏覽器驗證重算→待更新→已同步且保留停用狀態；窄螢幕卡片維持全寬、圖表可捲動。修正既有兩個中文測試明確用 UTF-8 讀取。
+- Windows/Python 3.12 完整後端 344 passed、28 skipped（隔離 Redis/Linux 整合及 Windows symlink 條件）；跳過不代表驗證。未部署正式 Docker，無業務模型或 DB 修改。後續 async/cancellable backfill 仍屬未實作增強。
+
 ## 2026-10-13 — R19 冪等訓練輸出與 Worker 復原
 
 - 每個 job 在 fit 前保留固定 output_model_id；hidden staging 完整寫入／fsync／record marker 後 atomic directory rename 才公開模型。job ownership、request hash 與 artifact SHA256 驗證後沿用既有成果，不再 fit；確認重試不增加 fit attempt。

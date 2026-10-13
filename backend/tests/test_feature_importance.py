@@ -214,5 +214,7 @@ def test_explicit_republish_refreshes_importance_without_replacing_artifact(trai
     # Older published packages can receive a backfilled report on explicit publish.
     (destination / 'feature_importance.json').unlink()
     training.publish(model.id)
-    assert published_service.get(model.id) == updated
+    refreshed = published_service.get(model.id)
+    assert refreshed.pop('published_at')
+    assert refreshed == updated
     assert (destination / 'model.pkl').read_bytes() == artifact

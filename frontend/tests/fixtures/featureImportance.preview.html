@@ -27,16 +27,25 @@
         metric: 'rmse_increase', data_source: 'training', sample_count: 500,
         total_rows: 800, repeats: 3, seed: 42, baseline_score: 0.12855,
         dataset_id: 'synthetic', computed_at: '2026-10-07T00:00:00Z',
+        publication: { status: 'current', registry_status: 'disabled', published_at: '2026-10-07T01:00:00Z' },
         rankings: names.map((feature, index) => ({
           rank: index + 1, feature, importance: index === 19 ? -0.008 : 0.94 / (index + 1) ** 1.8,
           std: 0.014 / (index + 1),
         })),
       }
       window.fetch = async (input, options = {}) => {
-        if (options.method && options.method !== 'GET') throw new Error('Preview is read-only')
         const url = new URL(String(input), location.href)
-        if (url.pathname !== '/api/trained-models/synthetic-preview/feature-importance') {
+        if (!['/api/trained-models/synthetic-preview/feature-importance', '/api/trained-models/synthetic-preview/feature-importance/publish'].includes(url.pathname)) {
           throw new Error('Unexpected preview request')
+        }
+        if (options.method === 'POST') {
+          if (url.pathname.endsWith('/publish')) {
+            report.publication.status = 'current'
+            report.publication.published_at = new Date().toISOString()
+          } else {
+            report.computed_at = new Date().toISOString()
+            report.publication.status = 'stale'
+          }
         }
         if (url.searchParams.get('format') === 'csv') {
           const csv = '\ufeffrank,feature,importance,std\r\n' + report.rankings
@@ -50,7 +59,7 @@
           h('p', '元件預覽 · 合成資料（不使用正式模型）'),
           h(ElButton, { onClick: () => { locale.value = locale.value === 'en' ? 'zh-TW' : 'en' } }, () => '切換語言'),
           h('section', { class: 'trained-models-page', style: 'margin-top:16px' }, [
-            h(FeatureImportance, { modelId: 'synthetic-preview' }),
+            h(FeatureImportance, { modelId: 'synthetic-preview', published: true }),
             h(ElCard, { class: 'result-card unified-model-detail' }, {
               header: () => h('div', { class: 'result-heading' }, '預覽模型：模型詳細資訊與評估'),
               default: () => h('p', '卡片對齊檢查（合成資料，未執行模型測試）'),

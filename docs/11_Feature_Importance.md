@@ -23,7 +23,9 @@ Automatic calculation runs in the existing training job before completion and ad
 
 Models trained before this feature show a Compute feature importance button. Computation uses the saved training settings and trusted artifact, without retraining. It requires the referenced original training or external test dataset. The button also allows retrying after an error. A missing dataset is reported rather than silently switching to a different dataset. Backfill runs synchronously; for large models it can take time. It does not enqueue a separate job in this version.
 
-After computing or recomputing a report, explicitly publish the model again to update the prediction package's snapshot. Republishing atomically refreshes the report without replacing the existing `model.pkl`. Until then, `/api/models` returns the previous published report (or 409 if none was included). It never falls back to a mutable trained-model report. If neither a published report nor retained source data exists, this API cannot reconstruct a permutation ranking from the artifact alone.
+Use **Recompute importance** to replace the trained report, then **Update Prediction snapshot** to publish that report separately. Both actions require confirmation. The card shows source, computation time, snapshot update time and draft/current/stale/missing/unregistered state; a disabled model remains visibly disabled. Updating only a snapshot preserves registration status, artifact and detailed evaluation scores, and supports legacy package directories via canonical ID. A removed registration requires explicit model publication first. Artifact SHA256 mismatch returns 409 instead of attaching a report to a different model.
+
+Until snapshot update, `/api/models` returns the previous report (or 409 if none was included). It never falls back to mutable training data. Missing source data cannot be reconstructed from the artifact alone. Recalculation and model mutation are serialized; report writes are flushed/fsynced and atomically replaced, preserving the previous report on failure. Backfill remains synchronous, not cancellable or a separate job.
 
 ## API
 
@@ -34,6 +36,7 @@ After computing or recomputing a report, explicitly publish the model again to u
 | `GET /api/trained-models/{model_id}/feature-importance` | Saved JSON ranking and method metadata |
 | `GET /api/trained-models/{model_id}/feature-importance?format=csv` | UTF-8 BOM CSV attachment |
 | `POST /api/trained-models/{model_id}/feature-importance` | Compute/recompute, save, and return JSON; no request body |
+| `POST /api/trained-models/{model_id}/feature-importance/publish` | Update only the registered Prediction snapshot, preserving enabled/disabled status; no body |
 
 GET returns 409 if the report is missing, unreadable, or invalid (including nonfinite ranking values); it never starts expensive computation implicitly. Unknown models return 404; the published endpoint also returns 404 for disabled models. Invalid format values return 422. Missing source data on POST returns 404; invalid feature/target data returns 422. Existing API-token and browser-session/CSRF rules apply. Direct integrations use a token with API access. The published endpoint is GET-only: recomputation belongs to the trained-model POST and explicit publication workflow.
 
@@ -69,6 +72,8 @@ for item in response.json()["rankings"]:
 ```
 
 ## Verification and follow-up
+
+The trained JSON response adds `publication` with `status`, optional `registry_status`, `published_at` and `published_computed_at`. Published snapshots add `published_at`; legacy snapshots may omit it. Metadata is derived from saved reports, not recomputed on GET. `status=current` compares full computation/report content, ignoring display names and publication timestamps. The dedicated update endpoint requires the normal API token or browser session plus CSRF; draft/unregistered/mismatched/missing trained reports return 409, missing trained models 404. See `tests/test_importance_publication.py` for disabled/legacy packages, authentication, failure preservation and serialization cases. The synthetic preview supports both actions without touching real data.
 
 Tests cover informative versus constant features, categorical classification, negative importance, repeatability, sample limits, automatic persistence, report reading after dataset removal, legacy backfill, path boundaries, JSON/CSV agreement, API authentication, canonical Prediction ID lookup, disabled/missing models, invalid reports, read-only access without model loading, and report refresh on explicit republication. Frontend tests verify top-10/all behavior, full-report preservation and compact/responsive layout constraints. Run `python -m pytest tests/test_feature_importance.py tests/test_training_algorithms.py -q` in backend, and `node --experimental-strip-types --test tests/*.test.mjs` plus `npm.cmd run build` in frontend.
 

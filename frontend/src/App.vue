@@ -166,7 +166,7 @@ const applyTrainedModelLocale = () => {
   let node: Node | null
   while ((node = walker.nextNode())) {
     const parent = node.parentElement
-    if (!parent?.closest('.trained-models-page') || parent.closest('.table-hover-tooltip, .model-evaluation-panel')) continue
+    if (!parent?.closest('.trained-models-page') || parent.closest('.table-hover-tooltip, .model-evaluation-panel, .feature-importance')) continue
     let value = node.nodeValue ?? ''
     for (const [from, to] of pairs) value = value.split(from).join(to)
     node.nodeValue = value
@@ -560,7 +560,7 @@ onMounted(async () => {
     </section>
 
     <section v-else-if="activePage === 'trained'" class="trained-models-page">
-      <FeatureImportance v-if="selectedTrainedModel" :key="selectedTrainedModel.id" :model-id="selectedTrainedModel.id" />
+      <FeatureImportance v-if="selectedTrainedModel" :key="selectedTrainedModel.id" :model-id="selectedTrainedModel.id" :published="selectedTrainedModel.status === 'published'" />
       <el-alert v-if="selectedTrainedModel?.problem_type === 'regression' && selectedTrainedModel.evaluation_version !== 'oof-v2'" title="舊版評估：驗證指標混用各折平均與折外預測，請重新訓練取得一致的新版指標。" type="warning" :closable="false" show-icon class="bottom-gap" />
       <el-alert v-else-if="selectedTrainedModel?.problem_type === 'regression'" :title="`新版折外評估 · 策略：${selectedTrainedModel.settings?.validation_strategy === 'time' ? '時間順序' : selectedTrainedModel.settings?.validation_strategy === 'group' ? '批次分組' : '隨機分折'}`" type="success" :closable="false" show-icon class="bottom-gap" />
       <p v-if="selectedTrainedModel?.validation_context?.evaluated_rows !== undefined" class="helper">有效資料 {{ selectedTrainedModel.validation_context.total_rows }} 筆；折外評估 {{ selectedTrainedModel.validation_context.evaluated_rows }} 筆；未納入評估 {{ selectedTrainedModel.validation_context.excluded_rows }} 筆。</p>

@@ -37,6 +37,7 @@ def get_model_id_by_name(
 
 
 @router.get('/models/{model_id}/feature-importance', response_model=FeatureImportanceReport,
+            response_model_exclude_none=True,
             responses={200: {'content': {'text/csv': {}}}})
 def get_published_feature_importance(
     model_id: str,

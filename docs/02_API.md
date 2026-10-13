@@ -13,7 +13,7 @@ Training requests accept `validation_strategy` (`random`, `time`, `group`, defau
 
 Feature importance: `GET /api/models/{model_id}/feature-importance?format=json` (or `csv`) returns the complete published ranking using the same active Model ID as Prediction. It reads the published report only, with no inference or source-data access. Missing/disabled models return `404`; a missing/invalid report returns `409`; unsupported formats return `422`. Normal API-token/browser-session authentication applies.
 
-`GET /api/trained-models/{model_id}/feature-importance?format=json` (or `csv`) reads the retained trained-model report. `POST` to that endpoint computes or refreshes it using the original source dataset. Explicitly publish again to update the published snapshot. Neither GET automatically computes importance; the `/api/models` endpoint is read-only. See [Feature importance API](11_Feature_Importance.md#api) for response metadata and examples.
+`GET /api/trained-models/{model_id}/feature-importance?format=json` (or `csv`) reads the retained report. `POST` computes/refreshes it from the original dataset; separate `POST /api/trained-models/{model_id}/feature-importance/publish` updates only the registered snapshot after artifact identity checks, preserving disabled status. JSON includes computation/publication timestamps and source report publication state. Neither GET computes importance; `/api/models` is read-only. See [Feature importance API](11_Feature_Importance.md#api).
 
 ## Parameter optimization
 

@@ -42,7 +42,7 @@ def test_training_and_both_external_evaluation_paths_use_same_rows(tmp_path, imp
     metrics = regression_metrics(expected['目標'], pipeline.predict(expected[['數值', '類別']]))
     assert model.test_metrics == metrics
     assert service.evaluate(model.id, data.id).metrics == metrics
-    report = json.loads((root / model.id / 'feature_importance.json').read_text())
+    report = json.loads((root / model.id / 'feature_importance.json').read_text(encoding='utf-8'))
     assert report['total_rows'] == len(expected)
     importance = FeatureImportanceService(TrainedModelCatalog(root), PredictorFactory(), datasets, root)
     assert importance.compute(model.id)['total_rows'] == len(expected)

@@ -17,6 +17,7 @@ router = APIRouter()
 
 
 @router.get('/trained-models/{model_id}/feature-importance', response_model=FeatureImportanceReport,
+            response_model_exclude_none=True,
             responses={200: {'content': {'text/csv': {}}}})
 def feature_importance(model_id: str, format: Literal['json', 'csv'] = 'json',
                        service: FeatureImportanceService = Depends(get_feature_importance_service)):
@@ -32,7 +33,7 @@ def feature_importance(model_id: str, format: Literal['json', 'csv'] = 'json',
     return report
 
 
-@router.post('/trained-models/{model_id}/feature-importance', response_model=FeatureImportanceReport)
+@router.post('/trained-models/{model_id}/feature-importance', response_model=FeatureImportanceReport, response_model_exclude_none=True)
 def compute_feature_importance(model_id: str, service: FeatureImportanceService = Depends(get_feature_importance_service)):
     try:
         return service.compute(model_id)
@@ -40,6 +41,19 @@ def compute_feature_importance(model_id: str, service: FeatureImportanceService 
         raise HTTPException(404, str(exc)) from exc
     except (PredictionValidationError, ValueError) as exc:
         raise HTTPException(422, str(exc)) from exc
+
+
+@router.post('/trained-models/{model_id}/feature-importance/publish', response_model=FeatureImportanceReport,
+             response_model_exclude_none=True)
+def refresh_importance_snapshot(model_id: str, training: TrainingService = Depends(get_training_service),
+                                importance: FeatureImportanceService = Depends(get_feature_importance_service)):
+    try:
+        training.refresh_importance_snapshot(model_id)
+        return importance.get(model_id)
+    except ModelNotFoundError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except (PredictionValidationError, ImportanceUnavailable) as exc:
+        raise HTTPException(409, str(exc)) from exc
 
 
 @router.post("/training", response_model=TrainedModelDetail, status_code=201)

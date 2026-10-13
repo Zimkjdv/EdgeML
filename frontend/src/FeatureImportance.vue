@@ -1,31 +1,52 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, useId, watch } from 'vue'
+import { ElMessageBox } from 'element-plus'
 import { locale } from './i18n'
 import { sessionHeaders, sessionExpired } from './webAuth'
 import { visibleImportanceRankings, TOP_FEATURE_COUNT, type ImportanceRanking } from './featureImportanceView'
-type Report = { model_name: string; metric: string; data_source: string; sample_count: number; repeats: number; baseline_score: number; rankings: ImportanceRanking[] }
-const props = defineProps<{ modelId: string }>()
+type Report = { model_name: string; metric: string; data_source: string; sample_count: number; repeats: number; baseline_score: number; rankings: ImportanceRanking[]; computed_at: string; publication?: { status: string; registry_status?: string; published_at?: string; published_computed_at?: string } }
+const props = defineProps<{ modelId: string; published?: boolean }>()
 const report = ref<Report | null>(null), busy = ref(false), missing = ref(false), error = ref('')
 const showAll = ref(false), chartId = useId()
 const visibleRankings = computed(() => visibleImportanceRankings(report.value?.rankings || [], showAll.value))
 const label = (zh: string, en: string) => locale.value === 'en' ? en : zh
 const fmt = (value: number) => new Intl.NumberFormat(locale.value === 'en' ? 'en' : 'zh-TW', { maximumSignificantDigits: 5 }).format(value)
 let revision = 0
+const snapshotLabel = computed(() => {
+  const state = report.value?.publication?.status
+  return state === 'current' ? label('Prediction 快照已同步', 'Prediction snapshot is current')
+    : state === 'stale' ? label('Prediction 快照待更新', 'Prediction snapshot needs updating')
+    : state === 'missing' ? label('Prediction 尚無有效快照', 'Prediction has no valid snapshot')
+    : state === 'unregistered' ? label('模型已移除註冊，需重新發布', 'Model is unregistered; publish it again')
+    : label('尚未發布至 Prediction', 'Not published to Prediction')
+})
+const time = (value?: string) => value ? new Date(value).toLocaleString(locale.value === 'en' ? 'en' : 'zh-TW') : '—'
+async function confirmAction(publish = false) {
+  const id = props.modelId, current = revision
+  try {
+    await ElMessageBox.confirm(publish
+      ? label('只更新 Prediction 的重要度快照，不替換模型檔案或更改啟用狀態。是否繼續？', 'Update only the Prediction importance snapshot, keeping its artifact and enabled status unchanged?')
+      : label('使用原始資料重新計算重要度，替換訓練端報告。Prediction 快照不會自動更新。是否繼續？', 'Recompute using source data and replace the training report? The Prediction snapshot will not update automatically.'),
+      label('確認操作', 'Confirm action'), { type: 'warning', confirmButtonText: label('繼續', 'Continue'), cancelButtonText: label('取消', 'Cancel') })
+  } catch { return }
+  if (id === props.modelId && current === revision) await load('POST', publish)
+}
 const domain = computed(() => {
   const values = report.value?.rankings.map(row => row.importance) || []
   return { min: Math.min(0, ...values), max: Math.max(0, ...values) }
 })
 const scale = (value: number) => (value - domain.value.min) / (domain.value.max - domain.value.min || 1) * 100
 const barStyle = (value: number) => ({ left: `${scale(Math.min(0, value))}%`, width: `${Math.abs(scale(value) - scale(0))}%` })
-async function load(method = 'GET') {
+async function load(method = 'GET', publish = false) {
   const current = ++revision
-  busy.value = true; error.value = ''; missing.value = false; report.value = null
+  busy.value = true; error.value = ''; missing.value = false
+  if (method === 'GET') report.value = null
   showAll.value = false
   try {
-    const response = await fetch(`/api/trained-models/${encodeURIComponent(props.modelId)}/feature-importance`, { method, headers: sessionHeaders() })
+    const response = await fetch(`/api/trained-models/${encodeURIComponent(props.modelId)}/feature-importance${publish ? '/publish' : ''}`, { method, headers: sessionHeaders() })
     if (current !== revision) return
     if (response.status === 401) sessionExpired()
-    if (response.status === 409) { missing.value = true; return }
+    if (response.status === 409 && method === 'GET') { missing.value = true; return }
     if (!response.ok) throw new Error((await response.json()).detail || label('載入失敗', 'Unable to load importance'))
     const data = await response.json()
     if (current === revision) report.value = data
@@ -47,7 +68,7 @@ async function download() {
   } catch (e) { error.value = String(e) }
   finally { busy.value = false }
 }
-watch(() => props.modelId, () => void load(), { immediate: true })
+watch(() => [props.modelId, props.published], () => void load(), { immediate: true })
 onUnmounted(() => { revision++ })
 </script>
 
@@ -56,11 +77,17 @@ onUnmounted(() => { revision++ })
     <template #header><div class="importance-heading"><h3>{{ label('特徵重要度排名', 'Feature importance ranking') }}</h3><el-button v-if="report" :disabled="busy" @click="download">{{ label('下載排名 CSV', 'Download ranking CSV') }}</el-button></div></template>
     <el-alert v-if="error" type="error" :closable="false" :title="error" />
     <p v-if="missing">{{ label('此模型尚未保存特徵重要度，可使用原始資料補算。', 'This model has no saved importance report. Compute one using its source data.') }}</p>
-    <el-button v-if="missing || error" :disabled="busy" @click="load('POST')">{{ label('計算特徵重要度', 'Compute feature importance') }}</el-button>
+    <div class="importance-actions">
+      <el-button :disabled="busy" @click="confirmAction()">{{ report ? label('重新計算重要度', 'Recompute importance') : label('計算特徵重要度', 'Compute feature importance') }}</el-button>
+      <el-button v-if="published && report" type="primary" :disabled="busy || report.publication?.status === 'unregistered'" @click="confirmAction(true)">{{ label('更新 Prediction 快照', 'Update Prediction snapshot') }}</el-button>
+      <el-tag v-if="report" :type="report.publication?.status === 'current' ? 'success' : 'warning'">{{ snapshotLabel }}</el-tag>
+      <el-tag v-if="report?.publication?.registry_status === 'disabled'" type="info">{{ label('模型停用中', 'Model disabled') }}</el-tag>
+    </div>
     <template v-if="report">
       <div class="importance-meta">
         <p class="importance-summary">{{ label('置換重要度', 'Permutation importance') }} · {{ report.metric === 'accuracy_drop' ? label('準確率下降量', 'Accuracy decrease') : label('RMSE 增加量', 'RMSE increase') }} · {{ report.sample_count }} {{ label('筆資料', 'rows') }} · {{ report.repeats }} {{ label('次重複', 'repeats') }}</p>
         <p class="importance-summary">{{ report.data_source === 'external_test' ? label('資料來源：外部測試集', 'Data: external test set') : label('資料來源：訓練集（可能高估，非獨立測試結果）', 'Data: training set (may be optimistic; not an independent test)') }} · {{ label('基準分數', 'Baseline score') }}: {{ fmt(report.baseline_score) }}</p>
+        <p class="importance-summary">{{ label('報告計算時間', 'Computed at') }}: {{ time(report.computed_at) }} · {{ label('快照更新時間', 'Snapshot updated at') }}: {{ time(report.publication?.published_at) }}</p>
       </div>
       <p class="importance-help">{{ label('數值越大，打亂該特徵後表現下降越多。負值表示打亂後表現改善；相關特徵可能互相分攤重要度。± 為重複置換的標準差，非信賴區間。', 'Larger values mean more performance loss when shuffled. Negative values indicate improvement after shuffling; correlated features may share importance. ± shows repeat standard deviation, not a confidence interval.') }}</p>
       <div class="importance-toolbar">
@@ -87,6 +114,8 @@ onUnmounted(() => { revision++ })
 .importance-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .importance-heading h3 { margin: 0; font-size: 17px; color: #204a78; }
 .importance-meta { display: flex; flex-wrap: wrap; gap: 4px 18px; }
+.importance-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
+.importance-actions :deep(.el-button + .el-button) { margin-left: 0; }
 .importance-summary { margin: 0; font-size: 13px; color: #4c6480; line-height: 1.6; }
 .importance-help { margin: 8px 0 12px; font-size: 12px; color: #718096; line-height: 1.6; }
 .importance-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 10px; color: #6a7f98; font-size: 12px; }
