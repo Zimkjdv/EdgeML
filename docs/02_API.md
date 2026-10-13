@@ -123,6 +123,8 @@ The request validates its size and CSV headers, drops rows with missing required
 
 Response headers include `X-Prediction-Metrics` (JSON), `X-Prediction-Ground-Truth` (URL-encoded column name), `X-Prediction-Dropped-Rows` (total excluded rows), and `X-Prediction-Out-Of-Range-Rows` (the training-range subset of that total). Metrics are populated when Ground Truth is available. Regression metrics include MAE, MAPE (%), RMSE, maximum error, R², and Pearson R. Classification metrics include accuracy, weighted precision, weighted recall, and weighted F1.
 
+Model manifests and API summaries expose canonical `problem_type` values `regression` or `classification`. Legacy `binary_classification` and `multiclass_classification` are normalized to `classification` when loaded; no manual metadata rewrite is required. Classification Ground Truth supports numeric or text labels and returns only classification metrics, with `prediction_correct` on each retained row. Regression instead returns `prediction_error`. Unsupported manifest problem types are rejected before inference; Prediction returns `422` for invalid manifests or incompatible Ground Truth labels, without recording a successful history entry.
+
 Every successful request also writes prediction metadata to the configured history repository. Uploaded CSV contents and prediction outputs are not retained.
 
 Errors use JSON with `detail` and appropriate HTTP status codes: 400 for invalid input, 404 for an unknown model, and 422 for schema/type validation failures.

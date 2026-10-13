@@ -2,6 +2,13 @@
 
 完成紀錄、歷史驗證與部署限制保存在此；未完成工作與驗收條件見 [ROADMAP.md](ROADMAP.md)。每項修正有獨立 commit/push，發布程式不代表自動升級業務容器。
 
+## 2026-10-13 — R21 分類 Prediction 評估
+
+- ModelManifest/ModelSummary 共用 canonical problem type；舊 binary_classification/multiclass_classification 在載入時正規化，不修改既有模型檔。未知類型在 manifest 邊界拒絕，Prediction 回 422 並且不執行推論或記錄成功歷史。
+- CSV/JSON 分類 Ground Truth 使用 accuracy、weighted precision/recall/F1 與 prediction_correct；不再走回歸分支。JSON object dtype 的數字標籤先推斷型別，中文文字標籤亦支援；不相容標籤轉成 validation error。
+- 定向回歸 55 passed：兩個範例模型、FileModelCatalog/Registry、CSV/JSON、缺值列排除、非完美分數、中文字串與未知類型；既有回歸／訓練／重要度案例通過。
+- 提交前 Python 3.12 完整後端回歸 283 passed、15 skipped；warnings 主要為既有序列化依賴及 solver/date parsing 警告。
+
 ## 2026-10-13 — R12 CSV 邊界與 profile
 
 - Dataset 與 Prediction 共用 CSV syntax/NA 政策，空檔／只有 header／重複欄名／缺欄或多欄／錯誤引號／NUL 回傳 422；保留 UTF-8/BOM/CP950/Big5 中文資料及 quoted multiline。

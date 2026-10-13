@@ -9,6 +9,7 @@ from app.services.prediction_ranges import filter_training_ranges
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
 
 from app.domain.errors import PredictionValidationError
+from app.domain.problem_types import normalize_problem_type
 from app.domain.model_catalog import ModelCatalog
 from app.domain.schemas import (
     JsonPredictionOutput,
@@ -48,7 +49,7 @@ class PredictionService:
         self, model_id: str, content: bytes, source_filename: str = "input.csv",
         ground_truth_column: str | None = None, training_range_policy: TrainingRangePolicy = "none",
     ) -> PredictionOutput:
-        manifest = self._catalog.get(model_id)
+        manifest = self._prediction_manifest(model_id)
         # Preserve exact integers even when another row is missing a value.
         integer_columns = {f.name: object for f in manifest.features
                            if f.dtype.lower().startswith(('int', 'uint'))}
@@ -76,7 +77,7 @@ class PredictionService:
         self, model_id: str, records: list[dict], source_name: str | None = None,
         ground_truth_column: str | None = None, training_range_policy: TrainingRangePolicy = "none",
     ) -> JsonPredictionOutput:
-        manifest = self._catalog.get(model_id)
+        manifest = self._prediction_manifest(model_id)
         frame = pd.DataFrame(records, dtype=object)
         frame, predictions, metrics, evaluation_column, dropped_rows, out_of_range_rows = self._predict_frame(
             frame, manifest, ground_truth_column, training_range_policy,
@@ -142,6 +143,12 @@ class PredictionService:
             metrics = self._evaluate_predictions(manifest.problem_type, frame[evaluation_column], predictions)
         return frame, predictions, metrics, evaluation_column, dropped_rows, out_of_range_rows
 
+    def _prediction_manifest(self, model_id: str):
+        try:
+            return self._catalog.get(model_id)
+        except ValueError as exc:
+            raise PredictionValidationError(f"Model '{model_id}' has an invalid manifest.") from exc
+
     def _record_history(self, manifest, source_filename: str, row_count: int) -> None:
         self._history_repository.add(
             PredictionHistoryRecord(
@@ -156,14 +163,22 @@ class PredictionService:
 
     @staticmethod
     def _evaluate_predictions(problem_type: str, actual, predictions) -> dict[str, float | None]:
-        if problem_type == "classification":
-            return {
-                "accuracy": round(float(accuracy_score(actual, predictions)), 6),
-                "precision": round(float(precision_score(actual, predictions, average="weighted", zero_division=0)), 6),
-                "recall": round(float(recall_score(actual, predictions, average="weighted", zero_division=0)), 6),
-                "f1": round(float(f1_score(actual, predictions, average="weighted", zero_division=0)), 6),
-            }
-        return regression_metrics(pd.to_numeric(actual, errors="raise"), predictions)
+        try:
+            problem_type = normalize_problem_type(problem_type)
+            if problem_type == "classification":
+                # JSON frames preserve object dtype for integer precision. Infer
+                # scalar label types after dropping gaps, before sklearn scoring.
+                actual = pd.Series(actual).infer_objects().to_numpy()
+                predictions = pd.Series(predictions).infer_objects().to_numpy()
+                return {
+                    "accuracy": round(float(accuracy_score(actual, predictions)), 6),
+                    "precision": round(float(precision_score(actual, predictions, average="weighted", zero_division=0)), 6),
+                    "recall": round(float(recall_score(actual, predictions, average="weighted", zero_division=0)), 6),
+                    "f1": round(float(f1_score(actual, predictions, average="weighted", zero_division=0)), 6),
+                }
+            return regression_metrics(pd.to_numeric(actual, errors="raise"), predictions)
+        except ValueError as exc:
+            raise PredictionValidationError(f'Invalid Ground Truth evaluation: {exc}') from exc
 
     @staticmethod
     def _validate_frame(frame: pd.DataFrame, features) -> None:

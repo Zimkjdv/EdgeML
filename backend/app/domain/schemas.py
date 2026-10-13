@@ -5,6 +5,7 @@ from typing import Literal
 from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
+from app.domain.problem_types import ProblemType
 
 TrainingRangePolicy = Literal["none", "drop"]
 
@@ -20,7 +21,7 @@ class ModelManifest(BaseModel):
     name: str
     version: str
     framework: str
-    problem_type: str
+    problem_type: ProblemType
     target: str
     features: list[FeatureSpec]
     prediction_column: str = "prediction"
@@ -39,7 +40,7 @@ class ModelSummary(BaseModel):
     name: str
     version: str
     framework: str
-    problem_type: str
+    problem_type: ProblemType
     target: str
     features: list[FeatureSpec]
     prediction_column: str
