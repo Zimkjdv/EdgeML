@@ -80,7 +80,7 @@ def test_retry_is_not_lost_while_original_owner_is_acknowledging(real_queue):
 def failed_job(real_queue):
     queue, _, name, root = real_queue
     training = TrainingService(None, root / 'trained', root / 'models', jobs_root=root / 'jobs')
-    request = TrainingRequest(dataset_id='test', model_name='Replay test', target_column='y',
+    request = TrainingRequest(dataset_id='00000000-0000-0000-0000-000000000001', model_name='Replay test', target_column='y',
         feature_columns=['x'], algorithm='random_forest')
     job = training.create_job(request)
     training.mark_job_failed(job.id, 'original failure')

@@ -47,7 +47,7 @@ class FakeOperationsQueue:
 
 def request() -> TrainingRequest:
     return TrainingRequest(
-        dataset_id="dataset-1",
+        dataset_id="00000000-0000-0000-0000-000000000001",
         model_name="Queue Operations Test",
         target_column="target",
         feature_columns=["feature"],

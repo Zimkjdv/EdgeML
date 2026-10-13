@@ -9,7 +9,7 @@ from test_training_algorithms import make_service
 
 
 def request(**kwargs):
-    return TrainingRequest(**dict(dataset_id='test', model_name='驗證策略測試', target_column='y',
+    return TrainingRequest(**dict(dataset_id='00000000-0000-0000-0000-000000000001', model_name='驗證策略測試', target_column='y',
         feature_columns=['x'], algorithm='random_forest', cv_folds=3,
         hyperparameters={'n_estimators': 3}) | kwargs)
 

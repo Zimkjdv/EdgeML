@@ -1,0 +1,80 @@
+# EdgeML CHANGELOG
+
+完成紀錄、歷史驗證與部署限制保存在此；未完成工作與驗收條件見 [ROADMAP.md](ROADMAP.md)。每項修正有獨立 commit/push，發布程式不代表自動升級業務容器。
+
+## 2026-10-13 — R20 資料集路徑安全
+
+- 資料集 ID 共用 canonical UUID 驗證；read/rename/delete/frame、訓練主／測試資料集及後續補測均拒絕路徑參照。
+- CSV 與 metadata 在任何操作前一併檢查根目錄邊界及 symlink；list 不跟隨連結，metadata ID 必須與檔名相符。無效 ID 回傳 422，合法但不存在或被拒絕的連結回傳 404。
+- 新增讀改刪／外部檔案保護、HTTP encoded backslash、訓練／補測參照與 symlink 測試。Windows 定向回歸 32 passed、2 skipped（建立 symlink 權限限制）；無網路、唯讀原始碼掛載的 Linux 臨時容器 16 passed，包含兩個 symlink 案例。
+- 完成紀錄由 ROADMAP 搬移至本檔；README 與 API 文件同步更新。
+- 提交前 Python 3.12 完整後端回歸：242 passed、15 skipped（13 個既有環境條件測試及 2 個 Windows symlink 權限案例）；舊佇列／驗證策略測試的假資料 ID 已同步為 UUID。
+
+## 2026-10-13 — 全專案複查基準（實作前）
+
+- Python 3.12 後端：**228 passed、13 skipped**。642 個 warnings 主要涉及 NumPy/joblib、AnyIO alias、solver 與日期解析，不能把 warnings 等同測試失敗；列入依賴與解析政策整理。
+- 前端：**25 tests passed**；`vue-tsc -b` 與 Vite production build 通過。JS 主檔 1,139.85 kB、gzip 370.90 kB；有 chunk size 與第三方 annotation warnings。
+- 另外使用隔離暫存資料重現 dataset 路徑越界、空 CSV、重複欄名、非有限 profile JSON，以及分類類型落入回歸評估；這些診斷尚未加入正式 regression tests。
+- 本輪未重跑真 Redis/Nginx 部署整合、未跑完整瀏覽器 E2E；UI 結論來自原始碼與使用者既有截圖。未連線或寫入業務 DB、未重訓既有模型、未 rebuild/redeploy Docker。歷史整合測試結果保留在本檔下方，不代表本輪再次驗證。
+- 保留已驗證的良好設計：Router/Service 分層、BasePredictor、fold 內 Pipeline 預處理、OOF 與測試指標分離、共用 regression_metrics、發布快照、跨程序模型/Registry 鎖與單 host Worker ownership。
+
+
+## 既有可靠性修正（原 ROADMAP 歷史紀錄）
+
+下列紀錄從原 ROADMAP 搬移，保留當時驗收說明；不代表本次重跑全部整合測試。
+
+| ID | 歷史狀態 | 原問題 | 完成內容與驗收 |
+| --- | --- | --- | --- |
+| R01 | 高／已實作 | 發布路徑使用可修改的名稱，含 `../` 的名稱可越界；舊實作會先刪除目的資料夾 | 發布資料夾只使用模型 ID；拒絕越界 ID／symlink；先完成暫存複製再 rename，失敗不更新 Registry；重複發布不刪除現有 artifact。驗證名稱含路徑、重新命名再發布、複製失敗。 |
+| R02 | 高／已實作 | `/app/ml_models` 在容器 writable layer，重建會遺失新發布模型，而 Registry 仍存在 | Docker 改存 `/app/data/published_models`，Backend／Worker 共用既有 `prediction-data`；image 中 `/app/ml_models` 僅提供首次 seed。舊容器先遷移再 recreate，衝突中止且保留原件；驗證跨容器重新載入及推論。 |
+| R03 | 高／已實作（單機範圍） | Worker 啟動時把 processing 全部重排，會接走其他活躍 Worker 的工作 | 共用 jobs Volume 上的跨程序工作鎖，claim／recover 以 dispatch lock 序列化；只回收無持有者工作，持續檢查崩潰工作；完成／取消工作直接 ack。驗證真 Redis 下活躍程序不被回收、終止後可回收、retry 不遺失。 |
+| R04 | 高／已實作 | Registry 的物件內 RLock 不保護不同實例／程序，讀改寫可覆蓋彼此且共用 `.tmp` | 跨程序 reentrant file lock 包住完整讀改寫交易；唯一暫存檔、fsync、atomic replace；損壞 Registry 不當空資料覆蓋。驗證兩程序並行註冊與停用後資料完整。 |
+| R05 | 高／已實作 | 未設定 bootstrap token／Web password 時，managed tokens 全數撤銷或到期會重新允許匿名 API | `EDGEML_ANONYMOUS_API=false` 預設要求驗證；明確 true 且未設 bootstrap／Web 密碼才允許匿名，與 Token 數量解耦。Session status 與 API 使用相同政策；已測全數到期／撤銷、重建 app、明確開發模式及無設定的預設拒絕。 |
+| R06 | 高／已實作 | 預測整數特徵 `1.9` 被 astype 靜默改為 `1`；有缺值時分支不同 | 共用數值驗證檢查有限值、整數性及 signed／unsigned dtype 範圍；Decimal／nullable integer 保留有缺值欄位的大整數精度。CSV／JSON 實測 `422`、小數、分數文字、NaN／Inf、溢位、int64／uint64 邊界與缺值。 |
+| R07 | 中／已實作（單機範圍） | Dead-letter replay 先 enqueue 再把 failed 改 queued，Worker 可能讀到舊狀態 | dispatch／job lock 內先原子保存 queued／replay_pending，再以 Lua 移轉 Redis ID；派工後不覆寫 job。檔案失敗保留原件；Redis 結果不明時保留準備狀態，未派工的 dead-letter 可再次 replay。真 Redis 驗證立即消費、並行只派一次、活躍 worker、檔案失敗、Redis 成功前／後断線與準備後程序崩潰。 |
+| R08 | 中／已實作 | 訓練 drop 特徵缺值，但訓練時外部測試與後續 evaluate 只 drop target | `clean_supervised_frame` 統一訓練、兩個外部測試入口與 importance；drop 模式清理所有選取特徵，其他模式僅清理 target。清理後驗證 folds／class counts，空資料回報 validation error。中文／類別／未選欄位缺值及三入口指標一致性已測；舊指標需自行重訓／重新評估。 |
+| R09 | 中／已完成 | Prediction 原先以換行切 CSV，且缺值估算檢查全部欄位 | 2026-10-05 前端 prediction/optimization 共用 parser；中文/BOM/quoted multiline 支援，NA 明確化、只檢查必要特徵與所選 Ground Truth，模型／GT 改變重算且清除舊結果；前後端共用案例驗證。 |
+| R10 | 中／已完成 | async CSV route 原先直接做同步 Pandas／模型推論 | 2026-10-05 改為 Starlette 有界 threadpool；並行測試在推論尚未結束時 health/models 可回應，CSV 結果與錯誤契約維持。 |
+| R13 | 中／已完成 | Docker Nginx 原先未與後端上傳大小及長請求 timeout 對齊 | 2026-10-05 runtime template 預設 11 MiB request cap、300s inactivity timeouts，Backend CSV 5 MiB/JSON 10 MiB 不變；隔離 Nginx 代理測試上傳及雙層邊界。 |
+| R14 | 中／已完成 | CV scores／OOF predictions／二元機率原先分別重訓 | 2026-10-05 每折一次 fit 收集全部結果，5-fold + 最終模型共 6 次 fit；與 sklearn 原流程比對分數／預測／機率，驗證 fold 內預處理及 fit 次數。時間改善依資料與模型而異，不宣稱固定倍數。 |
+
+部署入口：`deploy-docker.bat` 在重建前呼叫 `prepare-docker-upgrade.bat`。舊版第一次升級需暫停使用者寫入並停止所有舊 Worker（launcher 會停止 Compose Worker，手動啟動的舊 Worker 要另外停止）。`start-dev-docker.bat` 偵測到舊版會要求先 rebuild。不要先刪除舊容器，也不要執行 `docker compose down -v`。詳見 [Deployment](docs/05_Deployment.md)。
+
+R03／R04 的支援範圍是 Windows 本機，或單一 Docker host 上所有 replicas 共用的本地 Volume。不適用於不同 host 各自的目錄，也未宣稱支援 NFS／SMB 的鎖定語意。佇列仍是 at-least-once，不保證 exactly-once；artifact 已寫出但 job 尚未完成時崩潰，仍需 R19。
+
+
+## 2026-10-06／2026-10-05 — 已完成功能
+
+- 2026-10-06 新增 `examples/` 的獨立 MySQL Prediction 整表與時間範圍入口：piapi_fd 資料／中文 mapping → 訓練快照與 JSON Prediction API → piapifd_edge 資料庫的新表 `pidata1_predict`。預設不限總筆數、每批 200 筆，`--limit` 僅供選填試跑；時間高水位避免追逐持續新增列。依指定訓練 min/max 排除資料，保留 NULL 實際值、主鍵冪等及交易防護。文件為 `docs/14_DB_Prediction_Client.md`，保留原第 13 號文件。程式預設只 preview；實際 DB 寫入須明確指定 write。
+
+- 2026-10-06 CSV／JSON Prediction 增加可選 `training_range_policy=drop`，後端依模型套件訓練快照排除數值超界列；`none` 預設維持原行為。新增範圍排除數量（包含於總 dropped_rows），缺少快照／全數排除回傳 422；Server 不讀 DB 或可變來源資料集。DB 範例預先篩選並啟用 API 再檢查，確保回應 timestamp 對應後才寫入。單元測試使用隔離模擬資料與 Python 3.12 測試容器。
+
+- 2026-10-06 使用者明確要求實際 DB 寫入後，以本地 Python 3.12 API 8000 完成來源 2,018 筆掃描、55 筆預測寫入新表 `piapifd_edge.pidata1_predict`；回讀確認實際值均為 NULL、全部來源欄位比對差異為 0，來源保持唯讀。名稱差異改以明確 JSON alias 設定處理（前段水份／水分、濃乾／稀乾空格），不修改來源 mapping。另修正 float32 回歸輸出的四位小數 JSON 序列化，既有結果不覆寫。
+
+- 2026-10-06 模型註冊庫使用 API 的模型 ID 取代套件目錄欄位，支援完整 ID tooltip／一鍵複製 icon（含 tooltip 與無障礙標籤）／手動選取；中文與英文提示同步更新，保留既有套件路徑與 Registry API 契約。
+
+- 2026-10-06 註冊庫 ID 欄位縮為固定 200px，以 CSS 省略長 ID，tooltip／複製仍保留全文；加寬模型名稱與操作欄位、移除操作按鈕重複間距，避免 ID 擠壓其他欄位。
+
+- 2026-10-05 已訓練模型詳細卡片補測入口：直接上傳測試 CSV 或選既有資料集，儲存測試來源／筆數／時間並同步詳細指標與清單；Draft/Published 均可、不需重新訓練，錯誤不覆寫舊分數。直接 CSV 不持久化。
+
+- 2026-10-05 模型紀錄並行寫入已補強：evaluate/rename/publish/delete 使用共用每模型 OS 鎖；record/metadata 採 atomic JSON；新模型最後才公開 record。R11 的 dataset/history/job 多步交易及跨檔崩潰復原仍待處理。
+
+- 2026-10-05 評估可信度已實作：舊版評估醒目警示、random/time/group 驗證策略、相同時間點不跨折、可設定時間間隔與顯示有效／評估／暖機筆數。舊模型不自動改寫；策略應依使用情境選擇。
+
+## 2026-10-07 — 特徵重要度 API 與 UI
+
+- 已發布模型透過 canonical Prediction model ID 查詢 `/api/models/{model_id}/feature-importance`，讀取發布時快照；明確重新發布可更新報告，保留現有 model.pkl。
+- 特徵重要度卡片與詳細資訊全寬對齊，圖表維持緊湊高度、12px bars、top-10/all 切換與響應式配置；既有詳細評估區塊保留。
+- 當時前端 25 passed、TypeScript/Vite build 通過；程式提交為 f232eac。未自動升級業務 Docker。
+
+## 歷史驗證紀錄
+
+- 2026-10-05 五項優化：Python 3.12 完整後端 **190 tests passed**，包含獨立真 Redis 與 Nginx 代理整合；前端 **14 tests passed**、TypeScript/Vite build 通過，Compose config 與 Nginx syntax 通過。代理實測 1.1 MiB/恰好 5 MiB CSV 成功、超過 CSV 5 MiB 被 Backend 拒絕、JSON 10 MiB 與 Proxy 11 MiB 邊界被拒絕。測試環境不映射主機 port、原始碼唯讀掛載，模型只使用複製的三個範例；沒有重算正式模型或重新部署業務容器。仍有既有依賴 deprecation/solver warnings 與前端 bundle 警告，列入 R18/R15。
+
+- 原分析基準：Python 3.12 後端 81 tests；前端 11 tests；Vite build 通過（bundle warning）。
+- 本批測試：`backend/tests/test_storage_safety.py`、`test_redis_training_job_queue.py`、`test_worker_recovery_integration.py`。
+- 已驗證：Python 3.12 完整後端及真 Redis 整合測試 93 項通過；Windows Python 3.12 的兩項原生檔案鎖測試通過（重入／跨實例互斥、程序終止釋放）。隔離 Docker Volume 中完成訓練發布，移除第一個測試容器後由第二個容器載入同一模型並成功推論。Windows batch 實際業務升級流程尚未執行。
+- 最後補強既有 artifact 遺失時的發布拒絕與 HTTP 409 後，發布／API／真 Redis／Linux 原生鎖的定向回歸 36 項通過；Compose config 與 git diff whitespace 檢查通過。臨時 Redis 容器與測試模型 Volume 已清理。
+- 真 Redis 整合測試只在提供 `EDGEML_TEST_REDIS_URL` 時執行；使用獨立測試 Redis，測試僅清除自己帶 UUID 前綴的 keys。一般測試未提供時會 skip，不應誤認為已驗證。
+- 測試不可使用正式模型／工作／Token／Registry 檔案；既有業務環境尚未因本批修改而自動部署。
+- 第二批 R05–R08：Python 3.12 完整後端 **154 tests passed**（包含隔離真 Redis），定向第一輪 74 項通過。新增數值邊界、缺值一致性、Token 到期／撤銷及 replay 故障注入測試；只使用複製的三個範例模型與容器暫存資料，原始碼唯讀掛載。仍有既有 NumPy/joblib deprecation 與 SciPy solver warnings，依賴整理列於 R18。未執行業務 Docker rebuild／部署，也未重算既有模型分數。

@@ -35,6 +35,8 @@ def get_dataset(dataset_id: str, service: DatasetService = Depends(get_dataset_s
         return service.get(dataset_id)
     except ModelNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except PredictionValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.patch("/{dataset_id}", response_model=DatasetDetail)
@@ -43,9 +45,12 @@ def rename_dataset(dataset_id: str, request: DatasetRenameRequest, service: Data
         return service.rename(dataset_id, request.name)
     except ModelNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except PredictionValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.delete("/{dataset_id}", status_code=204)
 def delete_dataset(dataset_id: str, service: DatasetService = Depends(get_dataset_service)) -> None:
     try: service.delete(dataset_id)
     except ModelNotFoundError as exc: raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except PredictionValidationError as exc: raise HTTPException(status_code=422, detail=str(exc)) from exc

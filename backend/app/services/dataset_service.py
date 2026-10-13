@@ -9,7 +9,9 @@ from uuid import uuid4
 import pandas as pd
 
 from app.domain.errors import ModelNotFoundError, PredictionValidationError
+from app.domain.dataset_identifiers import validate_dataset_id
 from app.domain.training_schemas import ColumnProfile, DatasetDetail, DatasetSummary
+from app.infrastructure.file_lock import child_path
 
 
 class DatasetService:
@@ -37,21 +39,31 @@ class DatasetService:
         return DatasetDetail.model_validate(metadata)
 
     def list(self) -> list[DatasetSummary]:
+        summaries = []
+        for path in self._root.glob("*.json"):
+            try:
+                summaries.append(DatasetSummary.model_validate(self.get(path.stem).model_dump()))
+            except (ModelNotFoundError, PredictionValidationError):
+                # Never follow an invalid filename or linked dataset when listing.
+                continue
         return sorted(
-            [DatasetSummary.model_validate(self._read_metadata(path)) for path in self._root.glob("*.json")],
+            summaries,
             key=lambda item: item.created_at,
             reverse=True,
         )
 
     def get(self, dataset_id: str) -> DatasetDetail:
-        path = self._root / f"{dataset_id}.json"
+        _, path = self._paths(dataset_id)
         if not path.exists():
             raise ModelNotFoundError(f"Dataset '{dataset_id}' was not found.")
-        return DatasetDetail.model_validate(self._read_metadata(path))
+        detail = DatasetDetail.model_validate(self._read_metadata(path))
+        if detail.id != dataset_id:
+            raise PredictionValidationError("Dataset metadata ID does not match its filename.")
+        return detail
 
     def rename(self, dataset_id: str, name: str) -> DatasetDetail:
-        detail = self.get(dataset_id)
-        path = self._root / f"{dataset_id}.json"
+        self.get(dataset_id)
+        _, path = self._paths(dataset_id)
         payload = self._read_metadata(path)
         payload["name"] = name.strip()
         path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -59,13 +71,23 @@ class DatasetService:
 
     def delete(self, dataset_id: str) -> None:
         self.get(dataset_id)
-        for suffix in (".csv", ".json"):
-            path = self._root / f"{dataset_id}{suffix}"
+        for path in self._paths(dataset_id):
             if path.exists(): path.unlink()
 
     def frame(self, dataset_id: str) -> pd.DataFrame:
         self.get(dataset_id)
-        return self.read_csv((self._root / f"{dataset_id}.csv").read_bytes())
+        csv_path, _ = self._paths(dataset_id)
+        return self.read_csv(csv_path.read_bytes())
+
+    def _paths(self, dataset_id: str) -> tuple[Path, Path]:
+        try:
+            validate_dataset_id(dataset_id)
+        except ValueError as exc:
+            raise PredictionValidationError(str(exc)) from exc
+        # Check both files before any operation, including deletion. A linked
+        # CSV must not be read even when the JSON metadata itself is safe.
+        return (child_path(self._root, f"{dataset_id}.csv"),
+                child_path(self._root, f"{dataset_id}.json"))
 
     @staticmethod
     def read_csv(content: bytes) -> pd.DataFrame:

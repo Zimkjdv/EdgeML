@@ -4,6 +4,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from app.domain.schemas import FeatureSpec
+from app.domain.dataset_identifiers import DatasetIdentifier
 
 
 class ColumnProfile(BaseModel):
@@ -40,7 +41,7 @@ class DatasetRenameRequest(BaseModel):
 
 
 class TrainingRequest(BaseModel):
-    dataset_id: str
+    dataset_id: DatasetIdentifier
     model_name: str = Field(min_length=2, max_length=80)
     target_column: str
     feature_columns: list[str] = Field(min_length=1)
@@ -59,7 +60,7 @@ class TrainingRequest(BaseModel):
     time_gap: int = Field(default=0, ge=0, le=1000)
     dimension_reduction: Literal["none", "truncated_svd"] = "none"
     svd_components: int = Field(default=10, ge=2, le=100)
-    test_dataset_id: str | None = None
+    test_dataset_id: DatasetIdentifier | None = None
     hyperparameters: dict[str, str | int | float] = Field(default_factory=dict)
 
 
@@ -134,7 +135,7 @@ class DeadLetterJobSummary(BaseModel):
 
 
 class ExternalEvaluationRequest(BaseModel):
-    dataset_id: str
+    dataset_id: DatasetIdentifier
 
 
 class ExternalEvaluationResult(BaseModel):
