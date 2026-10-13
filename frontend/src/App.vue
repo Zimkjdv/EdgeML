@@ -27,6 +27,10 @@ const activePage = ref('prediction')
 const models = ref<PredictionModel[]>([])
 const datasets = ref<Dataset[]>([])
 const predictionHistory = ref<PredictionHistoryRecord[]>([])
+const historyPage = ref(1)
+const historyHasNext = ref(false)
+const historyLoading = ref(false)
+let historyRequest = 0
 const trainedModels = ref<TrainedModel[]>([])
 const registryModels = ref<ModelRegistryItem[]>([])
 const apiTokens = ref<ApiToken[]>([])
@@ -201,7 +205,20 @@ const refreshDatasets = async () => { datasets.value = await api<Dataset[]>('/ap
 const refreshTrainedModels = async () => { trainedModels.value = await api<TrainedModel[]>('/api/trained-models') }
 const refreshRegistry = async () => { registryModels.value = await api<ModelRegistryItem[]>('/api/model-registry') }
 const refreshApiTokens = async () => { apiTokens.value = await api<ApiToken[]>('/api/auth/tokens') }
-const refreshPredictionHistory = async () => { predictionHistory.value = await api<PredictionHistoryRecord[]>('/api/prediction-history') }
+const refreshPredictionHistory = async () => {
+  const revision = ++historyRequest
+  historyLoading.value = true
+  try {
+    const rows = await api<PredictionHistoryRecord[]>(`/api/prediction-history?limit=101&offset=${(historyPage.value - 1) * 100}`)
+    if (revision !== historyRequest) return
+    historyHasNext.value = rows.length > 100
+    predictionHistory.value = rows.slice(0, 100)
+  } finally { if (revision === historyRequest) historyLoading.value = false }
+}
+const changeHistoryPage = async (delta: number) => {
+  historyPage.value += delta
+  try { await refreshPredictionHistory() } catch (error) { historyPage.value -= delta; ElMessage.error(error instanceof Error ? error.message : String(error)) }
+}
 const refreshQueue = async () => {
   queueLoading.value = true
   try {
@@ -505,6 +522,11 @@ onMounted(async () => {
           <el-table-column :label="t('predictionTime')" min-width="220"><template #default="scope">{{ formatDate(scope.row.created_at) }}</template></el-table-column>
           <el-table-column prop="model_name" :label="t('modelName')" min-width="220" />
         </el-table>
+        <div class="top-gap" style="display:flex;align-items:center;gap:12px">
+          <el-button :disabled="historyPage === 1 || historyLoading" @click="changeHistoryPage(-1)">{{ t('previousPage') }}</el-button>
+          <span>{{ t('page') }} {{ historyPage }}</span>
+          <el-button :disabled="!historyHasNext || historyLoading" @click="changeHistoryPage(1)">{{ t('nextPage') }}</el-button>
+        </div>
       </el-card>
     </section>
 

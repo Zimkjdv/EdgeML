@@ -88,6 +88,42 @@ def failed_job(real_queue):
     return training, QueueOperationsService(queue, training, name), job.id
 
 
+def test_dispatch_outbox_recovers_without_duplicating_existing_redis_id(real_queue):
+    queue, _, _, root = real_queue
+    training = TrainingService(None, root / 'trained', root / 'models', jobs_root=root / 'jobs')
+    req = TrainingRequest(dataset_id='00000000-0000-0000-0000-000000000001',
+        model_name='Dispatch test', target_column='y', feature_columns=['x'], algorithm='random_forest')
+    first, second = training.create_job(req), training.create_job(req)
+    queue.enqueue(first.id)  # Simulate reply lost after Redis committed.
+    training.recover_pending_dispatch(queue)
+    assert set(queue.list_queued()) == {first.id, second.id}
+    assert len(queue.list_queued()) == 2
+    assert not list((root / 'jobs').glob('*.txn'))
+
+
+@pytest.mark.parametrize('commit_before_error', [False, True])
+def test_cancel_survives_ambiguous_redis_removal(real_queue, monkeypatch, commit_before_error):
+    queue, _, name, root = real_queue
+    training = TrainingService(None, root / 'trained', root / 'models', jobs_root=root / 'jobs')
+    job = training.create_job(TrainingRequest(dataset_id='00000000-0000-0000-0000-000000000001',
+        model_name='Cancel test', target_column='y', feature_columns=['x'], algorithm='random_forest'))
+    queue.enqueue(job.id)
+    operations = QueueOperationsService(queue, training, name)
+    original = queue._client.lrem
+    def fail(*args):
+        if commit_before_error: original(*args)
+        raise redis.ConnectionError('reply lost')
+    with monkeypatch.context() as patch:
+        patch.setattr(queue._client, 'lrem', fail)
+        with pytest.raises(redis.ConnectionError): operations.cancel_queued(job.id)
+    assert training.get_job(job.id).status == 'cancelled'
+    assert operations.cancel_queued(job.id).status == 'cancelled'
+    if not commit_before_error:
+        assert queue.consume(timeout=1) == job.id
+        assert training.get_job(job.id).status == 'cancelled'
+        queue.acknowledge(job.id)
+
+
 @pytest.mark.parametrize('commit_before_error', [False, True])
 def test_replay_survives_ambiguous_redis_error(real_queue, monkeypatch, commit_before_error):
     queue, _, _, _ = real_queue

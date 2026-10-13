@@ -19,8 +19,8 @@ class InMemoryPredictionHistoryRepository:
     def add(self, record: PredictionHistoryRecord) -> None:
         self.records.append(record)
 
-    def list(self) -> list[PredictionHistoryRecord]:
-        return list(reversed(self.records))
+    def list(self, limit=100, offset=0) -> list[PredictionHistoryRecord]:
+        return list(reversed(self.records))[offset:offset + limit]
 
 
 def client(

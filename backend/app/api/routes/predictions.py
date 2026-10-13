@@ -1,14 +1,14 @@
 import json
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import Response
 from starlette.concurrency import run_in_threadpool
 
 from app.api.dependencies import get_prediction_service
 from app.core.observability import record_prediction
 from app.core.config import get_settings
-from app.domain.errors import ModelNotFoundError, PredictionValidationError
+from app.domain.errors import ModelNotFoundError, PredictionHistoryError, PredictionValidationError
 from app.domain.schemas import JsonPredictionOutput, JsonPredictionRequest, PredictionHistoryRecord, TrainingRangePolicy
 from app.services.prediction_service import PredictionService
 
@@ -17,9 +17,11 @@ router = APIRouter()
 
 @router.get("/prediction-history", response_model=list[PredictionHistoryRecord])
 def prediction_history(
+    limit: int = Query(default=100, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0, le=100_000),
     service: PredictionService = Depends(get_prediction_service),
 ) -> list[PredictionHistoryRecord]:
-    return service.list_history()
+    return service.list_history(limit, offset)
 
 
 @router.post("/predict/json", response_model=JsonPredictionOutput)
@@ -57,6 +59,9 @@ def predict_json(
     except PredictionValidationError as exc:
         record_prediction("validation_error")
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except PredictionHistoryError as exc:
+        record_prediction('history_error')
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     except Exception:
         record_prediction("error")
         raise
@@ -92,6 +97,9 @@ async def predict(
     except PredictionValidationError as exc:
         record_prediction("validation_error")
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except PredictionHistoryError as exc:
+        record_prediction('history_error')
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     except Exception:
         record_prediction("error")
         raise

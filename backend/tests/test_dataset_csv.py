@@ -103,4 +103,6 @@ def test_partial_csv_write_failure_is_cleaned(tmp_path, monkeypatch):
     monkeypatch.setattr(Path, 'open', open_file)
     with pytest.raises(OSError):
         service.upload('new.csv', b'x\n2\n')
-    assert list(tmp_path.iterdir()) == []
+    assert not list(tmp_path.glob('*.csv'))
+    assert not list(tmp_path.glob('*.json'))
+    assert not list(tmp_path.glob('*.txn'))

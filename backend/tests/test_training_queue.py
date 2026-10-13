@@ -38,6 +38,12 @@ class FakeTrainingService:
         self.failed.append((job_id, error))
         return TrainingJob(id=job_id, status="failed", progress=0, message="failed", error=error)
 
+    def confirm_dispatch(self, job_id): pass
+
+    def note_dispatch_failure(self, job_id, error):
+        self.failed.append((job_id, error))
+        return TrainingJob(id=job_id, status='queued', progress=0, message='waiting for recovery', error=error)
+
 
 def request_payload() -> dict[str, object]:
     return {
@@ -72,7 +78,9 @@ def test_training_job_reports_queue_unavailable() -> None:
 
     response = TestClient(app).post("/api/training/jobs", json=request_payload())
 
-    assert response.status_code == 503
+    assert response.status_code == 202
+    assert response.json()['status'] == 'queued'
+    assert response.json()['error'] == 'redis unavailable'
     assert service.failed == [("job-1", "redis unavailable")]
 
 

@@ -7,6 +7,9 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
+from functools import wraps
+from threading import Lock
+from weakref import WeakValueDictionary
 
 import joblib
 import numpy as np
@@ -53,6 +56,23 @@ from app.services.prediction_csv import read_prediction_csv
 from app.infrastructure.atomic_json import write_json_atomic
 
 
+def job_state_transaction(method):
+    @wraps(method)
+    def locked(self, job_id, *args, **kwargs):
+        with self._job_state_lock(job_id):
+            return method(self, job_id, *args, **kwargs)
+    return locked
+
+
+def job_execution(method):
+    @wraps(method)
+    def locked(self, job_id, *args, **kwargs):
+        path = child_path(self._jobs_root / '.execution-locks', f'{job_id}.lock')
+        with FileLock(path, timeout=0):
+            return method(self, job_id, *args, **kwargs)
+    return locked
+
+
 class EncodedTargetClassifier(ClassifierMixin, BaseEstimator):
     """Keep string classification labels compatible with XGBoost's numeric target requirement."""
 
@@ -85,6 +105,8 @@ class TrainingService:
         self._jobs_root.mkdir(parents=True, exist_ok=True)
         self._model_registry = model_registry
         self._logger = logging.getLogger("edgeml.training")
+        self._state_locks = WeakValueDictionary()
+        self._state_locks_guard = Lock()
 
     def train(self, request: TrainingRequest, progress=None) -> TrainedModelDetail:
         if progress: progress(10, "驗證資料與訓練設定")
@@ -160,32 +182,69 @@ class TrainingService:
     def create_job(self, request: TrainingRequest) -> TrainingJob:
         job = TrainingJob(id=str(uuid4()), status="queued", progress=0, message="等待訓練開始")
         job.queued_at = datetime.now(timezone.utc)
-        self._write_job(job, request)
+        with self._job_state_lock(job.id):
+            write_json_atomic(self._dispatch_marker(job.id), {'job_id': job.id})
+            self._write_job(job, request)
         return job
 
+    def _dispatch_marker(self, job_id: str) -> Path:
+        return child_path(self._jobs_root, f'.dispatch-{job_id}.txn')
+
+    def confirm_dispatch(self, job_id: str) -> None:
+        self._dispatch_marker(job_id).unlink(missing_ok=True)
+
+    @job_state_transaction
+    def note_dispatch_failure(self, job_id: str, error: str) -> TrainingJob:
+        job, request = self._read_job(job_id)
+        if job.status == 'queued':
+            job.message = '工作已保存，等待 Redis 連線恢復後派送'
+            job.error = error
+            self._write_job(job, request)
+        return job
+
+    def recover_pending_dispatch(self, queue) -> None:
+        for marker in self._jobs_root.glob('.dispatch-*.txn'):
+            job_id = marker.name[len('.dispatch-'):-4]
+            def eligible():
+                try: return self.get_job(job_id).status == 'queued'
+                except ModelNotFoundError: return False
+            queue.ensure_enqueued(job_id, eligible)
+            self.confirm_dispatch(job_id)
+
+    @job_state_transaction
     def mark_job_failed(self, job_id: str, error: str) -> TrainingJob:
         job, request = self._read_job(job_id)
+        if job.status != 'queued':
+            return job  # A lost enqueue reply must not overwrite an active worker.
         job.status = "failed"
         job.message = "Training job could not be queued"
         job.error = error
         job.completed_at = datetime.now(timezone.utc)
         self._write_job(job, request)
+        self.confirm_dispatch(job_id)
         return job
 
-    def run_job(self, job_id: str, worker_id: str | None = None) -> TrainingJob:
+    @job_state_transaction
+    def _begin_job(self, job_id: str, worker_id: str | None = None):
         job, request = self._read_job(job_id)
         # A recovered processing-list entry may still be persisted as running after
         # a worker crash, so it is safe to resume both queued and running jobs.
         if job.status not in {"queued", "running"}:
             raise PredictionValidationError(f"Training job '{job_id}' is not available to run.")
-        started_at = training_started()
-        self._logger.info("Training job started", extra={"event": "training.job.started", "job_id": job_id, "worker_id": worker_id})
         job.attempt += 1
         job.replay_pending = False
+        job.error = None
         job.started_at = datetime.now(timezone.utc)
         job.worker_id = worker_id
         job.status, job.progress, job.message = "running", 2, "準備訓練環境"
         self._write_job(job, request)
+        return job, request
+
+    @job_execution
+    def run_job(self, job_id: str, worker_id: str | None = None) -> TrainingJob:
+        job, request = self._begin_job(job_id, worker_id)
+        started_at = training_started()
+        self._logger.info("Training job started", extra={"event": "training.job.started", "job_id": job_id, "worker_id": worker_id})
         try:
             result = self.train(request, lambda progress, message: self._update_job(job, request, progress, message))
         except Exception as exc:
@@ -209,6 +268,7 @@ class TrainingService:
         )
         return job
 
+    @job_state_transaction
     def schedule_retry(self, job_id: str, max_attempts: int) -> TrainingJob:
         """Move a failed job back to queued state when attempts remain."""
 
@@ -224,6 +284,7 @@ class TrainingService:
         self._write_job(job, request)
         return job
 
+    @job_state_transaction
     def cancel_job(self, job_id: str) -> TrainingJob:
         """Cancel a job that has not been claimed by a worker yet."""
 
@@ -238,6 +299,7 @@ class TrainingService:
         self._write_job(job, request)
         return job
 
+    @job_state_transaction
     def requeue_failed_job(self, job_id: str) -> TrainingJob:
         """Called under queue locks; a durable preparation can safely be resumed."""
 
@@ -310,9 +372,11 @@ class TrainingService:
         return FileLock(child_path(self._trained_root / '.locks', f'{model_id}.lock'))
 
     def _write_job(self, job: TrainingJob, request: TrainingRequest) -> None:
-        payload = {"job": job.model_dump(mode="json"), "request": request.model_dump(mode="json")}
-        write_json_atomic(child_path(self._jobs_root, f'{job.id}.json'), payload)
+        with self._job_state_lock(job.id):
+            payload = {"job": job.model_dump(mode="json"), "request": request.model_dump(mode="json")}
+            write_json_atomic(child_path(self._jobs_root, f'{job.id}.json'), payload)
 
+    @job_state_transaction
     def _read_job(self, job_id: str) -> tuple[TrainingJob, TrainingRequest]:
         path = child_path(self._jobs_root, f'{job_id}.json')
         if not path.exists(): raise ModelNotFoundError(f"Training job '{job_id}' was not found.")
@@ -320,7 +384,22 @@ class TrainingService:
         return TrainingJob.model_validate(payload["job"]), TrainingRequest.model_validate(payload["request"])
 
     def _update_job(self, job: TrainingJob, request: TrainingRequest, progress: int, message: str) -> None:
-        job.progress, job.message = progress, message; self._write_job(job, request)
+        with self._job_state_lock(job.id):
+            current, saved_request = self._read_job(job.id)
+            if current.status != 'running' or current.attempt != job.attempt:
+                return
+            current.progress, current.message = progress, message
+            self._write_job(current, saved_request)
+            job.progress, job.message = progress, message
+
+    def _job_state_lock(self, job_id: str) -> FileLock:
+        path = child_path(self._jobs_root / '.state-locks', f'{job_id}.lock')
+        with self._state_locks_guard:
+            lock = self._state_locks.get(job_id)
+            if lock is None:
+                lock = FileLock(path)
+                self._state_locks[job_id] = lock
+            return lock
 
     def list(self) -> list[TrainedModelSummary]:
         records = [TrainedModelSummary.model_validate(self._read_record(path.parent)) for path in self._trained_root.glob("*/record.json")]

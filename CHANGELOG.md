@@ -2,6 +2,14 @@
 
 完成紀錄、歷史驗證與部署限制保存在此；未完成工作與驗收條件見 [ROADMAP.md](ROADMAP.md)。每項修正有獨立 commit/push，發布程式不代表自動升級業務容器。
 
+## 2026-10-13 — R11 檔案交易、歷史復原與派工 outbox
+
+- Dataset 跨程序鎖序列化 read/rename/delete/frame；rename 使用 atomic JSON。upload/delete intent markers 支援真實程序崩潰後復原，未標記的既有 orphan 檔案不刪除。
+- History 跨程序 append/fsync、損壞原檔備份與修復、完整缺換行尾列保留、API/UI 分頁與 opt-in retention；預設不刪減，retention 先備份完整舊檔。分頁記憶體有界，但 active JSONL 掃描仍為線性。audit 寫入失敗明確回 503。
+- Job state 短交易與獨立 execution lock，start/cancel/retry/replay/progress 不互相覆蓋，polling 不等待整段訓練。durable outbox 恢復 API 保存後／Redis reply lost 的派工；保存成功就回 202 queued，連線中斷等待 Worker，不要求重送工作。
+- 取消先保存 cancelled 再移除 Redis ID；Redis 成功前／後斷線都可安全恢復，剩餘 cancelled ID 不再訓練。模型 artifact/job completion 冪等另由 R19 處理。
+- Windows 完整後端 333 passed、25 skipped；Linux 隔離真 Redis／程序崩潰／dataset symlink 46 passed。前端 25 passed、TypeScript/Vite build 通過；既有 dependency/bundle warnings 保留。測試原始碼唯讀、只複製三個範例，無 host ports，臨時 Redis/network 已清理，未操作業務資料。
+
 ## 2026-10-13 — R22 JSON 解析前大小上限與 scalar 契約
 
 - pure ASGI middleware 在 JSON decoding/Pydantic 前限制實際位元組，涵蓋無 Content-Length、chunked、偽小 header、trailing slash 與 mount prefix；超限 413、錯誤／重複 Content-Length 400，恰好邊界正常接受。

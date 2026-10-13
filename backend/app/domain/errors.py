@@ -9,3 +9,7 @@ class PredictionValidationError(Exception):
 class UnsupportedFrameworkError(Exception):
     pass
 
+
+class PredictionHistoryError(Exception):
+    """Prediction cannot be returned unless its audit metadata is durable."""
+

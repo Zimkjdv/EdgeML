@@ -59,9 +59,11 @@ def create_training_job(
     job = service.create_job(request)
     try:
         queue.enqueue(job.id)
+        service.confirm_dispatch(job.id)
     except Exception as exc:
-        service.mark_job_failed(job.id, str(exc))
-        raise HTTPException(status_code=503, detail="Training queue is unavailable.") from exc
+        # The filesystem outbox keeps accepted work recoverable across a crash
+        # or ambiguous Redis reply; a Worker dispatches it after reconnection.
+        return service.note_dispatch_failure(job.id, str(exc))
     return job
 
 

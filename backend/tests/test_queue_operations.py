@@ -44,6 +44,11 @@ class FakeOperationsQueue:
         self.queued.remove(job_id)
         return True
 
+    def cancel_queued(self, job_id, prepare):
+        if job_id not in self.queued: return False
+        prepare()
+        return self.remove_queued(job_id)
+
 
 def request() -> TrainingRequest:
     return TrainingRequest(

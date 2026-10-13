@@ -33,6 +33,9 @@ class TrainingQueueOperations(Protocol):
     def remove_queued(self, job_id: str) -> bool:
         ...
 
+    def cancel_queued(self, job_id: str, prepare: Callable[[], None]) -> bool:
+        ...
+
 
 class TrainingJobConsumer(Protocol):
     """Worker-side boundary for consuming and acknowledging training jobs."""

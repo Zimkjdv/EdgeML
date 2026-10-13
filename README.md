@@ -103,12 +103,12 @@ For integrations that need to discover models, use `GET /api/models/ids` to retr
 
 The ordered project-wide review and acceptance checklist is maintained in [ROADMAP.md](ROADMAP.md). The first reliability batch implements ID-based safe publication, persistent Docker model storage with legacy migration, live-worker-safe recovery on a shared volume, and cross-process Registry transactions. See [deployment upgrade instructions](docs/05_Deployment.md#model-storage-and-reliability-upgrade) before rebuilding an existing installation.
 
-The second batch (R05–R08) adds explicit anonymous-development configuration, exact integer/range validation for CSV and JSON prediction, recoverable dead-letter replay with state persisted before dispatch, and consistent missing-row handling for training and both external-test entry points. Job JSON files now use atomic replacement; broader JSON transaction work remains under R11.
+The second batch (R05–R08) adds explicit anonymous-development configuration, exact integer/range validation for CSV and JSON prediction, recoverable dead-letter replay with state persisted before dispatch, and consistent missing-row handling for training and both external-test entry points. Job JSON files now use atomic replacement; dataset/history/job state and outbox transactions are now implemented in R11 (see CHANGELOG).
 
 The current implementation is suitable for local and controlled self-hosted use. The following items are recorded before expanding toward multi-user production deployment:
 
 - **P0 reliability:** shared-volume ownership locks protect live jobs during recovery; dead-letter replay now has real-Redis concurrency, crash, and error-injection coverage. Redis restart, idempotent output and broader graceful-shutdown coverage remain in ROADMAP.
-- **P0 data durability:** Redis AOF and published Docker packages are persistent, and Registry writes have cross-process transactions. Other JSON repositories and full backup/restore verification remain in ROADMAP.
+- **P0 data durability:** Redis AOF, published packages, dataset transactions, job-state/outbox transactions, and history recovery are implemented. Full backup/restore verification remains in ROADMAP.
 - **P0 access control:** refine token scopes and add an external identity/reverse-proxy integration before exposing model registry and queue operations outside a trusted network.
 - **P1 operations:** add service healthchecks, resource limits, log rotation, Redis authentication, backup/restore procedures, and immutable Docker image tags.
 - **P1 frontend quality:** split the monolithic `App.vue`, move all labels to structured i18n keys, add frontend unit/E2E tests, and code-split the large production bundle.
@@ -117,6 +117,8 @@ The current implementation is suitable for local and controlled self-hosted use.
 Follow the prioritized outstanding work in [ROADMAP.md](ROADMAP.md) and completed changes in [CHANGELOG.md](CHANGELOG.md). Dataset IDs use canonical UUIDs; read, rename, delete, training, and evaluation reject paths and linked files outside their storage boundary. Dataset CSV uploads reject empty/header-only files, duplicate headers, malformed rows, and infinite numeric values with `422`, while retaining Chinese encoding support and missing-value profiling. See the [API contract](docs/02_API.md#dataset-identifiers-and-storage-boundaries). Redis AOF is already enabled; broader concurrency protection and stronger external authentication remain planned. These changes preserve the `ModelCatalog` and `PredictionService` application boundaries.
 
 ## Runtime selection
+
+Dataset read/rename/delete and transaction recovery share a cross-process lock. Prediction History is paginated (100 rows per UI page) and archives damaged originals before repair. Retention is opt-in with `EDGEML_PREDICTION_HISTORY_MAX_RECORDS`; `0` keeps all active records. Prediction audit-write failure returns `503`. See [storage details](docs/03_Database.md) and [completed work](CHANGELOG.md).
 
 Choose one of these runtime modes for normal development:
 
@@ -374,7 +376,7 @@ npm.cmd install
 npm run dev
 ```
 
-If only the FastAPI server is started without Redis and the worker, Prediction remains available but `POST /api/training/jobs` cannot enqueue work and returns `503 Training queue is unavailable`.
+If only the FastAPI server is started without Redis and the worker, Prediction remains available. Training submissions are durably saved and return `202 queued` with a recovery message; they wait until Redis and a Worker are started. Poll the returned job ID instead of submitting the same work again.
 
 When updating an existing local environment after pulling the training module, run `pip install -r requirements.txt` again. It installs XGBoost in addition to the original prediction dependencies.
 

@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     trained_models_root: Path = Path(__file__).resolve().parents[2] / "trained_models"
     training_jobs_root: Path = Path(__file__).resolve().parents[2] / "training_jobs"
     prediction_history_file: Path = Path(__file__).resolve().parents[2] / "data" / "prediction_history.jsonl"
+    prediction_history_max_records: int = Field(default=0, ge=0, le=1_000_000)
     api_tokens_database: Path = Path(__file__).resolve().parents[2] / "data" / "api_tokens.sqlite3"
     model_registry_file: Path = Path(__file__).resolve().parents[2] / "data" / "model_registry.json"
     queue_backend: str = "redis"

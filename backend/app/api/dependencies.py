@@ -126,7 +126,7 @@ def get_published_feature_importance_service() -> PublishedFeatureImportanceServ
 def get_prediction_service() -> PredictionService:
     settings = get_settings()
     catalog = get_model_registry()
-    history_repository = FilePredictionHistoryRepository(settings.prediction_history_file)
+    history_repository = FilePredictionHistoryRepository(settings.prediction_history_file, settings.prediction_history_max_records)
     return PredictionService(
         catalog=catalog,
         predictor_factory=PredictorFactory(),

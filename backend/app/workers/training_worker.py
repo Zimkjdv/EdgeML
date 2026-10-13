@@ -54,6 +54,7 @@ def run_worker() -> None:
     while not stop_event.is_set():
         try:
             # Also recover crashes while other replicas remain running.
+            service.recover_pending_dispatch(queue)
             queue.recover_processing()
             job_id = queue.consume(timeout=5)
         except redis.RedisError:

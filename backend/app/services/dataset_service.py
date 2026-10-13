@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 from math import isfinite
 from pathlib import Path
 from uuid import uuid4
+from functools import wraps
+import os
 
 import pandas as pd
 import numpy as np
@@ -12,15 +14,25 @@ import numpy as np
 from app.domain.errors import ModelNotFoundError, PredictionValidationError
 from app.domain.dataset_identifiers import validate_dataset_id
 from app.domain.training_schemas import ColumnProfile, DatasetDetail, DatasetSummary
-from app.infrastructure.file_lock import child_path
+from app.infrastructure.file_lock import FileLock, child_path
 from app.infrastructure.atomic_json import write_json_atomic
 from app.services.prediction_csv import read_csv_text
+
+
+def dataset_transaction(method):
+    @wraps(method)
+    def locked(self, *args, **kwargs):
+        with self._lock:
+            self._recover_transactions()
+            return method(self, *args, **kwargs)
+    return locked
 
 
 class DatasetService:
     def __init__(self, datasets_root: Path) -> None:
         self._root = datasets_root
         self._root.mkdir(parents=True, exist_ok=True)
+        self._lock = FileLock(self._root / '.datasets.lock')
 
     def upload(self, filename: str, content: bytes) -> DatasetDetail:
         frame = self.read_csv(content)
@@ -38,17 +50,32 @@ class DatasetService:
         detail = DatasetDetail.model_validate(metadata)
         # Validate the complete response before making either file visible.
         json.dumps(metadata, ensure_ascii=False, allow_nan=False)
-        csv_path, metadata_path = self._paths(dataset_id)
-        stream = csv_path.open('xb')
-        try:
-            with stream:
-                stream.write(content)
-            write_json_atomic(metadata_path, metadata)
-        except Exception:
-            csv_path.unlink(missing_ok=True)
-            raise
+        self._save_upload(dataset_id, content, metadata)
         return detail
 
+    @dataset_transaction
+    def _save_upload(self, dataset_id: str, content: bytes, metadata: dict) -> None:
+        csv_path, metadata_path = self._paths(dataset_id)
+        if csv_path.exists() or metadata_path.exists():
+            raise FileExistsError('Dataset ID already exists.')
+        marker = self._marker('upload', dataset_id)
+        write_json_atomic(marker, {'operation': 'upload', 'dataset_id': dataset_id})
+        stream = None
+        try:
+            stream = csv_path.open('xb')
+            with stream:
+                stream.write(content)
+                stream.flush()
+                os.fsync(stream.fileno())
+            write_json_atomic(metadata_path, metadata)
+        except Exception:
+            if stream is not None:
+                csv_path.unlink(missing_ok=True)
+            marker.unlink(missing_ok=True)
+            raise
+        marker.unlink()
+
+    @dataset_transaction
     def list(self) -> list[DatasetSummary]:
         summaries = []
         for path in self._root.glob("*.json"):
@@ -63,6 +90,7 @@ class DatasetService:
             reverse=True,
         )
 
+    @dataset_transaction
     def get(self, dataset_id: str) -> DatasetDetail:
         _, path = self._paths(dataset_id)
         if not path.exists():
@@ -72,23 +100,50 @@ class DatasetService:
             raise PredictionValidationError("Dataset metadata ID does not match its filename.")
         return detail
 
+    @dataset_transaction
     def rename(self, dataset_id: str, name: str) -> DatasetDetail:
         self.get(dataset_id)
         _, path = self._paths(dataset_id)
         payload = self._read_metadata(path)
         payload["name"] = name.strip()
-        path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-        return DatasetDetail.model_validate(payload)
+        if not payload['name']:
+            raise PredictionValidationError('Dataset display name must not be blank.')
+        detail = DatasetDetail.model_validate(payload)
+        write_json_atomic(path, payload)
+        return detail
 
+    @dataset_transaction
     def delete(self, dataset_id: str) -> None:
         self.get(dataset_id)
-        for path in self._paths(dataset_id):
+        csv_path, metadata_path = self._paths(dataset_id)
+        marker = self._marker('delete', dataset_id)
+        write_json_atomic(marker, {'operation': 'delete', 'dataset_id': dataset_id})
+        for path in (metadata_path, csv_path):
             if path.exists(): path.unlink()
+        marker.unlink()
 
+    @dataset_transaction
     def frame(self, dataset_id: str) -> pd.DataFrame:
         self.get(dataset_id)
         csv_path, _ = self._paths(dataset_id)
         return self.read_csv(csv_path.read_bytes())
+
+    def _marker(self, operation: str, dataset_id: str) -> Path:
+        validate_dataset_id(dataset_id)
+        return child_path(self._root, f'.{operation}-{dataset_id}.txn')
+
+    def _recover_transactions(self) -> None:
+        # Only EdgeML transaction markers authorize recovery; unrelated files
+        # and old orphan CSVs are never removed by scanning the directory.
+        for operation in ('upload', 'delete'):
+            for marker in self._root.glob(f'.{operation}-*.txn'):
+                dataset_id = marker.name[len(operation) + 2:-4]
+                csv_path, metadata_path = self._paths(dataset_id)
+                safe_marker = self._marker(operation, dataset_id)
+                if operation == 'delete' or not (csv_path.exists() and metadata_path.exists()):
+                    metadata_path.unlink(missing_ok=True)
+                    csv_path.unlink(missing_ok=True)
+                safe_marker.unlink()
 
     def _paths(self, dataset_id: str) -> tuple[Path, Path]:
         try:

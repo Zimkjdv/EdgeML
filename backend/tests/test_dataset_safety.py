@@ -29,7 +29,8 @@ def test_dataset_paths_rejected_without_reading_or_mutating_outside(tmp_path, id
             with pytest.raises(PredictionValidationError):
                 operation(value)
     assert all(p.read_bytes() == before for p, before in snapshots.items())
-    assert list((tmp_path / 'inside').iterdir()) == []
+    assert not list((tmp_path / 'inside').glob('*.csv'))
+    assert not list((tmp_path / 'inside').glob('*.json'))
 
 
 def test_canonical_id_still_supports_dataset_lifecycle_and_missing_404(tmp_path):
@@ -121,4 +122,5 @@ def test_http_encoded_windows_paths_and_body_refs_are_rejected(tmp_path):
             payload[field] = '..\\outside'
             response = client.post('/api/training/jobs', json=payload)
             assert response.status_code == 422
-    assert list(service._root.iterdir()) == []
+    assert not list(service._root.glob('*.csv'))
+    assert not list(service._root.glob('*.json'))

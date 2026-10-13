@@ -52,16 +52,18 @@ class QueueOperationsService:
 
     def cancel_queued(self, job_id: str) -> TrainingJob:
         job = self._training.get_job(job_id)
+        if job.status == 'cancelled':
+            return job  # The worker can safely ack a leftover cancelled queue ID.
         if job.status != "queued":
             raise PredictionValidationError("Only queued training jobs can be cancelled.")
-        if not self._queue.remove_queued(job_id):
+        prepared = None
+        def prepare():
+            nonlocal prepared
+            prepared = self._training.cancel_job(job_id)
+        if not self._queue.cancel_queued(job_id, prepare):
             raise PredictionValidationError("Training job is already being processed or was removed.")
-        try:
-            return self._training.cancel_job(job_id)
-        except Exception:
-            # Do not lose a job if the persisted state cannot be updated.
-            self._queue.enqueue(job_id)
-            raise
+        assert prepared is not None
+        return prepared
 
     @staticmethod
     def _summary(job: TrainingJob) -> DeadLetterJobSummary:

@@ -50,6 +50,12 @@ class RedisTrainingJobQueue:
     def enqueue(self, job_id: str) -> None:
         self._client.lpush(self._queue_key, job_id)
 
+    def ensure_enqueued(self, job_id: str, eligible: Callable[[], bool]) -> None:
+        with self._guard:
+            if not eligible(): return
+            if job_id not in self.list_queued() + self.list_processing() + self.list_dead_letter():
+                self.enqueue(job_id)
+
     def queue_depths(self) -> dict[str, int]:
         return {
             "queued": int(self._client.llen(self._queue_key)),
@@ -68,6 +74,15 @@ class RedisTrainingJobQueue:
 
     def remove_queued(self, job_id: str) -> bool:
         return bool(self._client.lrem(self._queue_key, 1, job_id))
+
+    def cancel_queued(self, job_id: str, prepare: Callable[[], None]) -> bool:
+        with self._guard:
+            if job_id not in self.list_queued() or job_id in self.list_processing():
+                return False
+            with self._job_lock(job_id):
+                prepare()  # Durable cancelled state precedes removal from Redis.
+                self._client.lrem(self._queue_key, 0, job_id)
+                return True
 
     def requeue_dead_letter(self, job_id: str, prepare: Callable[[], None]) -> bool:
         with self._guard:

@@ -8,7 +8,7 @@ from app.services.prediction_csv import read_prediction_csv
 from app.services.prediction_ranges import filter_training_ranges
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
 
-from app.domain.errors import PredictionValidationError
+from app.domain.errors import PredictionHistoryError, PredictionValidationError
 from app.domain.problem_types import normalize_problem_type
 from app.domain.model_catalog import ModelCatalog
 from app.domain.schemas import (
@@ -42,8 +42,8 @@ class PredictionService:
     def model_id_by_name(self, name: str) -> str:
         return self._catalog.find_id_by_name(name)
 
-    def list_history(self) -> list[PredictionHistoryRecord]:
-        return self._history_repository.list()
+    def list_history(self, limit: int = 100, offset: int = 0) -> list[PredictionHistoryRecord]:
+        return self._history_repository.list(limit, offset)
 
     def predict_csv(
         self, model_id: str, content: bytes, source_filename: str = "input.csv",
@@ -150,16 +150,19 @@ class PredictionService:
             raise PredictionValidationError(f"Model '{model_id}' has an invalid manifest.") from exc
 
     def _record_history(self, manifest, source_filename: str, row_count: int) -> None:
-        self._history_repository.add(
-            PredictionHistoryRecord(
-                id=str(uuid4()),
-                model_id=manifest.id,
-                model_name=manifest.name,
-                source_filename=source_filename.replace("\\", "/").rsplit("/", 1)[-1],
-                row_count=row_count,
-                created_at=datetime.now(timezone.utc),
+        try:
+            self._history_repository.add(
+                PredictionHistoryRecord(
+                    id=str(uuid4()),
+                    model_id=manifest.id,
+                    model_name=manifest.name,
+                    source_filename=source_filename.replace("\\", "/").rsplit("/", 1)[-1],
+                    row_count=row_count,
+                    created_at=datetime.now(timezone.utc),
+                )
             )
-        )
+        except (OSError, ValueError, TimeoutError) as exc:
+            raise PredictionHistoryError('Prediction audit storage is unavailable; no result was returned.') from exc
 
     @staticmethod
     def _evaluate_predictions(problem_type: str, actual, predictions) -> dict[str, float | None]:
