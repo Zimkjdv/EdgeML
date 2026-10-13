@@ -1,10 +1,12 @@
 import { parseCsv } from './csv.ts'
+import type { Confusion } from './trainingAudit'
 
 export type EvaluationContext = {
   source: 'csv' | 'dataset'; source_name: string; dataset_id: string | null
   input_rows: number; evaluated_rows: number; dropped_rows: number; evaluated_at: string
+  sha256?: string | null
 }
-export type EvaluationResult = { metrics: Record<string, number | null>; context?: EvaluationContext | null }
+export type EvaluationResult = { metrics: Record<string, number | null>; context?: EvaluationContext | null; confusion?: Confusion | null }
 export type ApiRequest = <T>(url: string, init?: RequestInit) => Promise<T>
 export type EvaluationInput = { kind: 'csv'; file: File } | { kind: 'dataset'; datasetId: string }
 
@@ -28,5 +30,6 @@ export async function evaluateModel(api: ApiRequest, modelId: string, input: Eva
 export function applyEvaluation<T extends { id: string; test_metrics?: Record<string, number | null>; test_rmse?: number | null; test_r2?: number | null; test_evaluation?: EvaluationContext | null }>(
   model: T, modelId: string, result: EvaluationResult): T {
   return model.id === modelId ? { ...model, test_metrics: result.metrics, test_rmse: result.metrics.rmse ?? null,
-    test_r2: result.metrics.r2 ?? null, test_evaluation: result.context ?? null } : model
+    test_r2: result.metrics.r2 ?? null, test_evaluation: result.context ?? null,
+    test_accuracy: result.metrics.accuracy ?? null, test_f1: result.metrics.f1 ?? null, test_confusion: result.confusion ?? null } : model
 }

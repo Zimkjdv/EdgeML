@@ -59,6 +59,7 @@ For integrations that need to discover models, use `GET /api/models/ids` to retr
 ### v0.3 in progress
 
 - Classification training with stratified cross-validation and classification metrics is implemented for Random Forest, Gradient Boosting, XGBoost, AdaBoost, and Logistic Regression.
+- Training provenance, explicit validation/test confusion matrices and problem-aware model lists are implemented; dataset content preview is paginated and preserves raw text.
 - Ridge regression and richer regularized linear-model controls remain planned for the standalone AutoML platform.
 - Keep regression and classification model manifests compatible with the existing trained-model and prediction workflows.
 
@@ -322,13 +323,17 @@ Model evaluation, rename, publication, and deletion are serialized per model acr
 
 Validation supports random folds, time-ordered expanding windows, and batch-separated folds. Choose a time/batch column when appropriate; timestamps/batches must not be missing. Time validation keeps equal timestamps together and optionally leaves a gap measured in distinct timestamps. Warm-up rows are excluded from validation scores; coverage is shown with the model. Existing models display a visible legacy-evaluation warning and require retraining for current metrics. See [Regression evaluation](docs/12_Regression_Metrics.md).
 
-1. Upload a CSV in **數據集管理**, inspect columns, and optionally rename its display name.
-2. In **模型訓練**, choose one numeric target and check the feature columns to use.
+1. Upload a CSV in **數據集管理**, inspect columns and the paginated content preview (50 rows/page), and optionally rename its display name.
+2. In **模型訓練**, choose a numeric regression target or classification labels and check the feature columns to use.
 3. Select an algorithm. Random Forest exposes tree-count and split/leaf controls; Gradient Boosting exposes `n_estimators` and `learning_rate`; XGBoost exposes its optional hyperparameter fields. Logistic Regression exposes `penalty`, `solver`, and `C` for classification. Leaving fields empty uses the estimator defaults.
 4. Review the background-job progress, then inspect the Draft model metrics.
 5. Publish the model to make it available in **Prediction**.
 
 Select a model in **Trained Models** to display its detail/evaluation card, including separate validation and test metrics. Optional feature-importance or classification cards do not hide these details; visibility follows model selection rather than card order.
+
+New training saves **Training provenance**: exact source CSV SHA256, selected fields, resolved estimator/preprocessing parameters (including fitted XGBoost booster configuration), Python/library versions and split counts/index hashes. Expand its card to inspect it. Published metadata retains the audit; legacy models show unavailable provenance rather than guessed historical values. Identical metadata does not guarantee bit-identical results across hardware.
+
+The model list filters Regression/Classification and uses R²/RMSE or Accuracy/F1 accordingly; mixed lists label each value. New classification runs use pooled OOF accuracy and weighted precision/recall/F1, with fold means saved separately. Validation/test confusion matrices show explicit label order, rows=actual and columns=predicted; binary TN/FP/FN/TP names the positive class, not a presumed semantic label. Later evaluation updates only test scores/matrix and records the test CSV checksum. The configurable classification label cap defaults to 100 to bound matrix size. See [Training audit and classification contract](docs/04_Architecture.md#training-audit-and-classification-contract).
 
 Inside **Model details and evaluation → Additional test evaluation**, upload a test CSV or choose an existing dataset and click **Evaluate test data**. This works for Draft and Published models without retraining. The CSV must contain all selected training features and the model's target column as Ground Truth. Use data excluded from training to measure performance on new data. The upload is evaluated in memory and is not added to dataset management. A successful evaluation replaces the previous test metrics, updates list scores and saves source/row-count metadata; validation metrics and model artifacts remain unchanged. Failed evaluation preserves previous scores. See [Regression evaluation](docs/12_Regression_Metrics.md).
 

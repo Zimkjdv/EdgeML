@@ -1,5 +1,7 @@
 # Database
 
+New model records and manifests retain `provenance` (`training-v1`) with source CSV SHA256, runtime/resolved parameters and validation split hashes. Classification matrices live separately in `validation_confusion`/`test_confusion`, with explicit labels and pooled-OOF scores (`classification-oof-v1`); supplemental evaluation updates test fields/context/hash only. Missing legacy audit/matrices are not backfilled from current data. Dataset content preview is paginated text/null; the file adapter still parses the bounded source in memory. See [Training audit contract](04_Architecture.md#training-audit-and-classification-contract).
+
 Training output is assembled under `.staging-<model-id>-<attempt-id>` and becomes visible only after an atomic directory rename. Job output IDs are reserved before fitting. `output_commit` stores job ownership, request hash, and streaming SHA256 of model.pkl; recovery verifies it and only confirms the existing result. Interrupted staging is moved to `.abandoned-*` for diagnostics and excluded from all model catalogs. Completed pre-upgrade jobs keep their original IDs; unassociated legacy orphan artifacts require operator review, not automatic matching/deletion.
 
 Prediction outputs remain stateless and are returned directly to the caller. Model, dataset and job records use files; API-token and browser-session metadata use the existing SQLite authentication database.

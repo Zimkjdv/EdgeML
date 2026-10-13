@@ -7,13 +7,14 @@ from pathlib import Path
 from uuid import uuid4
 from functools import wraps
 import os
+import hashlib
 
 import pandas as pd
 import numpy as np
 
 from app.domain.errors import ModelNotFoundError, PredictionValidationError
 from app.domain.dataset_identifiers import validate_dataset_id
-from app.domain.training_schemas import ColumnProfile, DatasetDetail, DatasetSummary
+from app.domain.training_schemas import ColumnProfile, DatasetDetail, DatasetSummary, DatasetPreview
 from app.infrastructure.file_lock import FileLock, child_path
 from app.infrastructure.atomic_json import write_json_atomic
 from app.services.prediction_csv import read_csv_text
@@ -128,6 +129,35 @@ class DatasetService:
         csv_path, _ = self._paths(dataset_id)
         return self.read_csv(csv_path.read_bytes())
 
+    @dataset_transaction
+    def snapshot(self, dataset_id: str, role: str = 'training') -> tuple[pd.DataFrame, dict]:
+        """Hash exactly the bytes parsed under the same dataset transaction."""
+        detail = self.get(dataset_id)
+        csv_path, _ = self._paths(dataset_id)
+        content = csv_path.read_bytes()
+        frame = self.read_csv(content)
+        return frame, {'dataset_id': dataset_id, 'name': detail.name, 'sha256': hashlib.sha256(content).hexdigest(),
+                       'input_rows': len(frame), 'column_count': len(frame.columns), 'role': role}
+
+    @dataset_transaction
+    def preview(self, dataset_id: str, offset: int = 0, limit: int = 50) -> DatasetPreview:
+        if not 1 <= limit <= 100 or not 0 <= offset <= 10_000_000:
+            raise PredictionValidationError('Preview limit must be 1–100 and offset 0–10000000.')
+        self.get(dataset_id)
+        csv_path, _ = self._paths(dataset_id)
+        frame = self.read_csv(csv_path.read_bytes(), preserve_text=True)
+        # Text-mode preview preserves leading zeroes, decimal notation and large
+        # nullable integers. The shared CSV NA policy maps missing cells to null.
+        def scalar(value):
+            if pd.isna(value): return None
+            if isinstance(value, np.generic): value = value.item()
+            if isinstance(value, float) and not isfinite(value): return None
+            if isinstance(value, int) and abs(value) > 2**53 - 1: return str(value)
+            return value
+        rows = [[scalar(value) for value in row] for row in frame.iloc[offset:offset + limit].itertuples(index=False, name=None)]
+        return DatasetPreview(dataset_id=dataset_id, columns=list(frame.columns), rows=rows,
+                              total_rows=len(frame), offset=offset, limit=limit)
+
     def _marker(self, operation: str, dataset_id: str) -> Path:
         validate_dataset_id(dataset_id)
         return child_path(self._root, f'.{operation}-{dataset_id}.txn')
@@ -156,14 +186,14 @@ class DatasetService:
                 child_path(self._root, f"{dataset_id}.json"))
 
     @staticmethod
-    def read_csv(content: bytes) -> pd.DataFrame:
+    def read_csv(content: bytes, preserve_text: bool = False) -> pd.DataFrame:
         for encoding in ("utf-8-sig", "utf-8", "cp950", "big5"):
             try:
                 text = content.decode(encoding)
             except UnicodeDecodeError:
                 continue
             # Encoding fallback applies only to decoding, never syntax errors.
-            return read_csv_text(text)
+            return read_csv_text(text, object if preserve_text else None)
         raise PredictionValidationError("CSV 無法以 UTF-8、CP950 或 Big5 編碼讀取。")
 
     @staticmethod

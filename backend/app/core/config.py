@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     optimization_iterations: int = Field(default=12, ge=1, le=20)
     importance_max_samples: int = Field(default=500, ge=2, le=2000)
     importance_repeats: int = Field(default=3, ge=1, le=10)
+    classification_max_classes: int = Field(default=100, ge=2, le=200)
 
     @property
     def anonymous_api_enabled(self) -> bool:

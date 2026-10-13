@@ -5,6 +5,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.domain.schemas import FeatureSpec
 from app.domain.dataset_identifiers import DatasetIdentifier
+from app.domain.schemas import PredictionScalar
+from app.domain.training_provenance import ClassificationConfusion, TrainingProvenance
 
 
 class ColumnProfile(BaseModel):
@@ -35,6 +37,15 @@ class DatasetSummary(BaseModel):
 
 class DatasetDetail(DatasetSummary):
     columns: list[ColumnProfile]
+
+
+class DatasetPreview(BaseModel):
+    dataset_id: str
+    columns: list[str]
+    rows: list[list[PredictionScalar]]
+    total_rows: int
+    offset: int
+    limit: int
 
 
 class DatasetRenameRequest(BaseModel):
@@ -78,6 +89,10 @@ class TrainedModelSummary(BaseModel):
     test_r2: float | None = None
     status: Literal["draft", "published"]
     evaluation_version: str | None = None
+    validation_accuracy: float | None = None
+    validation_f1: float | None = None
+    test_accuracy: float | None = None
+    test_f1: float | None = None
 
 
 class TestEvaluationContext(BaseModel):
@@ -88,6 +103,7 @@ class TestEvaluationContext(BaseModel):
     evaluated_rows: int
     dropped_rows: int
     evaluated_at: datetime
+    sha256: str | None = None
 
 
 class TrainedModelDetail(TrainedModelSummary):
@@ -98,6 +114,9 @@ class TrainedModelDetail(TrainedModelSummary):
     test_evaluation: TestEvaluationContext | None = None
     settings: dict[str, object]
     manifest: dict[str, object]
+    provenance: TrainingProvenance | None = None
+    validation_confusion: ClassificationConfusion | None = None
+    test_confusion: ClassificationConfusion | None = None
 
 
 class TrainingJob(BaseModel):
@@ -143,6 +162,7 @@ class ExternalEvaluationRequest(BaseModel):
 class ExternalEvaluationResult(BaseModel):
     metrics: dict[str, float | None]
     context: TestEvaluationContext | None = None
+    confusion: ClassificationConfusion | None = None
 
 
 class TrainedModelDeleteRequest(BaseModel):

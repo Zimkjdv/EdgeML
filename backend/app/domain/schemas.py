@@ -7,6 +7,7 @@ from math import isfinite
 
 from pydantic import BaseModel, BeforeValidator, Field, StrictBool, StrictFloat, StrictInt, StrictStr, model_validator
 from app.domain.problem_types import ProblemType
+from app.domain.training_provenance import TrainingProvenance
 
 TrainingRangePolicy = Literal["none", "drop"]
 
@@ -45,6 +46,7 @@ class ModelManifest(BaseModel):
     preprocess_artifact: str | None = None
     training_dataset_id: str | None = None
     feature_defaults: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    provenance: TrainingProvenance | None = None
     model_path: Path = Field(exclude=True)
 
 

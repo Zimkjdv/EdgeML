@@ -2,6 +2,14 @@
 
 完成紀錄、歷史驗證與部署限制保存在此；未完成工作與驗收條件見 [ROADMAP.md](ROADMAP.md)。每項修正有獨立 commit/push，發布程式不代表自動升級業務容器。
 
+## 2026-10-13 — R24 訓練追溯、分類矩陣與分頁預覽
+
+- 訓練前鎖定讀取各來源的完整 CSV 快照及 SHA256，validation／final fit／external test／importance 使用同一批 in-memory frames。record／published manifest 保存 training-v1：資料版本、runtime 套件版本、解析後 Pipeline 參數、fitted XGBoost 設定、驗證策略／seed／gap 與原始列位置的各折 counts/hash。舊模型不推測缺失追溯紀錄。
+- 新分類主要分數以整體 OOF 計算，fold 平均另存；validation_confusion／test_confusion 保存 labels、列=實際／欄=預測、sample_count 及明確正負標籤的 binary counts。測試含未知類別會追加標籤並計入錯誤；typed matrix 契約拒絕 shape／count／非有限值。可設定 class cap 預設 100，避免無界矩陣配置。補測只更新 test 分數／矩陣／CSV hash，不改驗證／audit／artifact。
+- 新增 GET /api/datasets/{id}/preview?offset=0&limit=50，最大 100 筆；文字／null 保留中文、多行、前導零、小數寫法及大整數，Vue 不解讀 HTML，快切／離頁忽略舊回應。模型清單依 Regression／Classification 顯示 R²/RMSE 或 Accuracy/F1；混合清單清楚標示分數類型。追溯資訊可展開，原回歸詳細指標與測試操作保留。
+- Windows/Python 3.12 完整後端 361 passed、28 skipped（環境限定整合／symlink）；前端 30 passed、型別／Vite build 通過，Compose config 通過。隔離 Linux R23/R24 專項 35 passed；唯讀 app/tests、無網路／host ports，臨時 container 自動移除，未接正式 DB 或部署業務容器。
+- 瀏覽器合成資料驗證分類矩陣、追溯展開、51–100 / 103 分頁、分類篩選 Accuracy/F1 及雙語切換不改使用者名稱／標籤。新增元件排除舊 TreeWalker；整體 i18n／效能改善仍在 ROADMAP。預覽 adapter 仍解析大小受限的檔案，非 streaming storage；直接 bool 特徵補值仍屬既有限制，未宣稱本項已支援。
+
 ## 2026-10-13 — R23 重要度重算與發布快照操作
 
 - 已訓練模型提供確認式「重新計算重要度」與「更新 Prediction 快照」，顯示來源、計算時間、快照時間、同步／待更新／缺失／未註冊與停用狀態。失敗保留現有報告，快切模型不套用舊確認／回應。

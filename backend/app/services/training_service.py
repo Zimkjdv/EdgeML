@@ -54,6 +54,8 @@ from app.infrastructure.file_lock import FileLock, child_path
 from app.services.training_data import clean_supervised_frame
 from app.services.validation_strategy import validation_splits
 from app.services.cross_validation import evaluate_folds
+from app.services.training_provenance import training_provenance
+from app.services.classification_evaluation import classification_confusion
 from app.services.prediction_csv import read_prediction_csv
 from app.infrastructure.atomic_json import write_json_atomic
 
@@ -121,7 +123,8 @@ class TrainingService:
         if child_path(self._trained_root, model_id).exists():
             raise PredictionValidationError('Output model already exists; refusing to overwrite it.')
         if progress: progress(10, "驗證資料與訓練設定")
-        frame = self._datasets.frame(request.dataset_id)
+        frame, primary_data = self._datasets.snapshot(request.dataset_id)
+        external_frame, external_data = self._datasets.snapshot(request.test_dataset_id, 'external_test') if request.test_dataset_id else (None, None)
         frame = clean_supervised_frame(frame, request.feature_columns, request.target_column, request.numeric_imputer)
         self._validate_request(frame, request)
         frame, cv = validation_splits(frame, request)
@@ -136,14 +139,18 @@ class TrainingService:
         validation = (self._classification_metrics(evaluated_target, fold_result.predictions, fold_result.scores, fold_result.probabilities)
                       if request.problem_type == "classification" else
                       self._regression_metrics(evaluated_target, fold_result.predictions, fold_result.scores))
+        validation_confusion = (classification_confusion(evaluated_target, fold_result.predictions,
+            np.sort(target.unique()), get_settings().classification_max_classes) if request.problem_type == 'classification' else None)
         if progress: progress(70, "以完整資料集訓練模型")
         pipeline.fit(features, target)
         if progress: progress(85, "儲存模型 artifact")
         validation_rmse = validation.get("rmse")
         validation_r2 = validation.get("r2")
-        test_metrics = self._external_test(pipeline, request) if request.test_dataset_id else None
+        test_metrics, test_confusion, test_context = self._external_test(pipeline, request, external_frame, external_data) if request.test_dataset_id else (None, None, None)
+        provenance = training_provenance(request, pipeline, frame, cv,
+            [primary_data] + ([external_data] if external_data else []), len(evaluated)).model_dump(mode='json')
         if progress: progress(90, "計算特徵重要度")
-        importance_frame = self._datasets.frame(request.test_dataset_id) if request.test_dataset_id else frame
+        importance_frame = external_frame if request.test_dataset_id else frame
         importance_frame = clean_supervised_frame(importance_frame, request.feature_columns, request.target_column, request.numeric_imputer)
         importance = calculate_importance(pipeline.predict, importance_frame[request.feature_columns],
                                          importance_frame[request.target_column], request.problem_type == 'classification',
@@ -155,6 +162,7 @@ class TrainingService:
         from app.domain.feature_defaults import summarize_features
         manifest['training_dataset_id'] = request.dataset_id
         manifest['feature_defaults'] = summarize_features(features)
+        manifest['provenance'] = provenance
         record = {
             "id": model_id,
             "name": request.model_name,
@@ -166,12 +174,19 @@ class TrainingService:
             "validation_r2": validation_r2,
             "test_rmse": test_metrics.get("rmse") if test_metrics else None,
             "test_r2": test_metrics.get("r2") if test_metrics else None,
+            "validation_accuracy": validation.get('accuracy'), "validation_f1": validation.get('f1'),
+            "test_accuracy": test_metrics.get('accuracy') if test_metrics else None,
+            "test_f1": test_metrics.get('f1') if test_metrics else None,
+            "validation_confusion": validation_confusion.model_dump(mode='json') if validation_confusion else None,
+            "test_confusion": test_confusion.model_dump(mode='json') if test_confusion else None,
+            "test_evaluation": test_context.model_dump(mode='json') if test_context else None,
+            "provenance": provenance,
             "status": "draft",
             "feature_columns": request.feature_columns,
             "validation_metrics": validation,
             "test_metrics": test_metrics,
             "settings": request.model_dump(),
-            "evaluation_version": "oof-v2",
+            "evaluation_version": "classification-oof-v1" if request.problem_type == 'classification' else "oof-v2",
             "validation_context": {"strategy": request.validation_strategy, "column": request.validation_column,
                 "time_gap": request.time_gap, "total_rows": len(frame), "evaluated_rows": len(evaluated),
                 "excluded_rows": len(frame) - len(evaluated)},
@@ -443,9 +458,8 @@ class TrainingService:
 
     def _evaluate(self, model_id: str, dataset_id: str) -> ExternalEvaluationResult:
         record = self.get(model_id)
-        frame = self._datasets.frame(dataset_id)
-        source = self._datasets.get(dataset_id)
-        return self._evaluate_frame(record, frame, source.name, dataset_id)
+        frame, data = self._datasets.snapshot(dataset_id, 'external_test')
+        return self._evaluate_frame(record, frame, data['name'], dataset_id, data['sha256'])
 
     def evaluate_csv(self, model_id: str, content: bytes, filename: str) -> ExternalEvaluationResult:
         with self._model_lock(model_id):
@@ -454,10 +468,10 @@ class TrainingService:
                                if feature.get('dtype', '').lower().startswith(('int', 'uint'))}
             frame = read_prediction_csv(content, integer_columns)
             source_name = filename.replace('\\', '/').rsplit('/', 1)[-1]
-            return self._evaluate_frame(record, frame, source_name)
+            return self._evaluate_frame(record, frame, source_name, sha256=hashlib.sha256(content).hexdigest())
 
     def _evaluate_frame(self, record: TrainedModelDetail, frame: pd.DataFrame,
-                        source_name: str, dataset_id: str | None = None) -> ExternalEvaluationResult:
+                        source_name: str, dataset_id: str | None = None, sha256: str | None = None) -> ExternalEvaluationResult:
         required = record.feature_columns + [record.target_column]
         missing = [column for column in required if column not in frame]
         if missing: raise PredictionValidationError(f"外部測試集缺少欄位：{', '.join(missing)}")
@@ -470,17 +484,20 @@ class TrainingService:
             if record.problem_type == 'regression': actual = pd.to_numeric(actual, errors='raise')
             predicted = pipeline.predict(frame[record.feature_columns])
             metrics = self._classification_metrics_from_predictions(actual, predicted) if record.problem_type == "classification" else self._metrics(actual, predicted)
+            confusion = classification_confusion(actual, predicted, pipeline.classes_, get_settings().classification_max_classes) if record.problem_type == 'classification' else None
         except ValueError as exc:
             raise PredictionValidationError('外部測試資料型態不正確：' + str(exc)) from exc
         context = TestEvaluationContext(source='dataset' if dataset_id else 'csv', source_name=source_name,
             dataset_id=dataset_id, input_rows=input_rows, evaluated_rows=len(frame),
-            dropped_rows=input_rows - len(frame), evaluated_at=datetime.now(timezone.utc))
+            dropped_rows=input_rows - len(frame), evaluated_at=datetime.now(timezone.utc), sha256=sha256)
         payload = self._read_record(source)
         payload["test_metrics"] = metrics; payload["test_rmse"] = metrics.get("rmse")
         payload["test_r2"] = metrics.get("r2")
+        payload['test_accuracy'], payload['test_f1'] = metrics.get('accuracy'), metrics.get('f1')
+        payload['test_confusion'] = confusion.model_dump(mode='json') if confusion else None
         payload['test_evaluation'] = context.model_dump(mode='json')
         write_json_atomic(source / "record.json", payload)
-        return ExternalEvaluationResult(metrics=metrics, context=context)
+        return ExternalEvaluationResult(metrics=metrics, context=context, confusion=confusion)
 
     def _model_lock(self, model_id: str) -> FileLock:
         if model_id.startswith('.'):
@@ -525,8 +542,19 @@ class TrainingService:
             return lock
 
     def list(self) -> list[TrainedModelSummary]:
-        records = [TrainedModelSummary.model_validate(self._read_record(path.parent)) for path in self._trained_root.glob("*/record.json") if not path.parent.name.startswith('.')]
+        records = [self._summary(self._read_record(path.parent)) for path in self._trained_root.glob("*/record.json") if not path.parent.name.startswith('.')]
         return sorted(records, key=lambda item: item.completed_at, reverse=True)
+
+    @staticmethod
+    def _summary(record):
+        # Legacy records already have these scores; expose them without inventing
+        # new provenance or recalculating old model results.
+        payload = dict(record)
+        for prefix in ('validation', 'test'):
+            metrics = record.get(prefix + '_metrics') or {}
+            for metric in ('accuracy', 'f1'):
+                payload[prefix + '_' + metric] = metrics.get(metric)
+        return TrainedModelSummary.model_validate(payload)
 
     def get(self, model_id: str) -> TrainedModelDetail:
         if model_id.startswith('.'): raise ModelNotFoundError('Internal staging models are not available.')
@@ -656,27 +684,26 @@ class TrainingService:
 
     @staticmethod
     def _classification_metrics(target, predictions, scores, probabilities=None) -> dict[str, float]:
-        metrics = {
-            "accuracy": round(float(scores["test_accuracy"].mean()), 6),
-            "f1": round(float(scores["test_f1"].mean()), 6),
-            "precision": round(float(scores["test_precision"].mean()), 6),
-            "recall": round(float(scores["test_recall"].mean()), 6),
-        }
+        metrics = TrainingService._classification_metrics_from_predictions(target, predictions)
+        metrics.update({f'cv_{key}_mean': round(float(scores[f'test_{key}'].mean()), 6)
+                        for key in ('accuracy', 'f1', 'precision', 'recall')})
         if probabilities is not None:
             metrics["roc_auc"] = round(float(roc_auc_score(target, probabilities)), 6)
         return metrics
 
     @staticmethod
     def _classification_metrics_from_predictions(target, predictions) -> dict[str, float]:
+        target = pd.Series(np.asarray(target)).infer_objects().to_numpy()
+        predictions = pd.Series(np.asarray(predictions)).infer_objects().to_numpy()
         return {
             "accuracy": round(float(accuracy_score(target, predictions)), 6),
-            "f1": round(float(f1_score(target, predictions, average="weighted")), 6),
+            "f1": round(float(f1_score(target, predictions, average="weighted", zero_division=0)), 6),
             "precision": round(float(precision_score(target, predictions, average="weighted", zero_division=0)), 6),
             "recall": round(float(recall_score(target, predictions, average="weighted", zero_division=0)), 6),
         }
 
-    def _external_test(self, pipeline: BaseEstimator, request: TrainingRequest) -> dict[str, float | None]:
-        frame = self._datasets.frame(request.test_dataset_id)
+    def _external_test(self, pipeline: BaseEstimator, request: TrainingRequest, frame: pd.DataFrame, data: dict):
+        input_rows = len(frame)
         required = request.feature_columns + [request.target_column]
         missing = [name for name in required if name not in frame]
         if missing:
@@ -684,7 +711,12 @@ class TrainingService:
         frame = clean_supervised_frame(frame, request.feature_columns, request.target_column, request.numeric_imputer)
         actual = frame[request.target_column] if request.problem_type == "classification" else pd.to_numeric(frame[request.target_column], errors="raise")
         predicted = pipeline.predict(frame[request.feature_columns])
-        return self._classification_metrics_from_predictions(actual, predicted) if request.problem_type == "classification" else self._metrics(actual, predicted)
+        metrics = self._classification_metrics_from_predictions(actual, predicted) if request.problem_type == "classification" else self._metrics(actual, predicted)
+        confusion = classification_confusion(actual, predicted, pipeline.classes_, get_settings().classification_max_classes) if request.problem_type == 'classification' else None
+        context = TestEvaluationContext(source='dataset', source_name=data['name'], dataset_id=request.test_dataset_id,
+            input_rows=input_rows, evaluated_rows=len(frame), dropped_rows=input_rows - len(frame),
+            evaluated_at=datetime.now(timezone.utc), sha256=data['sha256'])
+        return metrics, confusion, context
 
     @staticmethod
     def _metrics(actual, predicted) -> dict[str, float | None]:
@@ -709,6 +741,10 @@ class TrainingService:
             raise PredictionValidationError("可用資料列數不足以進行指定的交叉驗證折數。")
         if request.problem_type == "classification" and usable_target.nunique() < 2:
             raise PredictionValidationError("Classification target 至少需要兩個類別。")
+        if request.problem_type == 'classification' and usable_target.nunique() > get_settings().classification_max_classes:
+            raise PredictionValidationError(f'Classification supports at most {get_settings().classification_max_classes} labels.')
+        if request.problem_type == 'classification' and pd.api.types.is_numeric_dtype(usable_target) and not np.isfinite(usable_target.to_numpy()).all():
+            raise PredictionValidationError('Classification labels must be finite.')
         if request.problem_type == "classification" and usable_target.value_counts().min() < request.cv_folds:
             raise PredictionValidationError("每個 classification 類別的資料列數必須至少等於交叉驗證折數。")
         if request.problem_type == "regression" and not pd.api.types.is_numeric_dtype(frame[request.target_column]):

@@ -189,6 +189,7 @@ Audit persistence is mandatory: a CSV/JSON prediction whose history write fails 
 - `GET /api/datasets`: list uploaded datasets.
 - `POST /api/datasets`: upload a CSV and produce a column profile. UTF-8, UTF-8 BOM, CP950, and Big5 are accepted.
 - `GET /api/datasets/{dataset_id}`: retrieve columns, inferred ML types, missing values, IQR outliers, and numeric statistics.
+- `GET /api/datasets/{dataset_id}/preview?offset=0&limit=50`: paginated original cell text; `limit` 1–100, `offset` 0–10000000. Returns `{dataset_id, columns, rows, total_rows, offset, limit}`; rows are positional string/null arrays aligned with columns. Chinese/multiline, leading zeroes, decimal notation and large integers stay exact. Shared CSV missing tokens map to null, with no imputation. Out-of-range offsets return an empty page; unknown valid IDs 404, invalid IDs/page bounds 422. Normal API/session authentication applies; no whole-CSV download in this response.
 - `PATCH /api/datasets/{dataset_id}`: update a dataset display name without renaming its original CSV file.
 - `DELETE /api/datasets/{dataset_id}`: remove a stored source CSV and its profile metadata.
 - `POST /api/training`: train a regression or classification pipeline from a selected target and checked feature columns.
@@ -198,12 +199,19 @@ Audit persistence is mandatory: a CSV/JSON prediction whose history write fails 
 - `GET /api/queue/dead-letter`: list failed jobs retained for operator inspection, including attempt count and failure metadata.
 - `POST /api/queue/dead-letter/{job_id}/requeue`: move a dead-letter job back to the primary queue for manual replay while preserving its attempt history.
 - `GET /api/trained-models`: list draft and published training artifacts.
+- `GET /api/trained-models/{model_id}`: detailed scores plus optional `provenance`, `validation_confusion` and `test_confusion`; legacy missing fields remain null. Summaries include `validation_accuracy`, `validation_f1`, `test_accuracy`, `test_f1` alongside regression R²/RMSE fields.
 - `PATCH /api/trained-models/{model_id}`: update a model display name and its published manifest when applicable.
 - `DELETE /api/trained-models`: delete one or more Draft/Published model artifacts by id.
 - `POST /api/trained-models/{model_id}/publish`: validate and publish a draft model package to the prediction catalog.
 - `POST /api/trained-models/{model_id}/evaluate`: evaluate an existing trained model with a separately uploaded Dataset.
 
 Training supports Random Forest, Gradient Boosting, XGBoost, and AdaBoost regression, plus classifier variants for those algorithms and Logistic Regression classification. Training persists the full preprocessing and model pipeline as one trusted `model.pkl` artifact.
+
+New runs persist `provenance` in trained detail and the published package's `metadata.json`: raw dataset SHA256/IDs/row counts, runtime versions, resolved pipeline parameters, fitted XGBoost configuration and strategy/split index hashes. Query trained detail for the audit; the lightweight `/api/models` summaries do not include it. See [Training audit contract](04_Architecture.md#training-audit-and-classification-contract). No credentials or training row copies are recorded; provenance is not an automatic environment restore.
+
+New classification scores use pooled OOF predictions (`classification-oof-v1`) with weighted precision/recall/F1 and separately named `cv_*_mean`. Confusion reports contain explicit labels and a square nonnegative integer matrix (rows actual, columns predicted), sample_count and optional binary TN/FP/FN/TP with named positive/negative labels. Unseen external labels are appended; multiclass binary metadata is null. The configured maximum is 100 labels by default; exceeding it returns 422 before matrix allocation. Old scores are not silently recomputed.
+
+`POST /api/trained-models/{model_id}/evaluate` and `/evaluate-csv` return `{metrics, context, confusion}`; context now includes the exact test CSV `sha256`. Only test metrics/context/matrix change, not validation/provenance/artifacts. Failed tests preserve the preceding results. Regression `confusion` is null; external ROC AUC is not currently computed. Training-time external evaluation also records test context/hash using the same snapshot as its evaluation and importance.
 
 Training job creation uses a durable filesystem outbox. Once the job is saved, `POST /api/training/jobs` returns `202` even if Redis is temporarily unavailable; status remains `queued` with a recovery message and the original job ID. Poll that ID instead of resubmitting. Workers reconcile dispatch markers after reconnecting; a crash or lost enqueue reply does not silently strand accepted work. Short per-job state transactions protect start/cancel/retry/progress, while execution locks do not block polling. Queued cancellation persists `cancelled` under dispatch/ownership guards before removing the Redis ID. If Redis removal has an ambiguous outcome, retrying cancellation is safe and a Worker acknowledges leftover cancelled IDs without training. Jobs reserve output_model_id before fitting; result_model_id is populated on completion. Retries verify/reuse committed output without refitting. Hidden staging is excluded from model APIs; ownership/configuration/artifact verification failures are terminal and do not overwrite operator-modified outputs.
 

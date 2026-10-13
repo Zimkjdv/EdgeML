@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh-Hant"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Training audit synthetic preview</title></head>
+<body><div id="preview"></div><script type="module">
+import { createApp, h } from 'vue'
+import ElementPlus, { ElButton, ElCard } from 'element-plus'
+import 'element-plus/dist/index.css'
+import '../../src/styles.css'
+import { locale } from '../../src/i18n'
+import ClassificationEvaluation from '../../src/ClassificationEvaluation.vue'
+import TrainingProvenance from '../../src/TrainingProvenance.vue'
+import DatasetPreview from '../../src/DatasetPreview.vue'
+import TrainedModelList from '../../src/TrainedModelList.vue'
+const matrix = {labels:['不合格','合格'],matrix:[[20,2],[1,29]],sample_count:52,binary:{negative_label:'不合格',positive_label:'合格',tn:20,fp:2,fn:1,tp:29}}
+const model = {id:'synthetic',name:'分類模型：模型名稱',target_column:'品質',problem_type:'classification',algorithm:'random_forest_classifier',completed_at:'2026-10-13T00:00:00Z',status:'draft',evaluation_version:'classification-oof-v1',validation_metrics:{accuracy:49/52,f1:0.942},validation_accuracy:49/52,validation_f1:0.942,validation_confusion:matrix,test_metrics:null,test_confusion:null}
+const regression = {...model,id:'regression',name:'回歸模型',problem_type:'regression',algorithm:'xgboost',validation_r2:0.91,validation_rmse:0.12}
+const provenance = {version:'training-v1',data:[{dataset_id:'test-data',name:'中文資料版本',role:'training',input_rows:52,column_count:4,sha256:'a'.repeat(64)}],runtime:{python:'3.12',pandas:'2.x','scikit-learn':'1.x'},resolved_parameters:{model__n_estimators:100,model__max_depth:null},validation:{strategy:'random',seed:42,usable_rows:52,evaluated_rows:52,folds:[{fold:1,train_rows:41,validation_rows:11}]}}
+const request = async url => {
+  const offset = Number(new URL(url, location.href).searchParams.get('offset'))
+  return {dataset_id:'test-data',offset,limit:50,total_rows:103,columns:['中文類別','數值','大整數','缺值欄位'],rows:Array.from({length:Math.min(50,103-offset)},(_,i)=>[`資料第 ${offset+i+1} 列`,(offset+i).toString(),'9007199254740993',null])}
+}
+locale.value='zh-TW'
+createApp({setup:()=>()=>h('main',{style:'padding:20px'},[
+  h('p','合成資料預覽，不使用正式模型、資料或連線。'),
+  h(ElButton,{onClick:()=>{locale.value=locale.value==='en'?'zh-TW':'en'}},()=> '切換語言'),
+  h(ClassificationEvaluation,{model}), h(TrainingProvenance,{provenance}),
+  h(DatasetPreview,{datasetId:'test-data',request}),
+  h(TrainedModelList,{models:[model,regression],onOpen:()=>{},onPublish:()=>{},onLoad:()=>{},onDelete:()=>{}}),
+  h(ElCard,{class:'result-card unified-model-detail'},()=> '模型詳細資訊與評估仍保留'),
+])}).use(ElementPlus).mount('#preview')
+</script></body></html>

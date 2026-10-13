@@ -22,7 +22,7 @@ def read_prediction_csv(content: bytes, integer_columns: dict) -> pd.DataFrame:
     return read_csv_text(text, integer_columns)
 
 
-def read_csv_text(text: str, integer_columns: dict | None = None) -> pd.DataFrame:
+def read_csv_text(text: str, integer_columns: dict | type | None = None) -> pd.DataFrame:
     """Validate decoded CSV before Pandas can rename headers or discard cells."""
     try:
         if '\x00' in text:

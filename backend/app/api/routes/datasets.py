@@ -1,9 +1,9 @@
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, Query
 
 from app.api.dependencies import get_dataset_service
 from app.core.config import get_settings
 from app.domain.errors import ModelNotFoundError, PredictionValidationError
-from app.domain.training_schemas import DatasetDetail, DatasetRenameRequest, DatasetSummary
+from app.domain.training_schemas import DatasetDetail, DatasetRenameRequest, DatasetSummary, DatasetPreview
 from app.services.dataset_service import DatasetService
 
 router = APIRouter(prefix="/datasets")
@@ -37,6 +37,18 @@ def get_dataset(dataset_id: str, service: DatasetService = Depends(get_dataset_s
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except PredictionValidationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/{dataset_id}/preview", response_model=DatasetPreview)
+def preview_dataset(dataset_id: str, offset: int = Query(0, ge=0, le=10_000_000),
+                    limit: int = Query(50, ge=1, le=100),
+                    service: DatasetService = Depends(get_dataset_service)) -> DatasetPreview:
+    try:
+        return service.preview(dataset_id, offset, limit)
+    except ModelNotFoundError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except PredictionValidationError as exc:
+        raise HTTPException(422, str(exc)) from exc
 
 
 @router.patch("/{dataset_id}", response_model=DatasetDetail)
