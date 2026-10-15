@@ -13,3 +13,7 @@ class UnsupportedFrameworkError(Exception):
 class PredictionHistoryError(Exception):
     """Prediction cannot be returned unless its audit metadata is durable."""
 
+
+class WorkloadBusyError(Exception):
+    """Bounded work admission was exhausted; callers may retry later."""
+

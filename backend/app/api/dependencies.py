@@ -8,6 +8,8 @@ from app.core.config import get_settings
 from app.infrastructure.file_model_registry import FileModelRegistry
 from app.infrastructure.file_prediction_history_repository import FilePredictionHistoryRepository
 from app.infrastructure.predictor_factory import PredictorFactory
+from app.infrastructure.cached_predictor_provider import CachedPredictorProvider
+from app.services.dataset_ingestion import DatasetIngestion
 from app.infrastructure.redis_training_job_queue import RedisTrainingJobQueue
 from app.repositories.api_token import SqliteApiTokenRepository
 from app.services.api_token_service import ApiTokenService
@@ -25,7 +27,7 @@ from app.services.feature_importance_service import FeatureImportanceService, Pu
 
 def get_feature_importance_service() -> FeatureImportanceService:
     settings = get_settings()
-    return FeatureImportanceService(TrainedModelCatalog(settings.trained_models_root), PredictorFactory(),
+    return FeatureImportanceService(TrainedModelCatalog(settings.trained_models_root), get_predictor_provider(),
                                     get_dataset_service(), settings.trained_models_root,
                                     settings.models_root, get_model_registry())
 from app.repositories.web_session import WebSessionRepository
@@ -51,7 +53,7 @@ def has_web_session(request: Request) -> bool:
 def get_optimization_service(source: Literal['trained', 'registry'] = 'trained') -> OptimizationService:
     settings = get_settings()
     catalog = TrainedModelCatalog(settings.trained_models_root) if source == 'trained' else get_model_registry()
-    return OptimizationService(catalog, PredictorFactory(), settings.optimization_population, settings.optimization_iterations,
+    return OptimizationService(catalog, get_predictor_provider(), settings.optimization_population, settings.optimization_iterations,
         OptimizationDefaults(settings.trained_models_root, get_dataset_service()))
 
 
@@ -124,14 +126,26 @@ def get_published_feature_importance_service() -> PublishedFeatureImportanceServ
 
 
 @lru_cache
+def get_predictor_provider() -> CachedPredictorProvider:
+    settings = get_settings()
+    return CachedPredictorProvider(PredictorFactory(), settings.model_cache_entries,
+        settings.model_cache_artifact_bytes, settings.model_cache_load_concurrency)
+
+
+def get_dataset_ingestion(request: Request) -> DatasetIngestion:
+    return request.app.state.dataset_ingestion
+
+
+@lru_cache
 def get_prediction_service() -> PredictionService:
     settings = get_settings()
     catalog = get_model_registry()
     history_repository = FilePredictionHistoryRepository(settings.prediction_history_file, settings.prediction_history_max_records)
     return PredictionService(
         catalog=catalog,
-        predictor_factory=PredictorFactory(),
+        predictor_factory=get_predictor_provider(),
         history_repository=history_repository,
+        invalidate_runtime=get_predictor_provider().invalidate,
     )
 
 
@@ -149,6 +163,7 @@ def get_training_service() -> TrainingService:
         settings.models_root,
         jobs_root=settings.training_jobs_root,
         model_registry=get_model_registry(),
+        invalidate_runtime=get_predictor_provider().invalidate,
     )
 
 
@@ -171,4 +186,4 @@ def get_queue_operations_service() -> QueueOperationsService:
 
 @lru_cache
 def get_model_registry_service() -> ModelRegistryService:
-    return ModelRegistryService(get_model_registry())
+    return ModelRegistryService(get_model_registry(), get_predictor_provider().invalidate)

@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, Query
 
-from app.api.dependencies import get_dataset_service
+from app.api.dependencies import get_dataset_service, get_dataset_ingestion
 from app.core.config import get_settings
 from app.domain.errors import ModelNotFoundError, PredictionValidationError
 from app.domain.training_schemas import DatasetDetail, DatasetRenameRequest, DatasetSummary, DatasetPreview
 from app.services.dataset_service import DatasetService
+from app.services.dataset_ingestion import DatasetIngestion
 
 router = APIRouter(prefix="/datasets")
 
@@ -16,7 +17,8 @@ def list_datasets(service: DatasetService = Depends(get_dataset_service)) -> lis
 
 @router.post("", response_model=DatasetDetail, status_code=201)
 async def upload_dataset(
-    file: UploadFile = File(...), service: DatasetService = Depends(get_dataset_service)
+    file: UploadFile = File(...), service: DatasetService = Depends(get_dataset_service),
+    ingestion: DatasetIngestion = Depends(get_dataset_ingestion),
 ) -> DatasetDetail:
     if not file.filename or not file.filename.lower().endswith(".csv"):
         raise HTTPException(status_code=400, detail="只接受 CSV 檔案。")
@@ -24,7 +26,7 @@ async def upload_dataset(
     if len(content) > get_settings().max_upload_bytes:
         raise HTTPException(status_code=400, detail="CSV 超過系統設定的大小限制。")
     try:
-        return service.upload(file.filename, content)
+        return await ingestion.upload(service, file.filename, content)
     except PredictionValidationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

@@ -1,5 +1,5 @@
 import pytest
-from app.api.dependencies import get_api_token_service, get_prediction_service
+from app.api.dependencies import get_api_token_service, get_prediction_service, get_predictor_provider
 from app.core.config import get_settings
 
 
@@ -17,7 +17,9 @@ def isolated_token_storage(tmp_path, monkeypatch):
     get_settings.cache_clear()
     get_api_token_service.cache_clear()
     get_prediction_service.cache_clear()
+    get_predictor_provider.cache_clear()
     yield
     get_api_token_service.cache_clear()
     get_prediction_service.cache_clear()
+    get_predictor_provider.cache_clear()
     get_settings.cache_clear()

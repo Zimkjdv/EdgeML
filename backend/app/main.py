@@ -1,6 +1,9 @@
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from contextlib import asynccontextmanager
+from weakref import finalize
 
 from app.api.router import api_router
 from app.api.dependencies import require_api_token
@@ -10,12 +13,24 @@ from app.core.observability import RequestContextMiddleware, configure_logging
 from app.core.config import get_settings
 from app.core.request_limits import JsonPredictionBodyLimitMiddleware, prediction_request_validation_handler
 from app.infrastructure.model_storage import initialize_model_storage
+from app.domain.errors import WorkloadBusyError
+from app.services.dataset_ingestion import DatasetIngestion
 
 
 def create_app() -> FastAPI:
     configure_logging()
     initialize_model_storage(get_settings())
-    app = FastAPI(title="EdgeML", version="0.7.3")
+    ingestion = DatasetIngestion(get_settings().dataset_profile_concurrency)
+    @asynccontextmanager
+    async def lifespan(app):
+        try: yield
+        finally: ingestion.close()
+    app = FastAPI(title="EdgeML", version="0.7.3", lifespan=lifespan)
+    app.state.dataset_ingestion = ingestion
+    finalize(app, ingestion.close)
+    @app.exception_handler(WorkloadBusyError)
+    async def workload_busy(request, exc):
+        return JSONResponse(status_code=503, content={'detail': str(exc)}, headers={'Retry-After': '1'})
     app.add_exception_handler(RequestValidationError, prediction_request_validation_handler)
     app.add_middleware(JsonPredictionBodyLimitMiddleware)
     app.add_middleware(RequestContextMiddleware)

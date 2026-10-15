@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from uuid import uuid4
+from typing import Callable
 
 import pandas as pd
 from app.services.regression_metrics import regression_metrics
@@ -8,7 +9,7 @@ from app.services.prediction_csv import read_prediction_csv
 from app.services.prediction_ranges import filter_training_ranges
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
 
-from app.domain.errors import PredictionHistoryError, PredictionValidationError
+from app.domain.errors import ModelNotFoundError, PredictionHistoryError, PredictionValidationError
 from app.domain.problem_types import normalize_problem_type
 from app.domain.model_catalog import ModelCatalog
 from app.domain.schemas import (
@@ -18,7 +19,7 @@ from app.domain.schemas import (
     PredictionOutput,
     TrainingRangePolicy,
 )
-from app.infrastructure.predictor_factory import PredictorFactory
+from app.domain.optimization import PredictorProvider
 from app.repositories.prediction_history import PredictionHistoryRepository
 
 
@@ -26,12 +27,14 @@ class PredictionService:
     def __init__(
         self,
         catalog: ModelCatalog,
-        predictor_factory: PredictorFactory,
+        predictor_factory: PredictorProvider,
         history_repository: PredictionHistoryRepository,
+        invalidate_runtime: Callable[[str], None] | None = None,
     ) -> None:
         self._catalog = catalog
         self._predictor_factory = predictor_factory
         self._history_repository = history_repository
+        self._invalidate_runtime = invalidate_runtime
 
     def list_models(self) -> list[ModelSummary]:
         return self._catalog.list()
@@ -146,7 +149,11 @@ class PredictionService:
     def _prediction_manifest(self, model_id: str):
         try:
             return self._catalog.get(model_id)
+        except ModelNotFoundError:
+            if self._invalidate_runtime: self._invalidate_runtime(model_id)
+            raise
         except ValueError as exc:
+            if self._invalidate_runtime: self._invalidate_runtime(model_id)
             raise PredictionValidationError(f"Model '{model_id}' has an invalid manifest.") from exc
 
     def _record_history(self, manifest, source_filename: str, row_count: int) -> None:

@@ -186,6 +186,8 @@ Audit persistence is mandatory: a CSV/JSON prediction whose history write fails 
 
 ## Dataset and training APIs
 
+Model cold-load and dataset-profiling admission are bounded. Exhaustion returns `503` with `Retry-After: 1`; rejected profiling work does not invoke dataset storage. Accepted work may continue after a client disconnect, so check the list before resubmitting an ambiguous upload. Prediction still checks the active Registry and current artifacts before using its process-local cache. See [runtime limits](15_Runtime_Performance.md).
+
 - `GET /api/datasets`: list uploaded datasets.
 - `POST /api/datasets`: upload a CSV and produce a column profile. UTF-8, UTF-8 BOM, CP950, and Big5 are accepted.
 - `GET /api/datasets/{dataset_id}`: retrieve columns, inferred ML types, missing values, IQR outliers, and numeric statistics.

@@ -6,6 +6,8 @@ EdgeML is a self-hosted, plugin-oriented platform for batch predictions from CSV
 
 ## Implementation progress
 
+Runtime optimization now includes a bounded per-process model cache and a dedicated, bounded dataset-profiling pool. Registry checks remain authoritative; changed/deleted artifacts are not served from old cache entries. Overload returns `503` with `Retry-After: 1`. See [runtime limits and measured synthetic performance](docs/15_Runtime_Performance.md); artifact disk-byte budgets are not RAM limits.
+
 | Milestone | Status | Current scope |
 | --- | --- | --- |
 | v0.1 Prediction Server | Completed | Model selection, CSV prediction, missing-row cleanup, optional Ground Truth evaluation, metrics, preview, and download |

@@ -2,6 +2,14 @@
 
 完成紀錄、歷史驗證與部署限制保存在此；未完成工作與驗收條件見 [ROADMAP.md](ROADMAP.md)。每項修正有獨立 commit/push，發布程式不代表自動升級業務容器。
 
+## 2026-10-15 — R25 有界 Runtime 快取與資料分析資源
+
+- 新增 per-process LRU PredictorProvider，依 ID／manifest／版本／artifact 與 preprocess stat signature 區分；single-flight 首次載入、獨立 cold-load admission、失敗不保留、載入途中檔案變更拒絕結果。BasePredictor wrapper 序列化每 runtime predict/proba/explain，LRU／artifact disk-byte 上限可設定，0 entries 關閉快取。
+- Prediction 每次仍查 active Registry；本程序發布／改名／刪除／狀態變更會失效，其他程序下次請求驗證 catalog 與檔案。已接受請求可完成，無舊模型 fallback。stat signature 不是 integrity hash；可信部署須 atomic replace／增加版本，保留 timestamps 的原地修改不屬 hot-update 協議。
+- CSV profiling 改為 application-owned 有界 executor，不占事件迴圈／共用 sync-route pool；容量不足 503＋Retry-After。取消請求不提前釋放仍在執行的工作名額，關機不接受新工作；已接受工作可能在斷線後完成，需先查清單再重送。Compose／範例環境／API／架構與 runtime 文件同步。
+- Windows/Python 3.12 完整後端 370 passed、28 skipped（既有環境限定整合／symlink）。9 個新增專項涵蓋快取與 overload／取消／health 並行。合成 15.22 MB、120-tree RF 直接 PredictionService：30 次穩態 uncached/cached p50=172.434/86.921 ms、p95=249.531/126.984 ms；cached final RSS 約 173.16 MB，uncached 約 156.83 MB。測量含 tracemalloc，不含 HTTP/auth/disk history，不能外推正式容量或宣稱省 RAM；可重跑 scripts/benchmark_prediction_cache.py。
+- 業務資料／模型與正式容器未修改或部署；容量上限是 per-process retained artifacts 的磁碟 bytes，不是實際 RAM 硬上限。見 docs/15_Runtime_Performance.md。
+
 ## 2026-10-13 — R24 訓練追溯、分類矩陣與分頁預覽
 
 - 訓練前鎖定讀取各來源的完整 CSV 快照及 SHA256，validation／final fit／external test／importance 使用同一批 in-memory frames。record／published manifest 保存 training-v1：資料版本、runtime 套件版本、解析後 Pipeline 參數、fitted XGBoost 設定、驗證策略／seed／gap 與原始列位置的各折 counts/hash。舊模型不推測缺失追溯紀錄。

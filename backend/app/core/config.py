@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     importance_max_samples: int = Field(default=500, ge=2, le=2000)
     importance_repeats: int = Field(default=3, ge=1, le=10)
     classification_max_classes: int = Field(default=100, ge=2, le=200)
+    model_cache_entries: int = Field(default=4, ge=0, le=128)
+    model_cache_artifact_bytes: int = Field(default=256 * 1024 * 1024, ge=0, le=16 * 1024**3)
+    model_cache_load_concurrency: int = Field(default=2, ge=1, le=8)
+    dataset_profile_concurrency: int = Field(default=2, ge=1, le=8)
 
     @property
     def anonymous_api_enabled(self) -> bool:

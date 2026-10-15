@@ -12,6 +12,7 @@ import os
 from functools import wraps
 from threading import Lock
 from weakref import WeakValueDictionary
+from typing import Callable
 
 import joblib
 import numpy as np
@@ -99,7 +100,8 @@ class EncodedTargetClassifier(ClassifierMixin, BaseEstimator):
 
 
 class TrainingService:
-    def __init__(self, datasets: DatasetService, trained_models_root: Path, publish_root: Path, jobs_root: Path | None = None, model_registry: ModelRegistry | None = None) -> None:
+    def __init__(self, datasets: DatasetService, trained_models_root: Path, publish_root: Path, jobs_root: Path | None = None, model_registry: ModelRegistry | None = None,
+                 invalidate_runtime: Callable[[str], None] | None = None) -> None:
         self._datasets = datasets
         self._trained_root = trained_models_root
         self._publish_root = publish_root
@@ -108,6 +110,7 @@ class TrainingService:
         self._jobs_root = jobs_root or trained_models_root.parent / "training_jobs"
         self._jobs_root.mkdir(parents=True, exist_ok=True)
         self._model_registry = model_registry
+        self._invalidate_runtime = invalidate_runtime
         self._logger = logging.getLogger("edgeml.training")
         self._state_locks = WeakValueDictionary()
         self._model_locks = WeakValueDictionary()
@@ -600,6 +603,7 @@ class TrainingService:
             payload = self._read_record(source)
             payload['status'] = 'published'
             write_json_atomic(source / 'record.json', payload)
+            if self._invalidate_runtime: self._invalidate_runtime(model_id)
             return TrainedModelDetail.model_validate(payload)
 
     def _verify_published_artifact(self, source: Path, destination: Path, artifact: str):
@@ -646,6 +650,7 @@ class TrainingService:
                     published_manifest = ModelManifest.model_validate({**metadata, "model_path": metadata_path.parent})
                     self._model_registry.update_manifest(published_manifest)
         write_json_atomic(source / "record.json", payload)
+        if self._invalidate_runtime: self._invalidate_runtime(model_id)
         return TrainedModelDetail.model_validate(payload)
 
     def delete_many(self, model_ids: list[str]) -> None:
@@ -670,6 +675,7 @@ class TrainingService:
                     except ModelNotFoundError:
                         pass
         shutil.rmtree(source)
+        if self._invalidate_runtime: self._invalidate_runtime(model_id)
 
     @staticmethod
     def _regression_metrics(target, predictions, scores) -> dict[str, float | None]:
