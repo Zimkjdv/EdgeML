@@ -1,4 +1,5 @@
 import { ref } from 'vue'
+import { trainedModelMessages } from './trainedModelMessages'
 
 export type Locale = 'zh-TW' | 'en'
 
@@ -11,6 +12,7 @@ const registryLabels = {
 
 const messages = {
   'zh-TW': {
+    ...trainedModelMessages['zh-TW'],
     brandTag: 'EDGE MACHINE LEARNING',
     brandTitle: 'EdgeML 工作平台',
     brandDescription: 'CSV 資料管理、模型訓練與企業內部預測服務。',
@@ -137,6 +139,7 @@ const messages = {
     apiTokens: 'API Token', apiTokenManagement: 'API Token 管理', apiTokenHint: '產生並撤銷 API 存取權杖。完整 token 只會在建立時顯示一次。', createApiToken: '產生 Token', tokenName: 'Token 名稱', tokenScopes: '權限範圍', apiScope: 'API 存取', tokenManagementScope: 'Token 管理', expiresAt: '到期時間', noExpiry: '永不到期', tokenPrefix: 'Token 前綴', createdAt: '建立時間', lastUsedAt: '最後使用', tokenStatus: '狀態', revokeToken: '撤銷 Token', tokenCreated: 'Token 已建立，請立即複製保存。', copyToken: '複製 Token', tokenShownOnce: '基於安全考量，完整 Token 只顯示這一次。', noApiTokens: '目前沒有 API Token。', activeToken: '啟用', expiredToken: '已過期', revokedToken: '已撤銷', tokenManagementRequired: '需要 Token 管理權限。',
   },
   en: {
+    ...trainedModelMessages.en,
     ...registryLabels,
     apiTokens: 'API Tokens', apiTokenManagement: 'API Token Management', apiTokenHint: 'Create and revoke API access tokens. The complete token is shown only once after creation.', createApiToken: 'Create Token', tokenName: 'Token Name', tokenScopes: 'Scopes', apiScope: 'API Access', tokenManagementScope: 'Token Management', expiresAt: 'Expires At', noExpiry: 'Never expires', tokenPrefix: 'Token Prefix', createdAt: 'Created At', lastUsedAt: 'Last Used', tokenStatus: 'Status', revokeToken: 'Revoke Token', tokenCreated: 'Token created. Copy it now.', copyToken: 'Copy Token', tokenShownOnce: 'For security, the complete token is displayed only once.', noApiTokens: 'No API tokens yet.', activeToken: 'Active', expiredToken: 'Expired', revokedToken: 'Revoked', tokenManagementRequired: 'Token management permission is required.',
     queue: 'Queue', queueOperations: 'Queue Operations', queueHint: 'Inspect training queue state, replay failed jobs, and cancel training jobs that have not started.', queued: 'Queued', processing: 'Processing', deadLetter: 'Dead-letter', refreshQueue: 'Refresh', queuedJobs: 'Queued Jobs', processingJobs: 'Processing Jobs', deadLetterJobs: 'Dead-letter Jobs', noQueuedJobs: 'No queued jobs.', noProcessingJobs: 'No processing jobs.', noDeadLetterJobs: 'No dead-letter jobs.', cancelJob: 'Cancel Job', requeueJob: 'Requeue', attempts: 'Attempts', failure: 'Failure', queueRequeued: 'Job requeued.', queueCancelled: 'Job cancelled.', queueActionFailed: 'Queue operation failed.',
@@ -184,7 +187,13 @@ const messages = {
 
 export type TranslationKey = keyof typeof messages['zh-TW']
 
-export const t = (key: TranslationKey): string => messages[locale.value][key]
+export const t = (key: TranslationKey, values?: Record<string,string|number>): string => {
+  const message = messages[locale.value][key]
+  if (!values) return message
+  // Single-pass substitution: supplied data is text, never recursively translated.
+  return message.replace(/\{(\w+)\}/g, (placeholder, name:string) =>
+    Object.prototype.hasOwnProperty.call(values, name) ? String(values[name]) : placeholder)
+}
 
 export const toggleLocale = () => {
   locale.value = locale.value === 'zh-TW' ? 'en' : 'zh-TW'

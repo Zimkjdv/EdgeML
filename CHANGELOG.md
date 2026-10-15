@@ -2,6 +2,13 @@
 
 完成紀錄、歷史驗證與部署限制保存在此；未完成工作與驗收條件見 [ROADMAP.md](ROADMAP.md)。每項修正有獨立 commit/push，發布程式不代表自動升級業務容器。
 
+## 2026-10-15 — R16 顯式語系與原始資料保護
+
+- 移除 trained-page TreeWalker、雙向字串替換、onUpdated text rewriting 與全域 DOM tooltip listeners；詳細頁改為 typed i18n keys，涵蓋 OOF／coverage、驗證／測試完整回歸指標、R² tooltip 與舊版提示。目標欄位使用中性標籤，不誤宣稱分類 target 僅可數值。
+- 語系參數採單次插值，不遞迴翻譯或解讀資料為 HTML。模型／特徵／target／rename input 直接呈現原值，特徵 title 保留原名；完整 canonical ID 複製與 API 訓練 payload 不受語言影響。詳細指標、補測 CSV、圖表及原本數值／公式不變。
+- Node 30＋Vue 元件 15 測試、型別／build 與隔離瀏覽器流程：反覆切換中英文、名稱恰等於 UI label、原始資料／request body 不變、兩種語系複製完整 ID 一致、返回模型頁保留選取與名稱。使用合成 API／資料，不接正式 DB／模型。
+- README／架構及 docs/17_I18n_Data_Safety.md 同步；完成紀錄由 ROADMAP 移至此。既有 dependency audit／大共用 vendor chunk 與更完整 CI 仍由 R18/R29 追蹤，本項不宣稱已解決。
+
 ## 2026-10-15 — R15 前端模組與非同步生命週期
 
 - App 改為導航／provider shell，分頁與 Optimization 延遲載入；typed JSON client、資源 types、workspace／latest-task／route／training-job composables 分離，保留完整詳細指標、補測 CSV、超參數與卡片布局。

@@ -36,12 +36,12 @@ test('dataset preview range, bounded paging and stale-response guards', () => {
   assert.ok(!component.includes('v-html'))
 })
 
-test('new native i18n components cannot be mutated by legacy text replacement or hide regression details', () => {
-  const app = ['pages/TrainedModelsPage.vue','pages/DatasetPage.vue','composables/useTrainedModelPresentation.ts'].map(path => readFileSync(new URL(`../src/${path}`, import.meta.url), 'utf8')).join('\n')
-  assert.match(app, /\.training-audit, \.classification-evaluation, \.trained-model-list/)
+test('explicit i18n preserves native components and full regression details without DOM substitution', () => {
+  const app = ['pages/TrainedModelsPage.vue','pages/DatasetPage.vue'].map(path => readFileSync(new URL(`../src/${path}`, import.meta.url), 'utf8')).join('\n')
+  assert.doesNotMatch(app, /createTreeWalker|nodeValue|applyTrainedModelLocale/)
   assert.match(app, /<ClassificationEvaluation/)
   assert.match(app, /<DatasetPreview/)
   assert.match(app, /<TrainingProvenance/)
-  assert.match(app, /驗證 相關係數 Pearson R/)
+  assert.match(app, /t\('detailValidationPearson'\)/)
   assert.match(app, /class="result-card unified-model-detail"/)
 })

@@ -1,31 +1,118 @@
 <script setup lang="ts">
-import { Download, QuestionFilled, UploadFilled } from '@element-plus/icons-vue'
-import { locale, t } from '../i18n'
+import { computed } from 'vue'
+import { QuestionFilled } from '@element-plus/icons-vue'
+import { t } from '../i18n'
 import { injectWorkspace } from '../workspaceContext'
-import type { Dataset, TrainedModel } from '../workspaceTypes'
 import FeatureImportance from '../FeatureImportance.vue'
 import ModelEvaluation from '../ModelEvaluation.vue'
 import TrainingProvenance from '../TrainingProvenance.vue'
 import ClassificationEvaluation from '../ClassificationEvaluation.vue'
 import TrainedModelList from '../TrainedModelList.vue'
-import { useTrainedModelPresentation } from '../composables/useTrainedModelPresentation'
-useTrainedModelPresentation()
+
 const {
-  models, datasets, trainedModels, selectedTrainedModel, trainedModelRename, selectedTrainedModelIds, formatNumber, api, publish, loadPublished, openTrainedModel, renameTrainedModel, onModelEvaluated, deleteTrainedModels, modelDetailLoading
+  datasets, trainedModels, selectedTrainedModel, trainedModelRename,
+  selectedTrainedModelIds, formatNumber, api, publish, loadPublished,
+  openTrainedModel, renameTrainedModel, onModelEvaluated, deleteTrainedModels,
+  modelDetailLoading,
 } = injectWorkspace()
+
+const strategy = computed(() => t(selectedTrainedModel.value?.settings?.validation_strategy === 'time'
+  ? 'detailTimeStrategy' : selectedTrainedModel.value?.settings?.validation_strategy === 'group'
+  ? 'detailGroupStrategy' : 'detailRandomStrategy'))
+const coverage = computed(() => t('detailCoverage', {
+  total: String(selectedTrainedModel.value?.validation_context?.total_rows ?? '—'),
+  evaluated: String(selectedTrainedModel.value?.validation_context?.evaluated_rows ?? '—'),
+  excluded: String(selectedTrainedModel.value?.validation_context?.excluded_rows ?? '—'),
+}))
+const metricRows = [
+  { metric:'mae', validation:'detailValidationMAE', test:'detailTestMAE' },
+  { metric:'mape', validation:'detailValidationMAPE', test:'detailTestMAPE' },
+  { metric:'rmse', validation:'detailValidationRMSE', test:'detailTestRMSE' },
+  { metric:'nrmse', validation:'detailValidationNRMSE', test:'detailTestNRMSE' },
+  { metric:'max_error', validation:'detailValidationMaxError', test:'detailTestMaxError' },
+  { metric:'target_mean', validation:'detailValidationTargetMean', test:'detailTestTargetMean' },
+] as const
 </script>
 
 <template>
-<section class="trained-models-page">
-<el-alert v-if="modelDetailLoading" title="載入模型…" type="info" :closable="false" />
-      <FeatureImportance v-if="selectedTrainedModel" :key="selectedTrainedModel.id" :model-id="selectedTrainedModel.id" :published="selectedTrainedModel.status === 'published'" />
-      <el-alert v-if="selectedTrainedModel?.problem_type === 'regression' && selectedTrainedModel.evaluation_version !== 'oof-v2'" title="舊版評估：驗證指標混用各折平均與折外預測，請重新訓練取得一致的新版指標。" type="warning" :closable="false" show-icon class="bottom-gap" />
-      <el-alert v-else-if="selectedTrainedModel?.problem_type === 'regression'" :title="`新版折外評估 · 策略：${selectedTrainedModel.settings?.validation_strategy === 'time' ? '時間順序' : selectedTrainedModel.settings?.validation_strategy === 'group' ? '批次分組' : '隨機分折'}`" type="success" :closable="false" show-icon class="bottom-gap" />
-      <p v-if="selectedTrainedModel?.validation_context?.evaluated_rows !== undefined" class="helper">有效資料 {{ selectedTrainedModel.validation_context.total_rows }} 筆；折外評估 {{ selectedTrainedModel.validation_context.evaluated_rows }} 筆；未納入評估 {{ selectedTrainedModel.validation_context.excluded_rows }} 筆。</p>
-      <ClassificationEvaluation v-if="selectedTrainedModel?.problem_type === 'classification'" :model="selectedTrainedModel" />
-      <el-card v-if="selectedTrainedModel" class="result-card unified-model-detail"><template #header><div class="result-heading"><span>{{ selectedTrainedModel.name }}：模型詳細資訊與評估</span><span><el-button v-if="selectedTrainedModel.status === 'draft'" type="primary" class="publish-button" @click="publish(selectedTrainedModel)">發布至 Prediction</el-button><el-button v-else type="success" class="load-button" @click="loadPublished(selectedTrainedModel)">載入到 Prediction</el-button></span></div></template><ModelEvaluation :key="selectedTrainedModel.id" :model="selectedTrainedModel" :datasets="datasets" :request="api" @evaluated="onModelEvaluated" /><el-descriptions :column="2" border><el-descriptions-item label="演算法">{{ selectedTrainedModel.algorithm }}</el-descriptions-item><el-descriptions-item label="目標欄位">{{ selectedTrainedModel.target_column }}</el-descriptions-item><el-descriptions-item :span="2"><template #label>訓練特徵（{{ selectedTrainedModel.feature_columns?.length ?? 0 }} 個）</template><div class="feature-list"><el-tag v-for="feature in selectedTrainedModel.feature_columns" :key="feature" size="small" effect="plain">{{ feature }}</el-tag></div></el-descriptions-item><template v-if="selectedTrainedModel.problem_type === 'regression'"><el-descriptions-item><template #label>驗證 決定係數 R² <el-tooltip content="R² = 1 − SSE/SST。最佳為 1，可為負值；常數目標的整體 R² 無法定義。各折平均不等於整體 OOF R²，參考價值須依領域與測試資料判斷。" placement="top"><el-icon><QuestionFilled /></el-icon></el-tooltip></template>{{ formatNumber(selectedTrainedModel.validation_metrics?.r2) }}</el-descriptions-item><el-descriptions-item><template #label>測試 決定係數 R² <el-tooltip content="R² = 1 − SSE/SST。最佳為 1，可為負值；常數目標的整體 R² 無法定義。各折平均不等於整體 OOF R²，參考價值須依領域與測試資料判斷。" placement="top"><el-icon><QuestionFilled /></el-icon></el-tooltip></template>{{ formatNumber(selectedTrainedModel.test_metrics?.r2) }}</el-descriptions-item><el-descriptions-item label="驗證 相關係數 Pearson R">{{ formatNumber(selectedTrainedModel.validation_metrics?.pearson_r) }}</el-descriptions-item><el-descriptions-item label="測試 相關係數 Pearson R">{{ formatNumber(selectedTrainedModel.test_metrics?.pearson_r) }}</el-descriptions-item><el-descriptions-item label="驗證 MAE">{{ formatNumber(selectedTrainedModel.validation_metrics?.mae) }}</el-descriptions-item><el-descriptions-item label="測試 MAE">{{ formatNumber(selectedTrainedModel.test_metrics?.mae) }}</el-descriptions-item><el-descriptions-item label="驗證 MAPE (%)">{{ formatNumber(selectedTrainedModel.validation_metrics?.mape) }}</el-descriptions-item><el-descriptions-item label="測試 MAPE (%)">{{ formatNumber(selectedTrainedModel.test_metrics?.mape) }}</el-descriptions-item><el-descriptions-item label="驗證 RMSE">{{ formatNumber(selectedTrainedModel.validation_metrics?.rmse) }}</el-descriptions-item><el-descriptions-item label="測試 RMSE">{{ formatNumber(selectedTrainedModel.test_metrics?.rmse) }}</el-descriptions-item><el-descriptions-item label="驗證 NRMSE（以範圍正規化）">{{ formatNumber(selectedTrainedModel.validation_metrics?.nrmse) }}</el-descriptions-item><el-descriptions-item label="測試 NRMSE（以範圍正規化）">{{ formatNumber(selectedTrainedModel.test_metrics?.nrmse) }}</el-descriptions-item><el-descriptions-item label="驗證 最大誤差">{{ formatNumber(selectedTrainedModel.validation_metrics?.max_error) }}</el-descriptions-item><el-descriptions-item label="測試 最大誤差">{{ formatNumber(selectedTrainedModel.test_metrics?.max_error) }}</el-descriptions-item><el-descriptions-item label="驗證 目標平均">{{ formatNumber(selectedTrainedModel.validation_metrics?.target_mean) }}</el-descriptions-item><el-descriptions-item label="測試 目標平均">{{ formatNumber(selectedTrainedModel.test_metrics?.target_mean) }}</el-descriptions-item><el-descriptions-item label="各折 RMSE 平均">{{ formatNumber(selectedTrainedModel.validation_metrics?.cv_rmse_mean) }}</el-descriptions-item><el-descriptions-item label="各折 RMSE 標準差">{{ formatNumber(selectedTrainedModel.validation_metrics?.rmse_std) }}</el-descriptions-item><el-descriptions-item label="各折 MAE 平均">{{ formatNumber(selectedTrainedModel.validation_metrics?.cv_mae_mean) }}</el-descriptions-item><el-descriptions-item><template #label>各折 R² 平均 <el-tooltip content="R² = 1 − SSE/SST。最佳為 1，可為負值；常數目標的整體 R² 無法定義。各折平均不等於整體 OOF R²，參考價值須依領域與測試資料判斷。" placement="top"><el-icon><QuestionFilled /></el-icon></el-tooltip></template>{{ formatNumber(selectedTrainedModel.validation_metrics?.cv_r2_mean) }}</el-descriptions-item></template></el-descriptions><p v-if="selectedTrainedModel.problem_type === 'regression'" class="helper">新版驗證指標以整體折外預測（OOF）計算；各折平均與 RMSE 標準差另列。NRMSE = RMSE ÷（真實目標最大值 − 最小值），不是百分比。真實目標含零值時 MAPE 顯示「—」；接近零時 MAPE 可能偏大。常數目標的 R²、NRMSE，以及常數輸入或不足兩筆的 Pearson R 無法定義，顯示「—」。R² 可為負值；Pearson R 高不代表預測誤差小，須配合 MAE、RMSE 與領域要求判讀。</p><p v-if="selectedTrainedModel.problem_type === 'regression' &amp;&amp; selectedTrainedModel.evaluation_version !== 'oof-v2'" class="helper">此為舊版模型紀錄，驗證分數未自動重算。請重新訓練以取得新版 OOF 指標；外部測試可重新執行評估。</p><p class="helper">未提供測試資料或指標無法計算時顯示「—」。</p></el-card>
-      <TrainingProvenance v-if="selectedTrainedModel" :provenance="selectedTrainedModel.provenance" />
-      <el-card v-if="selectedTrainedModel" class="result-card"><template #header>修改模型名稱</template><el-form inline><el-form-item label="模型名稱"><el-input v-model="trainedModelRename" /></el-form-item><el-button type="primary" @click="renameTrainedModel">儲存名稱</el-button></el-form></el-card>
-      <TrainedModelList :models="trainedModels" @open="openTrainedModel" @publish="publish" @load="loadPublished" @delete="deleteTrainedModels" @selection="ids => selectedTrainedModelIds = ids" />
-    </section>
+  <section class="trained-models-page">
+    <el-alert v-if="modelDetailLoading" :title="t('detailLoading')" type="info" :closable="false" />
+    <FeatureImportance v-if="selectedTrainedModel" :key="selectedTrainedModel.id"
+      :model-id="selectedTrainedModel.id" :published="selectedTrainedModel.status === 'published'" />
+    <el-alert v-if="selectedTrainedModel?.problem_type === 'regression' && selectedTrainedModel.evaluation_version !== 'oof-v2'"
+      :title="t('detailLegacyWarning')" type="warning" :closable="false" show-icon class="bottom-gap" />
+    <el-alert v-else-if="selectedTrainedModel?.problem_type === 'regression'"
+      :title="t('detailOofStrategy', {strategy})" type="success" :closable="false" show-icon class="bottom-gap" />
+    <p v-if="selectedTrainedModel?.validation_context?.evaluated_rows !== undefined" class="helper">{{ coverage }}</p>
+    <ClassificationEvaluation v-if="selectedTrainedModel?.problem_type === 'classification'" :model="selectedTrainedModel" />
+
+    <el-card v-if="selectedTrainedModel" class="result-card unified-model-detail">
+      <template #header>
+        <div class="result-heading">
+          <span>{{ selectedTrainedModel.name }}：{{ t('modelDetails') }}</span>
+          <span>
+            <el-button v-if="selectedTrainedModel.status === 'draft'" type="primary" class="publish-button"
+              @click="publish(selectedTrainedModel)">{{ t('publishToPrediction') }}</el-button>
+            <el-button v-else type="success" class="load-button"
+              @click="loadPublished(selectedTrainedModel)">{{ t('loadToPrediction') }}</el-button>
+          </span>
+        </div>
+      </template>
+      <ModelEvaluation :key="selectedTrainedModel.id" :model="selectedTrainedModel" :datasets="datasets"
+        :request="api" @evaluated="onModelEvaluated" />
+      <el-descriptions :column="2" border>
+        <el-descriptions-item :label="t('algorithm')">{{ selectedTrainedModel.algorithm }}</el-descriptions-item>
+        <el-descriptions-item :label="t('detailTargetColumn')">{{ selectedTrainedModel.target_column }}</el-descriptions-item>
+        <el-descriptions-item :span="2">
+          <template #label>{{ t('detailFeatureCount', {count:selectedTrainedModel.feature_columns?.length ?? 0}) }}</template>
+          <div class="feature-list">
+            <el-tag v-for="feature in selectedTrainedModel.feature_columns" :key="feature" size="small" effect="plain">
+              <span :title="feature">{{ feature }}</span>
+            </el-tag>
+          </div>
+        </el-descriptions-item>
+        <template v-if="selectedTrainedModel.problem_type === 'regression'">
+          <el-descriptions-item>
+            <template #label>{{ t('detailValidationR2') }}
+              <el-tooltip :content="t('detailR2Help')" placement="top"><el-icon><QuestionFilled /></el-icon></el-tooltip>
+            </template>{{ formatNumber(selectedTrainedModel.validation_metrics?.r2) }}
+          </el-descriptions-item>
+          <el-descriptions-item>
+            <template #label>{{ t('detailTestR2') }}
+              <el-tooltip :content="t('detailR2Help')" placement="top"><el-icon><QuestionFilled /></el-icon></el-tooltip>
+            </template>{{ formatNumber(selectedTrainedModel.test_metrics?.r2) }}
+          </el-descriptions-item>
+          <el-descriptions-item :label="t('detailValidationPearson')">{{ formatNumber(selectedTrainedModel.validation_metrics?.pearson_r) }}</el-descriptions-item>
+          <el-descriptions-item :label="t('detailTestPearson')">{{ formatNumber(selectedTrainedModel.test_metrics?.pearson_r) }}</el-descriptions-item>
+          <template v-for="row in metricRows" :key="row.metric">
+            <el-descriptions-item :label="t(row.validation)">{{ formatNumber(selectedTrainedModel.validation_metrics?.[row.metric]) }}</el-descriptions-item>
+            <el-descriptions-item :label="t(row.test)">{{ formatNumber(selectedTrainedModel.test_metrics?.[row.metric]) }}</el-descriptions-item>
+          </template>
+          <el-descriptions-item :label="t('detailFoldRMSEMean')">{{ formatNumber(selectedTrainedModel.validation_metrics?.cv_rmse_mean) }}</el-descriptions-item>
+          <el-descriptions-item :label="t('detailFoldRMSEStd')">{{ formatNumber(selectedTrainedModel.validation_metrics?.rmse_std) }}</el-descriptions-item>
+          <el-descriptions-item :label="t('detailFoldMAEMean')">{{ formatNumber(selectedTrainedModel.validation_metrics?.cv_mae_mean) }}</el-descriptions-item>
+          <el-descriptions-item>
+            <template #label>{{ t('detailFoldR2Mean') }}
+              <el-tooltip :content="t('detailR2Help')" placement="top"><el-icon><QuestionFilled /></el-icon></el-tooltip>
+            </template>{{ formatNumber(selectedTrainedModel.validation_metrics?.cv_r2_mean) }}
+          </el-descriptions-item>
+        </template>
+      </el-descriptions>
+      <p v-if="selectedTrainedModel.problem_type === 'regression'" class="helper">{{ t('detailMetricHelp') }}</p>
+      <p v-if="selectedTrainedModel.problem_type === 'regression' && selectedTrainedModel.evaluation_version !== 'oof-v2'"
+        class="helper">{{ t('detailLegacyHelp') }}</p>
+      <p class="helper">{{ t('detailMissingTestHelp') }}</p>
+    </el-card>
+
+    <TrainingProvenance v-if="selectedTrainedModel" :provenance="selectedTrainedModel.provenance" />
+    <el-card v-if="selectedTrainedModel" class="result-card model-rename-card">
+      <template #header>{{ t('renameModel') }}</template>
+      <el-form inline>
+        <el-form-item :label="t('modelName')"><el-input v-model="trainedModelRename" /></el-form-item>
+        <el-button type="primary" @click="renameTrainedModel">{{ t('saveName') }}</el-button>
+      </el-form>
+    </el-card>
+    <TrainedModelList :models="trainedModels" @open="openTrainedModel" @publish="publish" @load="loadPublished"
+      @delete="deleteTrainedModels" @selection="ids => selectedTrainedModelIds = ids" />
+  </section>
 </template>

@@ -1,5 +1,7 @@
 # Architecture
 
+UI text and user data are separate: explicit typed translation keys replace trained-page DOM rewriting, with one-pass parameter interpolation and raw data rendering. See [i18n data safety](17_I18n_Data_Safety.md).
+
 Frontend composition and request ownership are documented in [Frontend lifecycle](16_Frontend_Lifecycle.md): lazy pages, typed JSON API client, shared workspace composables, last-request-wins detail loading and resumable, page-scoped training polling.
 
 Inference depends on `PredictorProvider`; composition supplies a per-process bounded LRU of synchronized `BasePredictor` runtimes, not framework-specific adapters in services. Active Registry resolution remains per request. Admission, fingerprints, lifecycle invalidation, thread safety and measured limits are detailed in [Runtime performance](15_Runtime_Performance.md). Dataset profiling uses a separate bounded executor and preserves its slot through client cancellation until work actually ends; it does not block the ASGI event loop.

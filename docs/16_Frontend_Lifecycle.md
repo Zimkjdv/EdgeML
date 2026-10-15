@@ -20,7 +20,7 @@ Pages unmount when left; shared form selections remain in memory. Dataset and mo
 4. Completed jobs open their detail only while Training is still active. Failure/cancellation/404 clears the stored job; transient connection errors display a warning and retry with backoff (capped at 15 seconds).
 5. If model detail retrieval fails after completion, the job is already terminal: find the model in Trained Models rather than resubmitting. Storage may be disabled; recovery is then limited to the current session.
 
-This tracks one job per browser origin. Local 5173 and Docker 5180 have separate storage. It is not a multi-user job-history system. Files/form contents do not survive refresh. The old trained-page DOM translation remains isolated until R16; it is not considered safe for arbitrary data names yet.
+This tracks one job per browser origin. Local 5173 and Docker 5180 have separate storage. It is not a multi-user job-history system. Files/form contents do not survive refresh. R16 subsequently removed trained-page DOM translation; see [i18n data safety](17_I18n_Data_Safety.md).
 
 ## Verification
 

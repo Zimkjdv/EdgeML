@@ -407,6 +407,8 @@ Parameter Optimization is available as a new bilingual page: select a trained re
 
 ## Documentation
 
+Trained-model details now use explicit bilingual translation keys rather than rewriting DOM text. Switching language preserves original model/feature names and canonical copied IDs. Metric formulas and API payloads are unchanged. See [UI translation and data safety](docs/17_I18n_Data_Safety.md).
+
 The frontend loads workspace pages on demand. Dataset/model selection ignores obsolete replies; Training pauses status polling when left and can recover its saved job ID after refresh. Reopen Training from the reminder to check an existing job instead of submitting again. Full regression details and supplemental CSV testing remain available. See [frontend lifecycle and isolated UI verification](docs/16_Frontend_Lifecycle.md).
 
 Parameter Optimization now prioritizes in-tolerance recommendations, validates inputs immediately, supports optional operating-baseline comparisons, and handles decimal steps consistently. See [optimization review and remaining work](docs/13_Optimization_Review.md).
