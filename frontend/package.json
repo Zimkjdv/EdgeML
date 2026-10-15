@@ -4,6 +4,8 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "test:components": "vitest run",
+    "test": "node --experimental-strip-types --test tests/*.test.mjs && vitest run",
     "test:csv": "node --experimental-strip-types --test tests/optimizationCsv.test.mjs",
     "dev": "vite --host 0.0.0.0",
     "build": "vue-tsc -b && vite build"
@@ -15,9 +17,11 @@
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.2.3",
+    "@vue/test-utils": "2.4.6",
+    "jsdom": "26.1.0",
     "typescript": "~5.7.2",
     "vite": "^6.1.0",
+    "vitest": "4.1.11",
     "vue-tsc": "^2.2.0"
   }
 }
-

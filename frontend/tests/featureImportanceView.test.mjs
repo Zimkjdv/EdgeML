@@ -12,7 +12,7 @@ test('recomputation and snapshot update are distinct confirmed actions with stal
   assert.match(component, /if \(method === 'GET'\) report\.value = null/)
   assert.match(component, /模型停用中/)
   assert.match(component, /report\.publication\?\.published_at/)
-  const app = readFileSync(new URL('../src/App.vue', import.meta.url), 'utf8')
+  const app = readFileSync(new URL('../src/composables/useTrainedModelPresentation.ts', import.meta.url), 'utf8')
   assert.match(app, /model-evaluation-panel, \.feature-importance/)
 })
 

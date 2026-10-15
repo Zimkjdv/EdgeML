@@ -2,6 +2,14 @@
 
 完成紀錄、歷史驗證與部署限制保存在此；未完成工作與驗收條件見 [ROADMAP.md](ROADMAP.md)。每項修正有獨立 commit/push，發布程式不代表自動升級業務容器。
 
+## 2026-10-15 — R15 前端模組與非同步生命週期
+
+- App 改為導航／provider shell，分頁與 Optimization 延遲載入；typed JSON client、資源 types、workspace／latest-task／route／training-job composables 分離，保留完整詳細指標、補測 CSV、超參數與卡片布局。
+- 資料集／模型 detail last-request-wins，切換／刪除／離頁／unmount 拒絕舊回應；rename／publish 不覆蓋新選取項目。Queue 停止背景刷新，Prediction 離頁中止本地 XHR；不宣稱取消已接受的後端工作。
+- 訓練只保存 UUID job ID，不保存 CSV／Token／完整表單；離頁停止 polling、重整可恢復，提醒返回 Training；終止清除、連線失敗 backoff，不重送訓練。URL hash 保留分頁且不攔截 skip-to-content anchor。
+- 加入 Vitest／Vue Test Utils 元件測試與隔離瀏覽器 fixture。Node 30＋元件 9 測試及型別／build 驗證；瀏覽器實走快切資料集、提交／進度／離頁停止／背景完成／重整恢復／完整指標。合成 API，不連正式 DB。主 JS 約 1,063.61 kB（gzip 350.78 kB），另有各頁 chunks；Element Plus 共用 runtime 仍大，不宣稱初載體積問題全部解決。
+- README／架構及 docs/16_Frontend_Lifecycle.md 同步。Vitest 使用修補版本；既有依賴 audit／跨平台 CI 留 R18/R29。舊 TreeWalker 已隔離，資料名稱被翻譯風險明確留待下一項 R16，不與本提交混合。
+
 ## 2026-10-15 — R25 有界 Runtime 快取與資料分析資源
 
 - 新增 per-process LRU PredictorProvider，依 ID／manifest／版本／artifact 與 preprocess stat signature 區分；single-flight 首次載入、獨立 cold-load admission、失敗不保留、載入途中檔案變更拒絕結果。BasePredictor wrapper 序列化每 runtime predict/proba/explain，LRU／artifact disk-byte 上限可設定，0 entries 關閉快取。

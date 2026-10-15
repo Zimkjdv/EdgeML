@@ -37,7 +37,7 @@ test('dataset preview range, bounded paging and stale-response guards', () => {
 })
 
 test('new native i18n components cannot be mutated by legacy text replacement or hide regression details', () => {
-  const app = readFileSync(new URL('../src/App.vue', import.meta.url), 'utf8')
+  const app = ['pages/TrainedModelsPage.vue','pages/DatasetPage.vue','composables/useTrainedModelPresentation.ts'].map(path => readFileSync(new URL(`../src/${path}`, import.meta.url), 'utf8')).join('\n')
   assert.match(app, /\.training-audit, \.classification-evaluation, \.trained-model-list/)
   assert.match(app, /<ClassificationEvaluation/)
   assert.match(app, /<DatasetPreview/)

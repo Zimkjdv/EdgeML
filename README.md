@@ -407,6 +407,8 @@ Parameter Optimization is available as a new bilingual page: select a trained re
 
 ## Documentation
 
+The frontend loads workspace pages on demand. Dataset/model selection ignores obsolete replies; Training pauses status polling when left and can recover its saved job ID after refresh. Reopen Training from the reminder to check an existing job instead of submitting again. Full regression details and supplemental CSV testing remain available. See [frontend lifecycle and isolated UI verification](docs/16_Frontend_Lifecycle.md).
+
 Parameter Optimization now prioritizes in-tolerance recommendations, validates inputs immediately, supports optional operating-baseline comparisons, and handles decimal steps consistently. See [optimization review and remaining work](docs/13_Optimization_Review.md).
 
 The optimization page displays search elapsed time, the target interval, evaluated combination counts, and green/orange recommendation status. Candidate count, step and seed have explanatory tooltips. After completion, a convergence chart and exact per-iteration errors help assess improvement. Defaults show actual feature coverage and warn when category choices were truncated to 100. Real progress percentages and cancellation remain future backend work.

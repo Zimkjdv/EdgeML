@@ -49,7 +49,7 @@ test('clipboard permission rejection falls back; blocked fallback rejects rather
 })
 
 test('registry binds model ID, not package name; displayed and copied IDs share the same prop', () => {
-  const app = readFileSync(new URL('../src/App.vue', import.meta.url), 'utf8')
+  const app = readFileSync(new URL('../src/pages/RegistryPage.vue', import.meta.url), 'utf8')
   const table = app.split('<el-table class="registry-table"')[1].split('</el-table>')[0]
   assert.match(table, /prop="id" :label="t\('modelId'\)"/)
   assert.match(table, /<ModelIdCell :model-id="scope\.row\.id"/)
@@ -65,7 +65,7 @@ test('registry binds model ID, not package name; displayed and copied IDs share 
 })
 
 test('registry limits ID width while preserving full tooltip/copy text and action space', () => {
-  const app = readFileSync(new URL('../src/App.vue', import.meta.url), 'utf8')
+  const app = readFileSync(new URL('../src/pages/RegistryPage.vue', import.meta.url), 'utf8')
   const table = app.split('<el-table class="registry-table"')[1].split('</el-table>')[0]
   assert.match(table, /prop="id"[^>]* width="200"/)
   assert.doesNotMatch(table, /prop="id"[^>]*min-width=/, 'ID must not expand into spare table width')

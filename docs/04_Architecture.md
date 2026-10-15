@@ -1,5 +1,7 @@
 # Architecture
 
+Frontend composition and request ownership are documented in [Frontend lifecycle](16_Frontend_Lifecycle.md): lazy pages, typed JSON API client, shared workspace composables, last-request-wins detail loading and resumable, page-scoped training polling.
+
 Inference depends on `PredictorProvider`; composition supplies a per-process bounded LRU of synchronized `BasePredictor` runtimes, not framework-specific adapters in services. Active Registry resolution remains per request. Admission, fingerprints, lifecycle invalidation, thread safety and measured limits are detailed in [Runtime performance](15_Runtime_Performance.md). Dataset profiling uses a separate bounded executor and preserves its slot through client cancellation until work actually ends; it does not block the ASGI event loop.
 
 JSON Prediction has a pure ASGI body-limit middleware before routing/JSON decoding. It checks declared size early and accumulates actual bytes into a bounded buffer, then replays the accepted body to FastAPI. Missing/chunked/understated Content-Length therefore cannot bypass the Backend cap. CORS and request-context middleware wrap this layer, preserving headers and HTTP logging on `413`. The typed request accepts scalar finite values; a Prediction-specific validation handler returns JSON-safe errors without reflecting payloads. Routers retain HTTP limit responses and services retain feature/model/evaluation validation.
